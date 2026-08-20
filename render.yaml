@@ -1,4 +1,5 @@
 services:
+  # Backend API (Docker)
   - type: web
     name: iqc-api-amaccaodev
     runtime: docker
@@ -14,4 +15,16 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: CORS_ORIGIN
-        value: https://amaccaodev.github.io
+        value: https://iqc-frontend.onrender.com
+
+  # Frontend (static — dùng khi repo private, GitHub Pages không free)
+  - type: web
+    name: iqc-frontend
+    runtime: static
+    plan: free
+    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && VITE_API_URL=https://iqc-api-amaccaodev.onrender.com/api pnpm build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
