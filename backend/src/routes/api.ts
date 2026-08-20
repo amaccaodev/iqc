@@ -16,7 +16,14 @@ export const apiRouter = Router();
 type CookieReq = Request & { cookies?: Record<string, string> };
 
 function setRefreshCookie(res: Response, token: string, maxAgeMs = REFRESH_TTL_MS) {
-  setCookie(res, REFRESH_COOKIE, token, { maxAgeMs, httpOnly: true, path: "/", sameSite: "Lax" });
+  const crossSite = process.env.NODE_ENV === "production";
+  setCookie(res, REFRESH_COOKIE, token, {
+    maxAgeMs,
+    httpOnly: true,
+    path: "/",
+    sameSite: crossSite ? "None" : "Lax",
+    secure: crossSite,
+  });
 }
 
 function bearer(req: Request) {

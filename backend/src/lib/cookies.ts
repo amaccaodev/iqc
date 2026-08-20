@@ -28,7 +28,13 @@ export function setCookie(
   res: ServerResponse,
   name: string,
   value: string,
-  opts: { maxAgeMs: number; httpOnly?: boolean; path?: string; sameSite?: "Lax" | "Strict" | "None" },
+  opts: {
+    maxAgeMs: number;
+    httpOnly?: boolean;
+    path?: string;
+    sameSite?: "Lax" | "Strict" | "None";
+    secure?: boolean;
+  },
 ) {
   const parts = [
     `${name}=${encodeURIComponent(value)}`,
@@ -37,6 +43,7 @@ export function setCookie(
     `SameSite=${opts.sameSite ?? "Lax"}`,
   ];
   if (opts.httpOnly !== false) parts.push("HttpOnly");
+  if (opts.secure) parts.push("Secure");
   res.setHeader("Set-Cookie", [...existingSetCookie(res), parts.join("; ")]);
 }
 

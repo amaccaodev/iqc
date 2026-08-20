@@ -99,7 +99,7 @@ jobs:
       - name: Build frontend for GitHub Pages
         env:
           GITHUB_PAGES: "true"
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://iqc-backend.onrender.com/api' }}
         run: pnpm build
 
       - name: SPA fallback for GitHub Pages
