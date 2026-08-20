@@ -1,5 +1,8 @@
 # CI/CD — GitHub Actions
 
+Repo: **https://github.com/amaccaodev/iqc**  
+Frontend test: **https://amaccaodev.github.io/iqc/**
+
 Workflow: [`.github/workflows/ci-cd.yml`](../workflows/ci-cd.yml)
 
 ## Khi nào chạy
