@@ -1,71 +1,33 @@
-# CI/CD — GitHub Actions
+# Deploy IQC
 
-Repo: **https://github.com/amaccaodev/iqc**  
-Frontend test: **https://amaccaodev.github.io/iqc/**  
-Backend API: **https://iqc-api-amaccaodev.onrender.com/api**
+## Khuyến nghị: Vercel (frontend + API cùng domain — không CORS)
 
-### Deploy backend Render (bắt buộc cho login)
-
-1. Mở **[Deploy to Render](https://render.com/deploy?repo=https://github.com/amaccaodev/iqc)**
-2. Thêm env:
+1. Vào **https://vercel.com/new** → Import repo `amaccaodev/iqc`
+2. Thêm **Environment Variables**:
    - `SUPABASE_URL` = `https://mobroigpqtsfbfbvmvwa.supabase.co`
    - `SUPABASE_SERVICE_ROLE_KEY` = (từ `backend/.env`)
-3. Deploy xong → kiểm tra: `https://iqc-api-amaccaodev.onrender.com/health` → `{"status":"ok"}`
+3. Deploy → app chạy tại `https://iqc-xxx.vercel.app`
+4. Login: `NV001` / `123456`
 
-> URL cũ `iqc-backend.onrender.com` **không phải** app IQC — đừng dùng.
+API gọi `/api/...` cùng domain — **không cần Render**.
 
-Workflow: [`.github/workflows/ci-cd.yml`](../workflows/ci-cd.yml)
+---
 
-## Khi nào chạy
+## GitHub Pages (chỉ frontend tĩnh)
 
-| Sự kiện | Build / typecheck | Migrate DB |
-|---------|-------------------|------------|
-| Pull request → `main` | ✓ | ✗ |
-| Push → `main` | ✓ | ✓ |
+URL: **https://amaccaodev.github.io/iqc/login**
 
-## Secrets (Settings → Secrets and variables → Actions)
+Cần backend Render riêng — hiện **`iqc-api-amaccaodev.onrender.com` chưa deploy** (`404 no-server`).
 
-| Secret | Bắt buộc | Mô tả |
-|--------|----------|--------|
-| `SUPABASE_DB_PASSWORD` | **Có** | Mật khẩu Postgres (Supabase → Project Settings → Database). **Không commit vào repo.** |
+1. **https://render.com/deploy?repo=https://github.com/amaccaodev/iqc**
+2. Env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+3. Kiểm tra: `https://iqc-api-amaccaodev.onrender.com/health` → `{"status":"ok"}`
 
-## Push lên GitHub lần đầu
+---
 
-```bash
-git init
-git add .
-git commit -m "Initial commit with CI/CD"
-git branch -M main
-git remote add origin https://github.com/<user>/<repo>.git
-git push -u origin main
-```
-
-Sau đó vào **Settings → Secrets and variables → Actions → New repository secret**:
-- Name: `SUPABASE_DB_PASSWORD`
-- Value: mật khẩu DB hiện tại
-
-## Thêm migration mới
-
-1. Tạo file SQL trong `supabase/migrations/`:
-   ```
-   supabase/migrations/20240820000004_ten_migration.sql
-   ```
-2. Commit + push lên `main`
-3. CI tự chạy migration mới (theo bảng `iqc_schema_migrations`)
-
-## Chạy local
+## Local
 
 ```bash
-# Windows PowerShell
-$env:SUPABASE_DB_PASSWORD="your-password"
-pnpm db:migrate
-
-# Seed demo (lần đầu)
-$env:RUN_DB_SEED="true"
-pnpm db:migrate
+pnpm dev:all
+# Frontend http://localhost:8443 — API proxy /api → :3001
 ```
-
-## Deploy app
-
-Workflow hiện build frontend và upload artifact `frontend-dist`.  
-Backend cần host riêng (Railway, Render, VPS…) — set env giống `backend/.env` khi deploy.
