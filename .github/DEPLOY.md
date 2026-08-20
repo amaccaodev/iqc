@@ -1,7 +1,18 @@
 # CI/CD — GitHub Actions
 
 Repo: **https://github.com/amaccaodev/iqc**  
-Frontend test: **https://amaccaodev.github.io/iqc/**
+Frontend test: **https://amaccaodev.github.io/iqc/**  
+Backend API: **https://iqc-api-amaccaodev.onrender.com/api**
+
+### Deploy backend Render (bắt buộc cho login)
+
+1. Mở **[Deploy to Render](https://render.com/deploy?repo=https://github.com/amaccaodev/iqc)**
+2. Thêm env:
+   - `SUPABASE_URL` = `https://mobroigpqtsfbfbvmvwa.supabase.co`
+   - `SUPABASE_SERVICE_ROLE_KEY` = (từ `backend/.env`)
+3. Deploy xong → kiểm tra: `https://iqc-api-amaccaodev.onrender.com/health` → `{"status":"ok"}`
+
+> URL cũ `iqc-backend.onrender.com` **không phải** app IQC — đừng dùng.
 
 Workflow: [`.github/workflows/ci-cd.yml`](../workflows/ci-cd.yml)
 

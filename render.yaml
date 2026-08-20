@@ -1,17 +1,14 @@
 services:
   - type: web
-    name: iqc-backend
-    runtime: node
+    name: iqc-api-amaccaodev
+    runtime: docker
     plan: free
-    rootDir: backend
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: NODE_VERSION
-        value: "22"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY

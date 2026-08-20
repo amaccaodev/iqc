@@ -1,5 +1,5 @@
 /** API base URL — `/api` local; URL đầy đủ khi frontend tách backend (GitHub Pages) */
-const PRODUCTION_API = "https://iqc-backend.onrender.com/api";
+const PRODUCTION_API = "https://iqc-api-amaccaodev.onrender.com/api";
 
 function resolveApiBase(): string {
   const fromEnv = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
