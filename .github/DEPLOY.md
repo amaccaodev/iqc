@@ -1,33 +1,19 @@
-# Deploy IQC
+# CI/CD — GitHub Actions
 
-## Khuyến nghị: Vercel (frontend + API cùng domain — không CORS)
+Repo: **https://github.com/amaccaodev/iqc**
 
-1. Vào **https://vercel.com/new** → Import repo `amaccaodev/iqc`
-2. Thêm **Environment Variables**:
-   - `SUPABASE_URL` = `https://mobroigpqtsfbfbvmvwa.supabase.co`
-   - `SUPABASE_SERVICE_ROLE_KEY` = (từ `backend/.env`)
-3. Deploy → app chạy tại `https://iqc-xxx.vercel.app`
-4. Login: `NV001` / `123456`
+| URL | Mô tả |
+|-----|--------|
+| https://amaccaodev.github.io/iqc/login | Frontend (GitHub Pages) |
+| https://iqc-api-amaccaodev.onrender.com/api | Backend API (Render free) |
 
-API gọi `/api/...` cùng domain — **không cần Render**.
+Workflow: [`.github/workflows/ci-cd.yml`](../workflows/ci-cd.yml)
 
----
+## Push → `main` tự động
 
-## GitHub Pages (chỉ frontend tĩnh)
+1. Build frontend + backend
+2. Migrate DB Supabase
+3. Deploy GitHub Pages
+4. Trigger Render deploy (nếu có hook)
 
-URL: **https://amaccaodev.github.io/iqc/login**
-
-Cần backend Render riêng — hiện **`iqc-api-amaccaodev.onrender.com` chưa deploy** (`404 no-server`).
-
-1. **https://render.com/deploy?repo=https://github.com/amaccaodev/iqc**
-2. Env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-3. Kiểm tra: `https://iqc-api-amaccaodev.onrender.com/health` → `{"status":"ok"}`
-
----
-
-## Local
-
-```bash
-pnpm dev:all
-# Frontend http://localhost:8443 — API proxy /api → :3001
-```
+Chi tiết setup: [`DEPLOY-FREE.md`](../../DEPLOY-FREE.md)

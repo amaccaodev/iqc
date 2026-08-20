@@ -19,10 +19,11 @@ env:
   SUPABASE_PROJECT_REF: mobroigpqtsfbfbvmvwa
   SUPABASE_POOLER_HOST: aws-0-ap-northeast-1.pooler.supabase.com
   SUPABASE_POOLER_PORT: "6543"
+  BACKEND_URL: https://iqc-api-amaccaodev.onrender.com
 
 jobs:
   validate:
-    name: Build & typecheck
+    name: Build frontend + backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +37,7 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Install backend dependencies
@@ -51,6 +52,10 @@ jobs:
 
       - name: Build frontend
         run: pnpm build
+
+      - name: Build backend
+        working-directory: backend
+        run: npm run build
 
   migrate-db:
     name: Database migrate
@@ -72,6 +77,22 @@ jobs:
         env:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: node backend/scripts/migrate_pg.mjs
+
+  deploy-backend:
+    name: Trigger Render backend deploy
+    needs: migrate-db
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy backend on Render
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            curl -fsS -X POST "$HOOK"
+          else
+            echo "RENDER_DEPLOY_HOOK chưa set — bỏ qua (Render vẫn auto-deploy nếu đã connect GitHub)"
+          fi
 
   deploy-pages:
     name: Deploy GitHub Pages
@@ -99,7 +120,7 @@ jobs:
       - name: Build frontend for GitHub Pages
         env:
           GITHUB_PAGES: "true"
-          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://iqc-api-amaccaodev.onrender.com/api' }}
+          VITE_API_URL: ${{ vars.VITE_API_URL || format('{0}/api', env.BACKEND_URL) }}
         run: pnpm build
 
       - name: SPA fallback for GitHub Pages

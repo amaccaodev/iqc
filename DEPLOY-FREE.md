@@ -1,40 +1,60 @@
-# Deploy miễn phí — IQC
+# Deploy miễn phí qua GitHub
 
-## ✅ Live test (Vercel — miễn phí)
+## Luồng tự động (push → `main`)
 
-**App:** https://iqc-app-phi.vercel.app/login  
-**Login:** `NV001` / `123456`
+| Bước | GitHub Actions làm gì |
+|------|------------------------|
+| 1 | Build **frontend** + **backend** |
+| 2 | Chạy SQL migration Supabase |
+| 3 | Deploy frontend → **GitHub Pages** |
+| 4 | (Tuỳ chọn) Trigger deploy backend Render |
 
-Frontend + API cùng domain — không CORS.
-
----
-
-## Tự deploy trên tài khoản Vercel của bạn
-
-**Import 1 click:** https://vercel.com/new/clone?repository-url=https://github.com/amaccaodev/iqc
-
-### Bước làm (5 phút)
-
-1. Mở link trên → **Sign in with GitHub**
-2. **Environment Variables** → thêm:
-   | Name | Value |
-   |------|-------|
-   | `SUPABASE_URL` | `https://mobroigpqtsfbfbvmvwa.supabase.co` |
-   | `SUPABASE_SERVICE_ROLE_KEY` | copy từ `backend/.env` |
-3. Bấm **Deploy** → đợi ~2 phút
-4. Mở URL Vercel (vd. `https://iqc-xxx.vercel.app/login`)
-5. Login test: **NV001** / **123456**
-
-Frontend + API cùng domain (`/api/...`) — **không cần Render, không CORS**.
+**Frontend:** https://amaccaodev.github.io/iqc/login  
+**Backend API:** https://iqc-api-amaccaodev.onrender.com/api
 
 ---
 
-## Render (chỉ backend — nếu vẫn dùng GitHub Pages)
+## Setup 1 lần
 
-Blueprint: `deploy/render.yaml`  
-Deploy: https://render.com/deploy?repo=https://github.com/amaccaodev/iqc
+### 1. GitHub Secrets (Settings → Secrets → Actions)
 
-Frontend GitHub Pages: https://amaccaodev.github.io/iqc/login
+| Secret | Mô tả |
+|--------|--------|
+| `SUPABASE_DB_PASSWORD` | Mật khẩu Postgres Supabase |
+| `RENDER_DEPLOY_HOOK` | *(tuỳ chọn)* URL deploy hook từ Render |
+
+### 2. GitHub Variables
+
+| Variable | Value |
+|----------|--------|
+| `VITE_API_URL` | `https://iqc-api-amaccaodev.onrender.com/api` |
+
+### 3. Backend Render (free) — bắt buộc cho login
+
+GitHub Pages **chỉ host frontend**. Backend chạy trên Render (free):
+
+1. Mở **https://render.com/deploy?repo=https://github.com/amaccaodev/iqc**
+2. Chọn repo → Blueprint dùng `render.yaml` (Docker build backend)
+3. Thêm env trên Render:
+   - `SUPABASE_URL` = `https://mobroigpqtsfbfbvmvwa.supabase.co`
+   - `SUPABASE_SERVICE_ROLE_KEY` = copy từ `backend/.env`
+4. Deploy → đợi **Live**
+5. Kiểm tra: https://iqc-api-amaccaodev.onrender.com/health → `{"status":"ok"}`
+
+**Render tự deploy backend mỗi khi push `main`** (nếu đã connect GitHub).
+
+Deploy hook (tuỳ chọn): Render → Service → Settings → Deploy Hook → copy URL → paste vào secret `RENDER_DEPLOY_HOOK`.
+
+### 4. Bật GitHub Pages
+
+Repo → **Settings → Pages → Source: GitHub Actions**
+
+---
+
+## Test login
+
+- URL: https://amaccaodev.github.io/iqc/login
+- User: `NV001` / Pass: `123456`
 
 ---
 
