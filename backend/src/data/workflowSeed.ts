@@ -1,0 +1,60 @@
+import type { MachineIncident, Notification } from "../../../shared/src/types/index.js";
+
+export const SEED_NOTIFICATIONS: Notification[] = [
+  {
+    id: "n1",
+    userId: "u1",
+    type: "order",
+    refId: "o1",
+    refType: "production_order",
+    title: "Lệnh LSX-2024-001 đang sản xuất",
+    body: "Tổ 1 đã báo cáo BOM Van NOVO 20 — chờ QC xác nhận.",
+    isRead: false,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: "n2",
+    userId: "u1",
+    type: "incident",
+    refId: "inc1",
+    refType: "machine_incident",
+    title: "Sự cố máy Cam 0.1",
+    body: "Công nhân báo máy rung bất thường — đang chờ xử lý.",
+    isRead: true,
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
+
+export const SEED_INCIDENTS: MachineIncident[] = [
+  {
+    id: "inc1",
+    orderId: "o1",
+    bomId: "b1",
+    machineName: "Cam 0.1",
+    machineCode: "CAM-01",
+    severity: "medium",
+    description: "Máy rung bất thường khi gia công Ø20",
+    reportedBy: "u6",
+    reportedName: "Cường 2T3",
+    reportedAt: new Date().toISOString(),
+    status: "open",
+    resolutionNote: "",
+    downtimeMinutes: 0,
+  },
+  {
+    id: "inc2",
+    machineName: "Tiện CNC",
+    machineCode: "CNC-02",
+    severity: "low",
+    description: "Mất dầu bôi trơn tự động",
+    reportedBy: "u7",
+    reportedName: "Nga 3/43",
+    reportedAt: new Date(Date.now() - 172800000).toISOString(),
+    status: "resolved",
+    resolvedBy: "u3",
+    resolvedName: "Lê Văn Quốc",
+    resolvedAt: new Date(Date.now() - 86400000).toISOString(),
+    resolutionNote: "Đã bổ sung dầu và kiểm tra bơm",
+    downtimeMinutes: 45,
+  },
+];
