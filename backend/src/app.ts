@@ -3,15 +3,13 @@ import cors from "cors";
 import type { Request, Response, NextFunction } from "express";
 import { apiRouter } from "./routes/api.js";
 import { parseCookies } from "./lib/cookies.js";
+import { getCorsOptions } from "./lib/corsConfig.js";
 
 export function createApp() {
   const app = express();
-  app.use(
-    cors({
-      origin: true,
-      credentials: true,
-    }),
-  );
+  const corsOptions = getCorsOptions();
+  app.use(cors(corsOptions));
+  app.options("*", cors(corsOptions));
   app.use(express.json());
   app.use((req: Request, _res: Response, next: NextFunction) => {
     (req as Request & { cookies: Record<string, string> }).cookies = parseCookies(req);

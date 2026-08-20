@@ -1,9 +1,21 @@
 import type { ApiResponse } from "@shared/types";
 import { API_BASE } from "../lib/apiBase";
 
+function apiIsCrossOrigin(): boolean {
+  if (typeof window === "undefined") return false;
+  if (!API_BASE.startsWith("http")) return false;
+  try {
+    return new URL(API_BASE).origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 /** HTTP client base — DRY for all API services */
 export abstract class BaseApiService {
   constructor(protected readonly baseUrl = API_BASE) {}
+
+  private readonly crossOrigin = apiIsCrossOrigin();
 
   private refreshing: Promise<string | null> | null = null;
 
@@ -22,7 +34,7 @@ export abstract class BaseApiService {
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers,
-      credentials: "include",
+      credentials: this.crossOrigin ? "omit" : "include",
     });
 
     if (res.status === 401 && retry && !path.startsWith("/auth/login") && !path.startsWith("/auth/refresh") && !path.startsWith("/auth/logout")) {
@@ -48,7 +60,7 @@ export abstract class BaseApiService {
         try {
           const res = await fetch(`${this.baseUrl}/auth/refresh`, {
             method: "POST",
-            credentials: "include",
+            credentials: this.crossOrigin ? "omit" : "include",
             headers: { "Content-Type": "application/json" },
           });
           const body = (await res.json()) as ApiResponse<{ token: string; user: unknown }>;
