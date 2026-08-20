@@ -1,16 +1,25 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "pnpm install --frozen-lockfile && cd backend && npm ci",
-  "buildCommand": "pnpm build",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/health", "destination": "/api" },
-    { "source": "/((?!api(?:/|$)|assets/|favicon|.*\\..*).*)", "destination": "/index.html" }
-  ],
-  "functions": {
-    "api/index.ts": {
-      "maxDuration": 30
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "installCommand": "pnpm install --frozen-lockfile && cd backend && npm ci",
+        "buildCommand": "pnpm build",
+        "distDir": "dist"
+      }
+    },
+    {
+      "src": "api/index.ts",
+      "use": "@vercel/node"
     }
-  }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/index.ts" },
+    { "src": "/health", "dest": "/api/index.ts" },
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    { "src": "/favicon.svg", "dest": "/favicon.svg" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 }
