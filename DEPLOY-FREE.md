@@ -1,39 +1,34 @@
-# Deploy miễn phí — UI demo trước, backend tuỳ chọn
+# Deploy miễn phí — UI demo trên GitHub Pages
 
-## Mục tiêu hiện tại
+## URL test UI (demo, không cần backend)
 
-**Frontend DEMO UI** chạy mock data in-memory — **không cần backend** để test giao diện / workflow.
+**https://amaccaodev.github.io/iqc/login**
+
+Login: `NV001` / `123456` (GĐ), `NV030` / `123456` (CN), `NV000` / `admin123` (Admin)…
+
+Repo đã **public** để GitHub Pages free hoạt động. Build dùng `VITE_DEMO_MODE=true` (mock in-memory).
 
 | URL | Mô tả |
 |-----|--------|
-| https://iqc-frontend.onrender.com/login | Frontend demo (Render static) |
-| `?demo=1` trên URL hoặc nút “Bật chế độ demo UI” | Bật bypass tạm trên mọi bản build |
+| https://amaccaodev.github.io/iqc/login | Frontend DEMO (GitHub Pages) |
+| https://iqc-frontend.onrender.com/login | Bản Render static (dự phòng) |
 
-Login demo: `NV001` / `123456` (GĐ), `NV030` / `123456` (CN), `NV000` / `admin123` (Admin)…
+Bật demo thủ công: thêm `?demo=1` hoặc nút “Bật chế độ demo UI” trên login.
 
 ## Push → `main`
 
-1. Build + typecheck FE/BE  
-2. Deploy UI (Render static auto / GitHub Pages nếu repo public) với `VITE_DEMO_MODE=true`  
-3. Migrate DB + Render API — **không chặn** UI (continue-on-error)
-
-## Repo PRIVATE
-
-GitHub Pages free cần repo **public**. Giữ private → dùng **Render frontend**:  
-https://iqc-frontend.onrender.com/login
+1. Build + typecheck  
+2. Deploy GitHub Pages (demo UI)  
+3. Migrate DB + Render API — không chặn UI nếu fail  
 
 ## Tắt demo / nối API thật sau
 
-1. Đổi `render.yaml` build: bỏ `VITE_DEMO_MODE`, set `VITE_API_URL=.../api`  
-2. Đảm bảo backend Live + env Supabase  
-3. Push lại
+1. Trong `.github/workflows/ci-cd.yml` job Pages: bỏ `VITE_DEMO_MODE`, set `VITE_API_URL`  
+2. Backend Live trên Render  
+3. Push lại  
 
 ## Local
 
 ```powershell
-# Demo UI only (không cần backend)
 $env:VITE_DEMO_MODE="true"; pnpm dev
-
-# Full stack
-pnpm dev:all
 ```
