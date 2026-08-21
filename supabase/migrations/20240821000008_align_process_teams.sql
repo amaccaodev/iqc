@@ -34,29 +34,43 @@ set assigned_group_id = 't_asm'
 where assigned_group_id is null
   and (assigned_group_name ilike '%lắp ráp%' or assigned_group_name ilike '%lap rap%');
 
--- Workers demo (seed) → group process teams
+-- Workers / teamlead demo (seed) → process teams
+-- u12 = tổ trưởng Lắp ráp (có trong seed FE, chưa có ở migration core cũ)
 insert into public.users (id, employee_id, name, password, department, phone, active) values
-  ('u13', 'NV032', 'Minh T2', '123456', 'Tổ Tự động', '0904567892', true),
-  ('u14', 'NV033', 'Hùng T2', '123456', 'Tổ Tự động', '0904567893', true),
-  ('u15', 'NV034', 'Lan LR',  '123456', 'Tổ Lắp ráp', '0904567894', true),
-  ('u16', 'NV035', 'Đức LR',  '123456', 'Tổ Lắp ráp', '0904567895', true)
-on conflict (id) do nothing;
+  ('u12', 'NV022', 'Nguyễn Thị Hoa', '123456', 'Tổ Lắp ráp', '0903456791', true),
+  ('u13', 'NV032', 'Minh T2',        '123456', 'Tổ Tự động', '0904567892', true),
+  ('u14', 'NV033', 'Hùng T2',        '123456', 'Tổ Tự động', '0904567893', true),
+  ('u15', 'NV034', 'Lan LR',         '123456', 'Tổ Lắp ráp', '0904567894', true),
+  ('u16', 'NV035', 'Đức LR',         '123456', 'Tổ Lắp ráp', '0904567895', true)
+on conflict (id) do update set
+  employee_id = excluded.employee_id,
+  name = excluded.name,
+  department = excluded.department,
+  phone = excluded.phone,
+  active = excluded.active;
 
 insert into public.user_roles (user_id, role_id) values
+  ('u12', 'teamlead'),
   ('u13', 'worker'),
   ('u14', 'worker'),
   ('u15', 'worker'),
   ('u16', 'worker')
 on conflict do nothing;
 
-insert into public.group_members (user_id, group_id, is_lead) values
-  ('u6',  't_hot',  false),
-  ('u7',  't_hot',  false),
-  ('u13', 't_auto', false),
-  ('u14', 't_auto', false),
-  ('u15', 't_asm',  false),
-  ('u16', 't_asm',  false),
-  ('u4',  't_hot',  true),
-  ('u5',  't_auto', true),
-  ('u12', 't_asm',  true)
+-- Chỉ gán membership khi user thật sự tồn tại (tránh FK fail trên DB lệch seed)
+insert into public.group_members (user_id, group_id, is_lead)
+select v.user_id, v.group_id, v.is_lead
+from (
+  values
+    ('u6',  't_hot',  false),
+    ('u7',  't_hot',  false),
+    ('u13', 't_auto', false),
+    ('u14', 't_auto', false),
+    ('u15', 't_asm',  false),
+    ('u16', 't_asm',  false),
+    ('u4',  't_hot',  true),
+    ('u5',  't_auto', true),
+    ('u12', 't_asm',  true)
+) as v(user_id, group_id, is_lead)
+where exists (select 1 from public.users u where u.id = v.user_id)
 on conflict (user_id, group_id) do update set is_lead = excluded.is_lead;
