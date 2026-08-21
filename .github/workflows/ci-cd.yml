@@ -61,6 +61,7 @@ jobs:
     name: Database migrate
     needs: validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +83,7 @@ jobs:
     name: Trigger Render backend deploy
     needs: migrate-db
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: Deploy backend on Render
@@ -118,10 +120,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend for GitHub Pages
+      - name: Build frontend for GitHub Pages (demo UI, no backend)
         env:
           GITHUB_PAGES: "true"
-          VITE_API_URL: ${{ vars.VITE_API_URL || format('{0}/api', env.BACKEND_URL) }}
+          VITE_DEMO_MODE: "true"
         run: pnpm build
 
       - name: SPA fallback for GitHub Pages

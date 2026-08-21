@@ -4,6 +4,7 @@ import type { LoginResponse } from "@shared/types";
 import { roleHomePath } from "@shared/constants/labels";
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../hooks/useTheme";
+import { enableDemoMode, isDemoMode } from "../../lib/demoMode";
 
 export default function LoginPage() {
   const { user, login, loading } = useAuth();
@@ -28,6 +29,7 @@ function LoginForm({
   const [err, setErr] = useState("");
   const [pendingMsg, setPendingMsg] = useState("");
   const [showPwd, setShowPwd] = useState(false);
+  const demo = isDemoMode();
 
   const submit = async () => {
     try {
@@ -61,6 +63,12 @@ function LoginForm({
           <h1 className="font-display font-800 text-white text-2xl">NOVO-VIỆT TIỆP</h1>
           <p className="text-white/50 text-sm mt-1">Hệ thống Quản lý Sản xuất</p>
         </div>
+        {demo && (
+          <div className="mb-3 rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-50">
+            <strong className="font-semibold">DEMO UI</strong> — chạy mock data, không cần backend.
+            Chọn tài khoản demo bên dưới rồi đăng nhập.
+          </div>
+        )}
         <div className="bg-card text-card-foreground rounded-xl border border-border shadow-sm p-6 shadow-2xl">
           <h2 className="font-display font-700 text-lg text-foreground mb-5">Đăng nhập</h2>
           <div className="space-y-4">
@@ -154,6 +162,15 @@ function LoginForm({
               ))}
             </div>
           </div>
+          {!demo && (
+            <button
+              type="button"
+              onClick={() => enableDemoMode()}
+              className="mt-4 w-full text-xs text-muted-foreground hover:text-primary bg-transparent border border-dashed border-border rounded-lg py-2 cursor-pointer"
+            >
+              Bật chế độ demo UI (bypass backend)
+            </button>
+          )}
         </div>
       </div>
     </div>

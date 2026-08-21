@@ -2,6 +2,8 @@ import type { ApiResponse, EntityListQuery, PagedResult } from "@shared/types";
 import { buildListQueryString } from "@shared/utils/listQuery";
 import { slicePagedArray } from "@shared/utils/pagedList";
 import { API_BASE } from "../lib/apiBase";
+import { isDemoMode } from "../lib/demoMode";
+import { handleDemoApi } from "../mocks/demoApiRouter";
 
 function apiIsCrossOrigin(): boolean {
   if (typeof window === "undefined") return false;
@@ -26,6 +28,17 @@ export abstract class BaseApiService {
     options: RequestInit = {},
     retry = true,
   ): Promise<T> {
+    if (isDemoMode()) {
+      const method = (options.method ?? "GET").toUpperCase();
+      const body =
+        typeof options.body === "string"
+          ? options.body
+          : options.body != null
+            ? String(options.body)
+            : undefined;
+      return handleDemoApi<T>(method, path, body);
+    }
+
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),

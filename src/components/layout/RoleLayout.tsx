@@ -8,6 +8,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useNotifications } from "../../hooks/useNotifications";
 import { useKeyboardViewport } from "../../hooks/useKeyboardViewport";
 import { useOrders } from "../../hooks/useOrders";
+import { isDemoMode } from "../../lib/demoMode";
 import { salaryApi } from "../../services/api/SalaryApiService";
 
 const PENDING_SHIFT = new Set(["pending_teamlead", "pending_qc", "pending_supervisor"]);
@@ -114,7 +115,14 @@ export default function RoleLayout({ role }: RoleLayoutProps) {
           </div>
           <div>
             <div className="font-display font-700 text-sm leading-tight">NOVO-VIỆT TIỆP</div>
-            <div className="text-xs text-header-muted">IQC</div>
+            <div className="text-xs text-header-muted flex items-center gap-1.5">
+              IQC
+              {isDemoMode() ? (
+                <span className="rounded px-1 py-0.5 bg-amber-500/25 text-amber-200 text-[10px] font-semibold tracking-wide">
+                  DEMO
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
         <nav className={desktopNavClass}>

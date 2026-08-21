@@ -17,12 +17,12 @@ services:
       - key: CORS_ORIGIN
         value: https://iqc-frontend.onrender.com
 
-  # Frontend (static — dùng khi repo private, GitHub Pages không free)
+  # Frontend static — DEMO UI (mock in-memory, không cần API)
   - type: web
     name: iqc-frontend
     runtime: static
     plan: free
-    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && VITE_API_URL=https://iqc-api-amaccaodev.onrender.com/api pnpm build
+    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && VITE_DEMO_MODE=true pnpm build
     staticPublishPath: dist
     routes:
       - type: rewrite
