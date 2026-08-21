@@ -1,4 +1,4 @@
-import type { BOMItem, ProductionOrder } from "../types/index.js";
+import type { BOMItem, ProductionOrder, WorkerMachineAssignment } from "../types/index.js";
 
 /** Số đã làm của linh kiện: ưu tiên passQty, fallback số dòng đo đã nộp */
 export function bomDoneQty(bom: BOMItem): number {
@@ -97,7 +97,7 @@ export type MachineWorkRow = {
 
 /** Gom máy đang làm linh kiện: tên máy, đã SX, người được assign */
 export function bomMachineWorkRows(bom: BOMItem): MachineWorkRow[] {
-  const assignments =
+  const assignments: WorkerMachineAssignment[] =
     bom.workerAssignments && bom.workerAssignments.length > 0
       ? bom.workerAssignments
       : (bom.assignedWorkers ?? []).map((name) => ({
