@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { DeviceKind, DeviceLoginRequest, UserPublic } from "../../../shared/src/types/index.js";
+import { resolveUserTeamId } from "../../../shared/src/constants/teams.js";
 import { SEED_USERS } from "../data/seed.js";
 
 export const ACCESS_TTL_MS = 15 * 60 * 1000;
@@ -169,7 +170,7 @@ class SessionStore {
     const u = SEED_USERS.find((x) => x.id === userId);
     if (!u) return null;
     const { password: _, ...pub } = u;
-    return pub;
+    return { ...pub, teamId: resolveUserTeamId(pub) || pub.teamId };
   }
 }
 

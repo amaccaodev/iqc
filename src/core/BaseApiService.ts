@@ -1,4 +1,6 @@
-import type { ApiResponse } from "@shared/types";
+import type { ApiResponse, EntityListQuery, PagedResult } from "@shared/types";
+import { buildListQueryString } from "@shared/utils/listQuery";
+import { slicePagedArray } from "@shared/utils/pagedList";
 import { API_BASE } from "../lib/apiBase";
 
 function apiIsCrossOrigin(): boolean {
@@ -98,5 +100,25 @@ export abstract class BaseApiService {
       method: "PATCH",
       body: data ? JSON.stringify(data) : undefined,
     });
+  }
+
+  /**
+   * GET list endpoint — hỗ trợ cả PagedResult và mảng legacy.
+   * Mọi *ApiService nên dùng method này thay vì tự build query string.
+   */
+  protected async listPaged<T>(path: string, query: EntityListQuery = {}): Promise<PagedResult<T>> {
+    const qs = buildListQueryString(query);
+    const raw = await this.get<PagedResult<T> | T[]>(`${path}?${qs}`);
+    if (Array.isArray(raw)) return slicePagedArray(raw, query);
+    return raw;
+  }
+
+  /** Giống listPaged nhưng trả trang rỗng khi lỗi mạng / API (cho màn workflow). */
+  protected async listPagedSafe<T>(path: string, query: EntityListQuery = {}): Promise<PagedResult<T>> {
+    try {
+      return await this.listPaged<T>(path, query);
+    } catch {
+      return { items: [], total: 0, page: query.page ?? 1, pageSize: query.pageSize ?? 20 };
+    }
   }
 }

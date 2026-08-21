@@ -1,45 +1,112 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Notification } from "@shared/types";
+import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { authApi } from "../../services/api/AuthApiService";
 import { useRoleUser } from "../../components/layout/RoleLayout";
 import { useNotifications } from "../../hooks/useNotifications";
+import { ResponsiveDataList } from "../../components/ui";
+import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 
 const TYPE_ICON: Record<string, string> = {
   incident: "fa-triangle-exclamation text-orange-500",
   overtime: "fa-clock text-blue-500",
   complaint: "fa-comment-dots text-red-500",
-  order: "fa-file-contract text-[#1B3A5C]",
-  device: "fa-mobile-screen-button text-[#2D6EBD]",
+  order: "fa-file-contract text-primary",
+  shift: "fa-clipboard-check text-[#16A34A]",
+  approval: "fa-industry text-amber-600",
+  device: "fa-mobile-screen text-[#4F46E5]",
 };
+
+function NotificationBody({
+  n,
+  canReviewDevice,
+  busyId,
+  onMark,
+  onReview,
+}: {
+  n: Notification;
+  canReviewDevice: boolean;
+  busyId: string | null;
+  onMark: (id: string) => void;
+  onReview: (n: Notification, approved: boolean) => void;
+}) {
+  return (
+    <div
+      className={`rounded-2xl p-4 border ${
+        n.isRead ? "bg-card border-border" : "bg-secondary border-[#C7D2FE]"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onMark(n.id)}
+        className="w-full text-left bg-transparent border-0 p-0 cursor-pointer"
+      >
+        <div className="flex gap-3">
+          <div className="w-10 h-10 rounded-full bg-card flex items-center justify-center flex-shrink-0">
+            <i className={`fas ${TYPE_ICON[n.type] ?? "fa-bell text-muted"}`} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold text-sm">{n.title}</div>
+            {n.body ? <div className="text-xs text-muted mt-0.5">{n.body}</div> : null}
+            <div className="text-[11px] text-muted-foreground mt-1">
+              {new Date(n.createdAt).toLocaleString("vi-VN")}
+            </div>
+          </div>
+          {!n.isRead && <span className="w-2 h-2 rounded-full bg-[#4F46E5] mt-2 flex-shrink-0" />}
+        </div>
+      </button>
+      {n.type === "device" &&
+        n.refType === "device_login" &&
+        n.refId &&
+        canReviewDevice &&
+        n.title.includes("Phê duyệt") && (
+          <div className="flex gap-2 mt-3 ml-[52px]">
+            <button
+              type="button"
+              disabled={busyId === n.id}
+              onClick={() => onReview(n, true)}
+              className="h-9 px-3 rounded-lg bg-[#16A34A] text-white text-xs font-semibold border-0 cursor-pointer disabled:opacity-50"
+            >
+              Cho phép
+            </button>
+            <button
+              type="button"
+              disabled={busyId === n.id}
+              onClick={() => onReview(n, false)}
+              className="h-9 px-3 rounded-lg bg-card text-[#DC2626] text-xs font-semibold border border-[#FECACA] cursor-pointer disabled:opacity-50"
+            >
+              Từ chối
+            </button>
+          </div>
+        )}
+    </div>
+  );
+}
 
 export default function NotificationsPage() {
   const user = useRoleUser();
   const { refreshUnread } = useNotifications();
-  const [items, setItems] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [unreadTotal, setUnreadTotal] = useState(0);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setItems(await workflowApi.getNotifications(user.id));
-      await refreshUnread();
-    } catch {
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user.id, refreshUnread]);
+  const fetchPage = useStableFetch((query) => workflowApi.listNotifications(user.id, query));
+  const { items, total, page, pageSize, setPage, q, setQ, loading, refresh } = usePagedList({
+    fetchPage,
+    pageSize: LIST_UI_PAGE_SIZE,
+  });
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void workflowApi
+      .listNotifications(user.id, { unreadOnly: true, page: 1, pageSize: 1 })
+      .then((d) => setUnreadTotal(d.total))
+      .catch(() => setUnreadTotal(0));
+  }, [user.id, items]);
 
   const markOne = async (id: string) => {
     try {
       await workflowApi.markRead(id);
-      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+      refresh();
       await refreshUnread();
     } catch {
       /* ignore */
@@ -49,8 +116,9 @@ export default function NotificationsPage() {
   const markAll = async () => {
     try {
       await workflowApi.markAllRead(user.id);
-      setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      refresh();
       await refreshUnread();
+      setUnreadTotal(0);
     } catch {
       /* ignore */
     }
@@ -69,89 +137,107 @@ export default function NotificationsPage() {
     }
   };
 
-  const unread = items.filter((n) => !n.isRead).length;
-  const canReviewDevice = ["director", "supervisor", "admin", "worker", "teamlead", "qc", "stats"].includes(user.role);
+  const canReviewDevice = useMemo(
+    () =>
+      ["director", "supervisor", "admin", "worker", "teamlead", "qc", "stats"].includes(user.role),
+    [user.role],
+  );
+
+  const renderItem = useCallback(
+    (n: Notification) => (
+      <NotificationBody
+        n={n}
+        canReviewDevice={canReviewDevice}
+        busyId={busyId}
+        onMark={(id) => void markOne(id)}
+        onReview={(item, ok) => void reviewDevice(item, ok)}
+      />
+    ),
+    [canReviewDevice, busyId],
+  );
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-5">
+    <div className="max-w-full min-w-0">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <div>
           <h2 className="font-display font-800 text-xl">Thông báo</h2>
-          <p className="text-sm text-[#64748B] mt-0.5">
-            {unread > 0 ? `${unread} chưa đọc` : "Không có thông báo mới"}
+          <p className="text-sm text-muted mt-0.5">
+            {unreadTotal > 0 ? `${unreadTotal} chưa đọc` : "Không có thông báo mới"} · {total} tổng
           </p>
         </div>
-        {unread > 0 && (
+        {unreadTotal > 0 && (
           <button
             type="button"
             onClick={() => void markAll()}
-            className="text-xs font-semibold text-[#2D6EBD] cursor-pointer border-0 bg-transparent"
+            className="text-xs font-semibold text-[#2D6EBD] cursor-pointer border-0 bg-transparent shrink-0"
           >
             Đánh dấu đã đọc
           </button>
         )}
       </div>
 
+      <div className="mb-4">
+        <input
+          className="w-full border border-border rounded-lg px-3 py-2 text-sm"
+          placeholder="Tìm tiêu đề, nội dung…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      </div>
+
       {loading ? (
-        <div className="text-center py-10 text-[#94A3B8]">
+        <div className="text-center py-10 text-muted-foreground">
           <i className="fas fa-spinner fa-spin text-2xl" />
         </div>
-      ) : items.length === 0 ? (
-        <div className="bg-white rounded-2xl p-10 text-center text-[#94A3B8] shadow-sm">
-          <i className="fas fa-bell-slash text-4xl block mb-3 opacity-30" />
-          Chưa có thông báo
-        </div>
       ) : (
-        <div className="space-y-2">
-          {items.map((n) => (
-            <div
-              key={n.id}
-              className={`w-full text-left rounded-2xl p-4 border ${
-                n.isRead ? "bg-white border-[#E2E8F0]" : "bg-[#EEF2FF] border-[#C7D2FE]"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => void markOne(n.id)}
-                className="w-full text-left bg-transparent border-0 p-0 cursor-pointer"
-              >
-                <div className="flex gap-3">
-                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-                    <i className={`fas ${TYPE_ICON[n.type] ?? "fa-bell text-[#64748B]"}`} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-sm">{n.title}</div>
-                    {n.body ? <div className="text-xs text-[#64748B] mt-0.5">{n.body}</div> : null}
-                    <div className="text-[11px] text-[#94A3B8] mt-1">
-                      {new Date(n.createdAt).toLocaleString("vi-VN")}
+        <ResponsiveDataList
+          items={items}
+          getKey={(n) => n.id}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPage={setPage}
+          emptyText="Chưa có thông báo"
+          columns={[
+            {
+              key: "title",
+              header: "Thông báo",
+              render: (n) => (
+                <div className="flex items-start gap-2">
+                  <i className={`fas ${TYPE_ICON[n.type] ?? "fa-bell text-muted"}`} />
+                  <div>
+                    <div className={`font-semibold text-sm ${n.isRead ? "" : "text-primary"}`}>
+                      {n.title}
                     </div>
+                    {n.body ? <div className="text-xs text-muted">{n.body}</div> : null}
                   </div>
-                  {!n.isRead && <span className="w-2 h-2 rounded-full bg-[#4F46E5] mt-2 flex-shrink-0" />}
                 </div>
-              </button>
-              {n.type === "device" && n.refType === "device_login" && n.refId && canReviewDevice && n.title.includes("Phê duyệt") && (
-                <div className="flex gap-2 mt-3 ml-[52px]">
-                  <button
-                    type="button"
-                    disabled={busyId === n.id}
-                    onClick={() => void reviewDevice(n, true)}
-                    className="h-9 px-3 rounded-lg bg-[#16A34A] text-white text-xs font-semibold border-0 cursor-pointer disabled:opacity-50"
-                  >
-                    Cho phép
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busyId === n.id}
-                    onClick={() => void reviewDevice(n, false)}
-                    className="h-9 px-3 rounded-lg bg-white text-[#DC2626] text-xs font-semibold border border-[#FECACA] cursor-pointer disabled:opacity-50"
-                  >
-                    Từ chối
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+              ),
+            },
+            {
+              key: "time",
+              header: "Thời gian",
+              render: (n) => (
+                <span className="text-xs text-muted-foreground">
+                  {new Date(n.createdAt).toLocaleString("vi-VN")}
+                </span>
+              ),
+            },
+            {
+              key: "read",
+              header: "TT",
+              className: "text-center",
+              render: (n) =>
+                n.isRead ? (
+                  <span className="text-xs text-muted-foreground">Đã đọc</span>
+                ) : (
+                  <span className="text-xs font-semibold text-[#4F46E5]">Mới</span>
+                ),
+            },
+          ]}
+          renderCard={renderItem}
+          onRowClick={(n) => void markOne(n.id)}
+        />
       )}
     </div>
   );

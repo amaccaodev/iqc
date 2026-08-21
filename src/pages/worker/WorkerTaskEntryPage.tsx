@@ -10,7 +10,7 @@ export default function WorkerTaskEntryPage() {
 
   if (loading) {
     return (
-      <div className="text-center py-16 text-[#94A3B8] text-sm">
+      <div className="text-center py-16 text-muted-foreground text-sm">
         <i className="fas fa-spinner fa-spin text-2xl block mb-2" />
         Đang tải...
       </div>
@@ -31,8 +31,8 @@ export default function WorkerTaskEntryPage() {
         <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4 mx-auto">
           <i className="fas fa-triangle-exclamation text-red-500 text-2xl" />
         </div>
-        <h2 className="font-display font-800 text-xl text-[#0F172A] mb-2">Chưa được phân công</h2>
-        <p className="text-[#64748B] text-sm mb-6">Bạn không có quyền nhập dữ liệu cho BOM này.</p>
+        <h2 className="font-display font-800 text-xl text-foreground mb-2">Chưa được phân công</h2>
+        <p className="text-muted text-sm mb-6">Bạn không có quyền nhập dữ liệu cho BOM này.</p>
         <Navigate to="/worker/dashboard" replace />
       </div>
     );

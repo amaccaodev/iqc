@@ -1,6 +1,8 @@
 import type {
+  EntityListQuery,
   MachineIncident,
   OvertimeRequest,
+  PagedResult,
   QCComplaint,
   ProductionStat,
   OrderAuditLog,
@@ -11,13 +13,21 @@ import { MOCK_INCIDENTS, MOCK_NOTIFICATIONS } from "../../mocks/workflowSeed";
 
 class WorkflowApiService extends BaseApiService {
   // ── Incidents ──────────────────────────────────────────────────────────────
+  listIncidents(query: EntityListQuery = {}): Promise<PagedResult<MachineIncident>> {
+    return this.listPagedSafe<MachineIncident>("/incidents", query);
+  }
+
+  getIncidentStats(): Promise<Record<string, number>> {
+    return this.get<Record<string, number>>("/incidents/stats");
+  }
+
   async getIncidents(filters?: { orderId?: string; bomId?: string; status?: string }): Promise<MachineIncident[]> {
-    const params = new URLSearchParams();
-    if (filters?.orderId) params.set("orderId", filters.orderId);
-    if (filters?.bomId) params.set("bomId", filters.bomId);
-    if (filters?.status) params.set("status", filters.status);
-    const qs = params.toString();
     try {
+      const params = new URLSearchParams();
+      if (filters?.orderId) params.set("orderId", filters.orderId);
+      if (filters?.bomId) params.set("bomId", filters.bomId);
+      if (filters?.status) params.set("status", filters.status);
+      const qs = params.toString();
       return await this.get<MachineIncident[]>(`/incidents${qs ? `?${qs}` : ""}`);
     } catch {
       return MOCK_INCIDENTS.filter((i) => {
@@ -58,6 +68,10 @@ class WorkflowApiService extends BaseApiService {
   }
 
   // ── Overtime ───────────────────────────────────────────────────────────────
+  listOvertime(query: EntityListQuery = {}): Promise<PagedResult<OvertimeRequest>> {
+    return this.listPagedSafe<OvertimeRequest>("/overtime", query);
+  }
+
   async getOvertimeRequests(filters?: { orderId?: string; status?: string }): Promise<OvertimeRequest[]> {
     const params = new URLSearchParams();
     if (filters?.orderId) params.set("orderId", filters.orderId);
@@ -88,6 +102,10 @@ class WorkflowApiService extends BaseApiService {
   }
 
   // ── Complaints ─────────────────────────────────────────────────────────────
+  listComplaints(query: EntityListQuery = {}): Promise<PagedResult<QCComplaint>> {
+    return this.listPagedSafe<QCComplaint>("/complaints", query);
+  }
+
   async getComplaints(filters?: { orderId?: string; bomId?: string; status?: string }): Promise<QCComplaint[]> {
     const params = new URLSearchParams();
     if (filters?.orderId) params.set("orderId", filters.orderId);
@@ -164,6 +182,10 @@ class WorkflowApiService extends BaseApiService {
   }
 
   // ── Notifications ──────────────────────────────────────────────────────────
+  listNotifications(userId: string, query: EntityListQuery = {}): Promise<PagedResult<Notification>> {
+    return this.listPagedSafe<Notification>(`/notifications/${userId}`, query);
+  }
+
   async getNotifications(userId: string, unreadOnly = false): Promise<Notification[]> {
     try {
       return await this.get<Notification[]>(`/notifications/${userId}${unreadOnly ? "?unread=true" : ""}`);

@@ -58,6 +58,10 @@ export class AuthApiService extends BaseApiService implements IAuthService {
   reviewDevice(id: string, approved: boolean): Promise<DeviceLoginRequest> {
     return this.post<DeviceLoginRequest>(`/auth/device-requests/${id}/review`, { approved });
   }
+
+  changePassword(currentPassword: string, newPassword: string): Promise<{ ok: true }> {
+    return this.post<{ ok: true }>("/auth/change-password", { currentPassword, newPassword });
+  }
 }
 
 export const authApi = new AuthApiService();

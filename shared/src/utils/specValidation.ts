@@ -1,4 +1,4 @@
-import type { MaterialSpec, SpecValidationResult } from "../types/spec.js";
+import type { MaterialSpec, PartChecklistItem, SpecValidationResult } from "../types/spec.js";
 
 /** Parse nhãn cột kích thước → thông số có min/max */
 export function parseSpecLabel(label: string, index: number): MaterialSpec {
@@ -79,6 +79,45 @@ export function buildMaterialSpecs(specCols: string[]): MaterialSpec[] {
     .filter((s) => s.label);
 }
 
+/**
+ * Xây materialSpecs từ checklist thiết kế linh kiện.
+ * VD: [{ name: "Đường kính dây", target: 2.5, unit: "mm" }, ...]
+ */
+export function buildMaterialSpecsFromChecklist(
+  items: PartChecklistItem[],
+): MaterialSpec[] {
+  return items.map((item, i) => {
+    const type =
+      item.type ??
+      (item.target !== undefined ? "numeric" : "text");
+    const target = item.target;
+    const min = item.min ?? target;
+    const max = item.max ?? target;
+    return {
+      index: i,
+      pointNo: i + 1,
+      label: item.name,
+      type,
+      target,
+      min,
+      max,
+      unit: item.unit,
+      hint: item.hint,
+    } satisfies MaterialSpec;
+  });
+}
+
+/** Sinh specCols legacy từ checklist (để tương thích lưu DB cũ) */
+export function checklistToSpecCols(items: PartChecklistItem[], padTo = 11): string[] {
+  const cols = items.map((item) => {
+    if (item.target === undefined) return item.name;
+    const u = item.unit ? ` ${item.unit}` : "";
+    return `${item.name}: ${item.target}${u}`.trim();
+  });
+  while (cols.length < padTo) cols.push("");
+  return cols;
+}
+
 export function resolveMaterialSpecs(
   specCols: string[],
   materialSpecs?: MaterialSpec[],
@@ -87,13 +126,45 @@ export function resolveMaterialSpecs(
   return buildMaterialSpecs(specCols);
 }
 
+/** Các điểm đo hiển thị khi nhập — ưu tiên spec có pointNo (theo bản vẽ / checklist) */
+export function getActiveInspectionSpecs(specs: MaterialSpec[]): MaterialSpec[] {
+  const numbered = specs.filter((s) => s.pointNo != null && s.label);
+  if (numbered.length) {
+    return [...numbered].sort((a, b) => (a.pointNo ?? 0) - (b.pointNo ?? 0));
+  }
+  return specs.filter((s) => s.label);
+}
+
+/** Số slot dims cần cấp phát (tương thích mảng cũ tối thiểu 11) */
+export function dimSlotCount(specs: MaterialSpec[], minSlots = 11): number {
+  if (!specs.length) return minSlots;
+  const maxIndex = Math.max(...specs.map((s) => s.index));
+  return Math.max(minSlots, maxIndex + 1);
+}
+
+export function emptyDims(specs: MaterialSpec[], minSlots = 11): string[] {
+  return Array(dimSlotCount(specs, minSlots)).fill("");
+}
+
 export function formatSpecRange(spec: MaterialSpec): string {
-  if (spec.type !== "numeric" || spec.target === undefined) return spec.label;
+  if (spec.type === "text" || spec.type === "qualitative") {
+    return spec.target !== undefined
+      ? `${spec.label} = ${spec.target}${spec.unit ?? ""}`
+      : spec.label;
+  }
+  if (spec.target === undefined) return spec.label;
   const u = spec.unit ?? "";
   const min = spec.min ?? spec.target;
   const max = spec.max ?? spec.target;
-  if (min === max) return `${spec.label} = ${min}${u}`;
-  return `${spec.label}: ${min}${u} – ${max}${u}`;
+  if (min === max) return `${spec.label} = ${min}${u ? ` ${u}` : ""}`;
+  return `${spec.label}: ${min}${u ? ` ${u}` : ""} – ${max}${u ? ` ${u}` : ""}`;
+}
+
+/** Nhãn field trên form nhập: "Đường kính dây · 2.5 mm" */
+export function formatSpecFieldTitle(spec: MaterialSpec): string {
+  if (spec.target === undefined) return spec.label;
+  const u = spec.unit ? ` ${spec.unit}` : "";
+  return `${spec.label} · ${spec.target}${u}`;
 }
 
 export function validateDimensionValue(

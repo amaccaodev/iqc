@@ -123,20 +123,26 @@ export default function DashboardCharts({
     setSelected(null);
   };
 
+  const openAllBoms = () => {
+    const all = slices.flatMap((s) => s.items);
+    if (all.length) openSheet(`Tất cả BOM · ${all.length} mục`, all);
+  };
+
   return (
     <div className="mb-6 space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="bg-white rounded-2xl border border-[#E2E8F0] p-4 shadow-sm">
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
           <h3 className="font-display font-700 text-sm mb-1">BOM theo trạng thái</h3>
-          <p className="text-[11px] text-[#94A3B8] mb-3">Bấm phần biểu đồ để xem danh sách. Bấm dòng để mở chi tiết.</p>
+          <p className="text-[11px] text-muted-foreground mb-3">Bấm phần biểu đồ để xem danh sách. Bấm dòng để mở chi tiết.</p>
           <PieChart
             slices={slices}
             onSelect={(s) => openSheet(`${s.label} · ${s.value} BOM (${s.percent}%)`, s.items)}
+            onCenterClick={openAllBoms}
           />
         </div>
-        <div className="bg-white rounded-2xl border border-[#E2E8F0] p-4 shadow-sm">
+        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
           <h3 className="font-display font-700 text-sm mb-1">Sản lượng theo lệnh</h3>
-          <p className="text-[11px] text-[#94A3B8] mb-3">Bấm điểm để xem số. Số liệu nằm ô riêng, không ghi đè lên đường.</p>
+          <p className="text-[11px] text-muted-foreground mb-3">Bấm điểm để xem số. Số liệu nằm ô riêng, không ghi đè lên đường.</p>
           <LineChart
             points={pagedPoints}
             onSelect={(p) => openSheet(`LSX-${p.label} · ${p.pass.toLocaleString()} đạt`, p.items)}
@@ -146,19 +152,19 @@ export default function DashboardCharts({
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center keyboard-aware-overlay" onClick={() => setSelected(null)}>
           <div
-            className="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-md shadow-xl flex flex-col"
-            style={{ minHeight: "58vh", maxHeight: "88vh" }}
+            className="bg-card rounded-t-3xl sm:rounded-2xl w-full max-w-md shadow-xl flex flex-col"
+            style={{ minHeight: "58vh", maxHeight: "min(88vh, calc(100dvh - var(--keyboard-inset, 0px) - 1rem))" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 pt-3 pb-2 flex-shrink-0">
-              <div className="sm:hidden w-10 h-1 bg-[#E2E8F0] rounded-full mx-auto mb-3" />
+              <div className="sm:hidden w-10 h-1 bg-border rounded-full mx-auto mb-3" />
               <div className="flex items-start justify-between gap-3">
                 <h4 className="font-display font-700 text-base pr-2">{selected.title}</h4>
-                <button type="button" onClick={() => setSelected(null)} className="w-9 h-9 rounded-full bg-[#F1F5F9] border-0 cursor-pointer text-lg flex-shrink-0">×</button>
+                <button type="button" onClick={() => setSelected(null)} className="w-9 h-9 rounded-full bg-surface border-0 cursor-pointer text-lg flex-shrink-0">×</button>
               </div>
-              <p className="text-[11px] text-[#94A3B8] mt-1">{sheetItems.length} mục · bấm dòng để xem chi tiết</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{sheetItems.length} mục · bấm dòng để xem chi tiết</p>
             </div>
             <div className="px-5 overflow-y-auto flex-1" style={{ minHeight: sheetListH }}>
               <div className="space-y-2 pb-2">
@@ -167,23 +173,23 @@ export default function DashboardCharts({
                     key={item.key}
                     type="button"
                     onClick={() => openDetail(item)}
-                    className="w-full text-left bg-[#F8FAFC] rounded-xl px-3 py-3 border border-transparent hover:border-[#2D6EBD] cursor-pointer min-h-[64px]"
+                    className="w-full text-left bg-surface rounded-xl px-3 py-3 border border-transparent hover:border-ring cursor-pointer min-h-[64px]"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-[#0F172A] truncate">{item.title}</div>
-                        <div className="text-xs text-[#64748B] mt-0.5">{item.subtitle}</div>
+                        <div className="text-sm font-semibold text-foreground truncate">{item.title}</div>
+                        <div className="text-xs text-muted mt-0.5">{item.subtitle}</div>
                       </div>
                       <i className="fas fa-chevron-right text-[#CBD5E1] text-xs" />
                     </div>
                   </button>
                 ))}
                 {pagedSheet.length === 0 && (
-                  <div className="text-sm text-[#94A3B8] text-center py-8">Không có mục</div>
+                  <div className="text-sm text-muted-foreground text-center py-8">Không có mục</div>
                 )}
               </div>
             </div>
-            <div className="px-5 pb-6 pt-1 flex-shrink-0 border-t border-[#F1F5F9]">
+            <div className="px-5 pb-6 pt-1 flex-shrink-0 border-t border-border">
               <PaginationBar page={sheetPage} pageSize={SHEET_PAGE} total={sheetItems.length} onPage={setSheetPage} />
             </div>
           </div>
@@ -193,9 +199,9 @@ export default function DashboardCharts({
   );
 }
 
-function PieChart({ slices, onSelect }: { slices: Slice[]; onSelect: (s: Slice) => void }) {
+function PieChart({ slices, onSelect, onCenterClick }: { slices: Slice[]; onSelect: (s: Slice) => void; onCenterClick?: () => void }) {
   if (slices.length === 0) {
-    return <div className="h-40 flex items-center justify-center text-sm text-[#94A3B8]">Chưa có dữ liệu BOM</div>;
+    return <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">Chưa có dữ liệu BOM</div>;
   }
   const total = slices.reduce((s, x) => s + x.value, 0) || 1;
   const size = 220;
@@ -224,10 +230,11 @@ function PieChart({ slices, onSelect }: { slices: Slice[]; onSelect: (s: Slice) 
     <div className="flex flex-col sm:flex-row items-center gap-3">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="max-w-full">
         {arcs.map(({ slice, d }) => (
-          <path key={slice.id} d={d} fill={slice.color} className="cursor-pointer" onClick={() => onSelect(slice)}>
+          <path key={slice.id} d={d} fill={slice.color} className="cursor-pointer hover:opacity-90" onClick={() => onSelect(slice)}>
             <title>{slice.label}: {slice.value} ({slice.percent}%)</title>
           </path>
         ))}
+        <circle cx={cx} cy={cy} r={40} fill="transparent" className="cursor-pointer" onClick={() => onCenterClick?.()} />
         {arcs.map(({ slice, lx, ly, showLabel }) =>
           showLabel ? (
             <text key={`${slice.id}-lbl`} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="700" fill="#0F172A">
@@ -235,8 +242,10 @@ function PieChart({ slices, onSelect }: { slices: Slice[]; onSelect: (s: Slice) 
             </text>
           ) : null,
         )}
-        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-[#0F172A]" fontSize="20" fontWeight="700">{total}</text>
-        <text x={cx} y={cy + 12} textAnchor="middle" className="fill-[#94A3B8]" fontSize="10">BOM</text>
+        <text x={cx} y={cy - 6} textAnchor="middle" className="fill-[#0F172A] cursor-pointer" fontSize="20" fontWeight="700" onClick={onCenterClick}>
+          {total}
+        </text>
+        <text x={cx} y={cy + 12} textAnchor="middle" className="fill-[#94A3B8] cursor-pointer" fontSize="10" onClick={onCenterClick}>BOM</text>
       </svg>
       <div className="flex-1 w-full space-y-1">
         {slices.map((s) => (
@@ -244,12 +253,12 @@ function PieChart({ slices, onSelect }: { slices: Slice[]; onSelect: (s: Slice) 
             key={s.id}
             type="button"
             onClick={() => onSelect(s)}
-            className="w-full flex items-center gap-2 text-left border border-transparent hover:border-[#E2E8F0] rounded-xl bg-transparent cursor-pointer py-2 px-2 min-h-11"
+            className="w-full flex items-center gap-2 text-left border border-transparent hover:border-border rounded-xl bg-transparent cursor-pointer py-2 px-2 min-h-11"
           >
             <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: s.color }} />
-            <span className="text-xs text-[#475569] flex-1 truncate">{s.label}</span>
-            <span className="text-sm font-bold text-[#0F172A] tabular-nums">{s.value}</span>
-            <span className="text-[11px] text-[#64748B] w-10 text-right">{s.percent}%</span>
+            <span className="text-xs text-muted flex-1 truncate">{s.label}</span>
+            <span className="text-sm font-bold text-foreground tabular-nums">{s.value}</span>
+            <span className="text-[11px] text-muted w-10 text-right">{s.percent}%</span>
           </button>
         ))}
       </div>
@@ -272,7 +281,7 @@ function shortAxisLabel(label: string) {
 function LineChart({ points, onSelect }: { points: LinePoint[]; onSelect: (p: LinePoint) => void }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   if (points.length === 0) {
-    return <div className="h-40 flex items-center justify-center text-sm text-[#94A3B8]">Chưa có lệnh sản xuất</div>;
+    return <div className="h-40 flex items-center justify-center text-sm text-muted-foreground">Chưa có lệnh sản xuất</div>;
   }
   const active = points.find((p) => p.id === activeId) ?? points[points.length - 1];
   const col = 100;
@@ -291,18 +300,18 @@ function LineChart({ points, onSelect }: { points: LinePoint[]; onSelect: (p: Li
     <div>
       <div className="flex gap-3 text-[11px] mb-2">
         <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#2D6EBD] inline-block" /> Đạt</span>
-        <span className="flex items-center gap-1 text-[#94A3B8]"><span className="w-4 border-t border-dashed border-[#94A3B8] inline-block" /> Mục tiêu</span>
+        <span className="flex items-center gap-1 text-muted-foreground"><span className="w-4 border-t border-dashed border-[#94A3B8] inline-block" /> Mục tiêu</span>
       </div>
       <button
         type="button"
         onClick={() => onSelect(active)}
-        className="w-full mb-2 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-left cursor-pointer"
+        className="w-full mb-2 rounded-xl border border-border bg-surface px-3 py-2.5 text-left cursor-pointer"
       >
-        <div className="text-[11px] text-[#94A3B8] truncate">{active.label}</div>
+        <div className="text-[11px] text-muted-foreground truncate">{active.label}</div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm">
-          <span><span className="text-[#94A3B8] text-xs">Đạt </span><b className="text-[#1B3A5C]">{active.pass.toLocaleString("vi-VN")}</b></span>
-          <span><span className="text-[#94A3B8] text-xs">Mục tiêu </span><b className="text-[#475569]">{active.target.toLocaleString("vi-VN")}</b></span>
-          <span><span className="text-[#94A3B8] text-xs">Hỏng </span><b className="text-[#DC2626]">{active.fail.toLocaleString("vi-VN")}</b></span>
+          <span><span className="text-muted-foreground text-xs">Đạt </span><b className="text-primary">{active.pass.toLocaleString("vi-VN")}</b></span>
+          <span><span className="text-muted-foreground text-xs">Mục tiêu </span><b className="text-muted">{active.target.toLocaleString("vi-VN")}</b></span>
+          <span><span className="text-muted-foreground text-xs">Hỏng </span><b className="text-[#DC2626]">{active.fail.toLocaleString("vi-VN")}</b></span>
         </div>
       </button>
       <div className="overflow-x-auto -mx-1 px-1" style={{ WebkitOverflowScrolling: "touch" }}>
@@ -340,12 +349,12 @@ function LineChart({ points, onSelect }: { points: LinePoint[]; onSelect: (p: Li
               type="button"
               onClick={() => { setActiveId(p.id); onSelect(p); }}
               className={`flex-shrink-0 min-w-[132px] rounded-xl border px-3 py-2 text-left cursor-pointer ${
-                p.id === active.id ? "border-[#2D6EBD] bg-[#EFF6FF]" : "border-[#E2E8F0] bg-[#F8FAFC]"
+                p.id === active.id ? "border-[#2D6EBD] bg-[#EFF6FF]" : "border-border bg-surface"
               }`}
             >
-              <div className="text-[10px] text-[#94A3B8] truncate">{p.label}</div>
-              <div className="text-sm font-bold text-[#1B3A5C] leading-tight">{p.pass.toLocaleString("vi-VN")}</div>
-              <div className="text-[11px] text-[#64748B]">/ {p.target.toLocaleString("vi-VN")} · hỏng {p.fail.toLocaleString("vi-VN")}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{p.label}</div>
+              <div className="text-sm font-bold text-primary leading-tight">{p.pass.toLocaleString("vi-VN")}</div>
+              <div className="text-[11px] text-muted">/ {p.target.toLocaleString("vi-VN")} · hỏng {p.fail.toLocaleString("vi-VN")}</div>
             </button>
         ))}
       </div>

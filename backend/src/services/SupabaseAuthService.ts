@@ -1,10 +1,15 @@
 import type { DeviceKind, DeviceLoginRequest, LoginRequest, LoginResponse, User, UserPublic } from "../../../shared/src/types/index.js";
+import { resolveUserTeamId } from "../../../shared/src/constants/teams.js";
 import { SEED_USERS } from "../data/seed.js";
 import { supabaseUserRepository as userRepo } from "../repositories/SupabaseUserRepository.js";
 import { workflowService } from "./WorkflowService.js";
 import { REFRESH_TTL_MS, sessionStore } from "./SessionStore.js";
 
 export const REFRESH_COOKIE = "iqc_refresh";
+
+function normalizeUserTeam(user: User): User {
+  return { ...user, teamId: resolveUserTeamId(user) || user.teamId };
+}
 
 export class SupabaseAuthService {
   private findSeedUser(employeeId: string): User | undefined {
@@ -14,7 +19,7 @@ export class SupabaseAuthService {
   async resolveUser(employeeId: string): Promise<User | undefined> {
     let user = await userRepo.findByEmployeeId(employeeId);
     if (!user) user = this.findSeedUser(employeeId);
-    return user;
+    return user ? normalizeUserTeam(user) : undefined;
   }
 
   async login(
@@ -170,6 +175,31 @@ export class SupabaseAuthService {
         : "Yêu cầu đăng nhập máy mới đã bị từ chối.",
     });
     return request;
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!currentPassword || !newPassword) {
+      throw new Error("Thiếu mật khẩu hiện tại hoặc mật khẩu mới.");
+    }
+    if (newPassword.length < 4) {
+      throw new Error("Mật khẩu mới tối thiểu 4 ký tự.");
+    }
+
+    let user = await userRepo.findById(userId);
+    const seed = SEED_USERS.find((u) => u.id === userId);
+    if (!user) user = seed;
+
+    if (!user) throw new Error("Không tìm thấy tài khoản.");
+    if (user.password !== currentPassword) {
+      throw new Error("Mật khẩu hiện tại không đúng.");
+    }
+
+    if (seed) seed.password = newPassword;
+    try {
+      await userRepo.updatePassword(userId, newPassword);
+    } catch {
+      /* seed-only / offline demo */
+    }
   }
 }
 

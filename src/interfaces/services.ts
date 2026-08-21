@@ -37,6 +37,12 @@ export interface IOrderService {
 
 export interface IUserService {
   getAll(): Promise<UserPublic[]>;
+  list?(query?: {
+    q?: string;
+    page?: number;
+    pageSize?: number;
+    roles?: string[];
+  }): Promise<{ items: UserPublic[]; total: number; page: number; pageSize: number }>;
   create(user: Omit<User, "id">): Promise<UserPublic>;
   update(id: string, user: Partial<User>): Promise<UserPublic>;
   toggle(id: string): Promise<UserPublic>;

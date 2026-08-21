@@ -1,4 +1,5 @@
 import type { IEntity } from "../../../shared/src/types/index.js";
+import { paginateInMemory } from "../../../shared/src/utils/pagedList.js";
 import type { IRepository } from "./IRepository.js";
 
 /** In-memory repository base — Open/Closed principle */
@@ -37,5 +38,17 @@ export abstract class BaseRepository<T extends IEntity> implements IRepository<T
 
   protected setAll(items: T[]): void {
     this.items = [...items];
+  }
+
+  searchPaged(opts: {
+    q?: string;
+    page?: number;
+    pageSize?: number;
+    match?: (item: T, q: string) => boolean;
+    filter?: (item: T) => boolean;
+  }) {
+    let base = this.findAll();
+    if (opts.filter) base = base.filter(opts.filter);
+    return paginateInMemory(base, opts);
   }
 }

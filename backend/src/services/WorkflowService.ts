@@ -8,17 +8,37 @@
  *   - Thông báo (Notifications)
  */
 import type {
+  EntityListQuery,
   MachineIncident,
   OvertimeRequest,
+  PagedResult,
   QCComplaint,
   ProductionStat,
   OrderAuditLog,
   Notification,
+  Role,
 } from "../../../shared/src/types/index.js";
+import { notificationTypesForRole } from "../../../shared/src/constants/notifications.js";
+import { normalizePageQuery } from "../../../shared/src/utils/listQuery.js";
+import { paginateInMemory } from "../../../shared/src/utils/pagedList.js";
 import { supabase } from "../lib/supabase.js";
+import { SEED_USERS } from "../data/seed.js";
 
 function uid(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function roleOfUser(userId: string): Role | null {
+  return SEED_USERS.find((u) => u.id === userId)?.role ?? null;
+}
+
+function filterNotificationsByRole(userId: string, items: Notification[]): Notification[] {
+  const role = roleOfUser(userId);
+  if (!role) return items;
+  const allowed = notificationTypesForRole(role);
+  if (!allowed) return items;
+  const set = new Set(allowed);
+  return items.filter((n) => set.has(n.type));
 }
 
 // ── Mappers (snake_case → camelCase) ─────────────────────────────────────────
@@ -28,6 +48,7 @@ function mapIncident(r: Record<string, unknown>): MachineIncident {
     id: r.id as string,
     bomId: r.bom_id as string | undefined,
     orderId: r.order_id as string | undefined,
+    machineId: (r.machine_id as string | undefined) ?? undefined,
     machineName: r.machine_name as string,
     machineCode: (r.machine_code as string) ?? "",
     severity: r.severity as MachineIncident["severity"],
@@ -166,6 +187,7 @@ export class WorkflowService {
         order_id: body.orderId ?? null,
         machine_name: body.machineName,
         machine_code: body.machineCode ?? "",
+        machine_id: body.machineId ?? null,
         severity: body.severity,
         description: body.description,
         reported_by: body.reportedBy,
@@ -548,7 +570,7 @@ export class WorkflowService {
       if (unreadOnly) q = q.eq("is_read", false);
       const { data, error } = await q;
       if (error) throw new Error(error.message);
-      return (data ?? []).map((r) => ({
+      const mapped = (data ?? []).map((r) => ({
         id: r.id as string,
         userId: r.user_id as string,
         type: r.type as Notification["type"],
@@ -559,9 +581,13 @@ export class WorkflowService {
         isRead: r.is_read as boolean,
         createdAt: r.created_at as string,
       }));
+      return filterNotificationsByRole(userId, mapped);
     } catch {
       const { workflowMemoryStore } = await import("./WorkflowMemoryStore.js");
-      return workflowMemoryStore.getNotifications(userId, unreadOnly);
+      return filterNotificationsByRole(
+        userId,
+        workflowMemoryStore.getNotifications(userId, unreadOnly),
+      );
     }
   }
 
@@ -606,6 +632,193 @@ export class WorkflowService {
     } catch {
       const { workflowMemoryStore } = await import("./WorkflowMemoryStore.js");
       workflowMemoryStore.createNotification(body);
+    }
+  }
+
+  // ── Paginated lists (search + page) ─────────────────────────────────────────
+
+  async listIncidentsPaged(query: EntityListQuery = {}): Promise<PagedResult<MachineIncident>> {
+    const { page, pageSize, q, status, orderId, bomId } = normalizePageQuery(query);
+    try {
+      let db = supabase
+        .from("machine_incidents")
+        .select("*", { count: "exact" })
+        .order("reported_at", { ascending: false });
+      if (status) db = db.eq("status", status);
+      if (orderId) db = db.eq("order_id", orderId);
+      if (bomId) db = db.eq("bom_id", bomId);
+      if (q?.trim()) {
+        const esc = q.trim().replace(/[%_]/g, "");
+        db = db.or(
+          `machine_name.ilike.%${esc}%,machine_code.ilike.%${esc}%,description.ilike.%${esc}%`,
+        );
+      }
+      const from = (page - 1) * pageSize;
+      const { data, error, count } = await db.range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      return {
+        items: (data ?? []).map((r) => mapIncident(r as Record<string, unknown>)),
+        total: count ?? 0,
+        page,
+        pageSize,
+      };
+    } catch {
+      const { workflowMemoryStore } = await import("./WorkflowMemoryStore.js");
+      const base = workflowMemoryStore.getIncidents({ orderId, bomId, status });
+      return paginateInMemory(base, {
+        q,
+        page,
+        pageSize,
+        match: (i, s) =>
+          i.machineName.toLowerCase().includes(s) ||
+          i.machineCode.toLowerCase().includes(s) ||
+          i.description.toLowerCase().includes(s),
+      });
+    }
+  }
+
+  async getIncidentStatusCounts(): Promise<Record<string, number>> {
+    const keys = ["open", "assigned", "in_progress", "resolved"] as const;
+    try {
+      const counts: Record<string, number> = {};
+      for (const st of keys) {
+        const { count, error } = await supabase
+          .from("machine_incidents")
+          .select("*", { count: "exact", head: true })
+          .eq("status", st);
+        if (error) throw error;
+        counts[st] = count ?? 0;
+      }
+      return counts;
+    } catch {
+      const { workflowMemoryStore } = await import("./WorkflowMemoryStore.js");
+      const all = workflowMemoryStore.getIncidents();
+      return Object.fromEntries(keys.map((st) => [st, all.filter((i) => i.status === st).length]));
+    }
+  }
+
+  async listNotificationsPaged(
+    userId: string,
+    query: EntityListQuery = {},
+  ): Promise<PagedResult<Notification>> {
+    const { page, pageSize, q, unreadOnly } = normalizePageQuery(query);
+    const role = roleOfUser(userId);
+    const allowed = role ? notificationTypesForRole(role) : null;
+
+    try {
+      let db = supabase
+        .from("notifications")
+        .select("*", { count: "exact" })
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+      if (unreadOnly) db = db.eq("is_read", false);
+      if (allowed?.length) db = db.in("type", [...allowed]);
+      if (q?.trim()) {
+        const esc = q.trim().replace(/[%_]/g, "");
+        db = db.or(`title.ilike.%${esc}%,body.ilike.%${esc}%`);
+      }
+      const from = (page - 1) * pageSize;
+      const { data, error, count } = await db.range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      return {
+        items: (data ?? []).map((r) => ({
+          id: r.id as string,
+          userId: r.user_id as string,
+          type: r.type as Notification["type"],
+          refId: r.ref_id as string | undefined,
+          refType: r.ref_type as string | undefined,
+          title: r.title as string,
+          body: (r.body as string) ?? "",
+          isRead: r.is_read as boolean,
+          createdAt: r.created_at as string,
+        })),
+        total: count ?? 0,
+        page,
+        pageSize,
+      };
+    } catch {
+      const { workflowMemoryStore } = await import("./WorkflowMemoryStore.js");
+      let base = filterNotificationsByRole(
+        userId,
+        workflowMemoryStore.getNotifications(userId, unreadOnly),
+      );
+      return paginateInMemory(base, {
+        q,
+        page,
+        pageSize,
+        match: (n, s) =>
+          n.title.toLowerCase().includes(s) || (n.body ?? "").toLowerCase().includes(s),
+      });
+    }
+  }
+
+  async listOvertimePaged(query: EntityListQuery = {}): Promise<PagedResult<OvertimeRequest>> {
+    const { page, pageSize, q, status, orderId } = normalizePageQuery(query);
+    try {
+      let db = supabase
+        .from("overtime_requests")
+        .select("*", { count: "exact" })
+        .order("requested_at", { ascending: false });
+      if (status) db = db.eq("status", status);
+      if (orderId) db = db.eq("order_id", orderId);
+      if (q?.trim()) {
+        const esc = q.trim().replace(/[%_]/g, "");
+        db = db.or(`reason.ilike.%${esc}%,requested_name.ilike.%${esc}%`);
+      }
+      const from = (page - 1) * pageSize;
+      const { data, error, count } = await db.range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      return {
+        items: (data ?? []).map((r) => mapOvertime(r as Record<string, unknown>)),
+        total: count ?? 0,
+        page,
+        pageSize,
+      };
+    } catch {
+      const all = await this.getOvertimeRequests({ orderId, status });
+      return paginateInMemory(all, {
+        q,
+        page,
+        pageSize,
+        match: (o, s) =>
+          o.reason.toLowerCase().includes(s) || o.requestedName.toLowerCase().includes(s),
+      });
+    }
+  }
+
+  async listComplaintsPaged(query: EntityListQuery = {}): Promise<PagedResult<QCComplaint>> {
+    const { page, pageSize, q, status, orderId, bomId } = normalizePageQuery(query);
+    try {
+      let db = supabase
+        .from("qc_complaints")
+        .select("*", { count: "exact" })
+        .order("raised_at", { ascending: false });
+      if (status) db = db.eq("status", status);
+      if (orderId) db = db.eq("order_id", orderId);
+      if (bomId) db = db.eq("bom_id", bomId);
+      if (q?.trim()) {
+        const esc = q.trim().replace(/[%_]/g, "");
+        db = db.or(`defect_type.ilike.%${esc}%,defect_description.ilike.%${esc}%`);
+      }
+      const from = (page - 1) * pageSize;
+      const { data, error, count } = await db.range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      return {
+        items: (data ?? []).map((r) => mapComplaint(r as Record<string, unknown>)),
+        total: count ?? 0,
+        page,
+        pageSize,
+      };
+    } catch {
+      const all = await this.getComplaints({ orderId, bomId, status });
+      return paginateInMemory(all, {
+        q,
+        page,
+        pageSize,
+        match: (c, s) =>
+          c.defectType.toLowerCase().includes(s) ||
+          c.defectDescription.toLowerCase().includes(s),
+      });
     }
   }
 }

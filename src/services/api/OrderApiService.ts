@@ -94,11 +94,23 @@ export class OrderApiService extends BaseApiService implements IOrderService {
     orderId: string,
     bomId: string,
     workerNames: string[],
+    assignments?: Array<{
+      workerId: string;
+      workerName: string;
+      machineId?: string;
+      machineName: string;
+    }>,
   ): Promise<ProductionOrder> {
     const updated = await this.post<ProductionOrder>(
       `/orders/${orderId}/boms/${bomId}/assign-workers`,
-      { workerNames },
+      { workerNames, assignments },
     );
+    await this.refresh();
+    return updated;
+  }
+
+  async complete(id: string, note?: string): Promise<ProductionOrder> {
+    const updated = await this.post<ProductionOrder>(`/orders/${id}/complete`, { note });
     await this.refresh();
     return updated;
   }
@@ -147,6 +159,47 @@ export class OrderApiService extends BaseApiService implements IOrderService {
     );
     await this.refresh();
     return result;
+  }
+
+  async workerShiftClose(
+    orderId: string,
+    bomId: string,
+    summary: { passQty: number; failQty: number; note: string; reportedBy: string; workerId?: string },
+  ): Promise<ProductionOrder> {
+    const updated = await this.post<ProductionOrder>(
+      `/orders/${orderId}/boms/${bomId}/worker-shift-close`,
+      summary,
+    );
+    await this.refresh();
+    return updated;
+  }
+
+  async createFromProduct(
+    body: import("@shared/types").CreateOrderFromProductRequest & { createdBy: string },
+  ): Promise<ProductionOrder> {
+    const created = await this.post<ProductionOrder>("/orders/from-product", body);
+    await this.refresh();
+    return created;
+  }
+
+  async createFromProductsBatch(
+    body: {
+      deadline: string;
+      note?: string;
+      priority?: import("@shared/types").Priority;
+      customer?: string;
+      createdBy: string;
+      items: Array<
+        Omit<import("@shared/types").CreateOrderFromProductRequest, "deadline" | "priority" | "customer"> & {
+          deadline?: string;
+          note?: string;
+        }
+      >;
+    },
+  ): Promise<ProductionOrder[]> {
+    const created = await this.post<ProductionOrder[]>("/orders/from-products-batch", body);
+    await this.refresh();
+    return created;
   }
 
   async submitWorkerEntry(

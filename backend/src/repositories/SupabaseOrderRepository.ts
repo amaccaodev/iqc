@@ -15,6 +15,7 @@ import type {
   TeamSummary,
   WorkerEntry,
 } from "../../../shared/src/types/index.js";
+import { TEAMS, resolveBomTeamId } from "../../../shared/src/constants/teams.js";
 import { supabase } from "../lib/supabase.js";
 import { applyPlanToBom, encodeTechNote, today, todayDateTime } from "../../../shared/src/utils/orderHelpers.js";
 
@@ -62,6 +63,9 @@ interface DbAttachment {
   size: string;
   uploaded_by: string;
   uploaded_at: string;
+  mime_type?: string | null;
+  content_base64?: string | null;
+  kind?: string | null;
 }
 
 interface DbEntry {
@@ -107,6 +111,24 @@ function mapAttachment(row: DbAttachment): Attachment {
     size: row.size,
     uploadedBy: row.uploaded_by,
     uploadedAt: row.uploaded_at,
+    mimeType: row.mime_type || undefined,
+    contentBase64: row.content_base64 || undefined,
+    kind: (row.kind as Attachment["kind"]) || undefined,
+  };
+}
+
+function attachmentRow(a: Attachment, foreignKey: string, foreignValue: string) {
+  return {
+    id: a.id,
+    [foreignKey]: foreignValue,
+    name: a.name,
+    type: a.type,
+    size: a.size,
+    uploaded_by: a.uploadedBy,
+    uploaded_at: a.uploadedAt,
+    mime_type: a.mimeType ?? "",
+    content_base64: a.contentBase64 ?? null,
+    kind: a.kind ?? "other",
   };
 }
 
@@ -133,7 +155,7 @@ function mapBom(
   teamSummary: DbTeamSummary | null,
   qcReport: DbQCReport | null,
 ): BOMItem {
-  return applyPlanToBom({
+  const mapped = applyPlanToBom({
     id: bom.id,
     bomCode: bom.bom_code,
     partCode: bom.part_code,
@@ -173,6 +195,24 @@ function mapBom(
         }
       : undefined,
   });
+  const teamId = resolveBomTeamId(mapped);
+  const team = TEAMS.find((t) => t.id === teamId);
+  return {
+    ...mapped,
+    assignedTeamId: teamId || mapped.assignedTeamId,
+    assignedTeamName:
+      mapped.assignedTeamName ||
+      (team ? `${team.name} – ${team.leadShort}` : mapped.assignedTeamName),
+    processStage:
+      mapped.processStage ||
+      (teamId === "t_hot"
+        ? "hot_forge"
+        : teamId === "t_auto"
+          ? "auto"
+          : teamId === "t_asm"
+            ? "assembly"
+            : undefined),
+  };
 }
 
 // ── Repository class ─────────────────────────────────────────────────────────
@@ -234,7 +274,7 @@ export class SupabaseOrderRepository {
     return { items, total: count ?? items.length, page, pageSize };
   }
 
-  /** Create a new order row (no BOMs yet) */
+  /** Create order + BOMs. Nếu BOM fail sau khi đã insert order → xóa orphan. */
   async create(order: ProductionOrder): Promise<ProductionOrder> {
     const row = {
       id: order.id,
@@ -252,13 +292,20 @@ export class SupabaseOrderRepository {
     const { error } = await supabase.from("production_orders").insert(row);
     if (error) throw new Error(error.message);
 
-    // Insert order attachments
-    if (order.attachments?.length) {
-      await this.insertOrderAttachments(order.id, order.attachments);
-    }
-    // Insert BOMs
-    for (const bom of order.boms ?? []) {
-      await this.insertBOM(order.id, bom);
+    try {
+      if (order.attachments?.length) {
+        try {
+          await this.insertOrderAttachments(order.id, order.attachments);
+        } catch (attErr) {
+          console.warn("[create] order attachments skipped:", (attErr as Error).message);
+        }
+      }
+      for (const bom of order.boms ?? []) {
+        await this.insertBOM(order.id, bom);
+      }
+    } catch (err) {
+      await supabase.from("production_orders").delete().eq("id", order.id);
+      throw err;
     }
     return (await this.findById(order.id))!;
   }
@@ -276,6 +323,7 @@ export class SupabaseOrderRepository {
     if (patch.priority !== undefined) row.priority = patch.priority;
     if (patch.status !== undefined) row.status = patch.status;
     if (patch.pendingApproval !== undefined) row.pending_approval = patch.pendingApproval;
+    if (patch.note !== undefined) row.note = patch.note;
     if (Object.keys(row).length) {
       const { error } = await supabase.from("production_orders").update(row).eq("id", id);
       if (error) throw new Error(error.message);
@@ -373,21 +421,28 @@ export class SupabaseOrderRepository {
   // ── private helpers ────────────────────────────────────────────────────────
 
   private async insertOrderAttachments(orderId: string, attachments: Attachment[]): Promise<void> {
-    const rows = attachments.map((a) => ({
-      id: a.id,
-      order_id: orderId,
-      name: a.name,
-      type: a.type,
-      size: a.size,
-      uploaded_by: a.uploadedBy,
-      uploaded_at: a.uploadedAt,
-    }));
+    const rows = attachments.map((a) => attachmentRow(a, "order_id", orderId));
     const { error } = await supabase.from("order_attachments").insert(rows);
     if (error) throw new Error(error.message);
   }
 
   private async insertBOM(orderId: string, bom: BOMItem): Promise<void> {
-    const { error } = await supabase.from("boms").insert({
+    const teamId = resolveBomTeamId(bom);
+    const team = TEAMS.find((t) => t.id === teamId);
+    // Đảm bảo group tồn tại (t_hot/…) trước khi gắn FK
+    if (teamId) {
+      await supabase.from("groups").upsert(
+        {
+          id: teamId,
+          name: team?.name ?? bom.assignedTeamName ?? teamId,
+          lead: team?.lead ?? "",
+          lead_short: team?.leadShort ?? "",
+        },
+        { onConflict: "id" },
+      );
+    }
+
+    const baseRow = {
       id: bom.id,
       production_order_id: orderId,
       bom_code: bom.bomCode,
@@ -399,8 +454,9 @@ export class SupabaseOrderRepository {
       target_qty: bom.targetQty,
       pass_qty: bom.passQty,
       fail_qty: bom.failQty,
-      assigned_group_id: bom.assignedTeamId || null,
-      assigned_group_name: bom.assignedTeamName,
+      assigned_group_name:
+        bom.assignedTeamName ||
+        (team ? `${team.name} – ${team.leadShort}` : ""),
       assigned_workers: bom.assignedWorkers,
       status: bom.status,
       spec_cols: bom.specCols,
@@ -410,22 +466,37 @@ export class SupabaseOrderRepository {
         shift: bom.shift,
         quota: bom.quota,
         workTime: bom.workTime,
+        workerAssignments: bom.workerAssignments,
       }),
+    };
+
+    let { error } = await supabase.from("boms").insert({
+      ...baseRow,
+      assigned_group_id: teamId || null,
     });
+    if (error && teamId) {
+      ({ error } = await supabase.from("boms").insert({
+        ...baseRow,
+        assigned_group_id: null,
+      }));
+    }
     if (error) throw new Error(error.message);
 
     if (bom.attachments?.length) {
-      const rows = bom.attachments.map((a) => ({
-        id: a.id,
-        bom_id: bom.id,
-        name: a.name,
-        type: a.type,
-        size: a.size,
-        uploaded_by: a.uploadedBy,
-        uploaded_at: a.uploadedAt,
-      }));
-      await supabase.from("bom_attachments").insert(rows);
+      const rows = bom.attachments.map((a) => attachmentRow(a, "bom_id", bom.id));
+      const { error: attErr } = await supabase.from("bom_attachments").insert(rows);
+      if (attErr) {
+        console.warn("[insertBOM] attachments skipped:", attErr.message);
+      }
     }
+  }
+
+  /** Append BOMs to an existing order (dùng sửa lệnh thiếu linh kiện) */
+  async appendBoms(orderId: string, boms: BOMItem[]): Promise<ProductionOrder | null> {
+    for (const bom of boms) {
+      await this.insertBOM(orderId, bom);
+    }
+    return this.findById(orderId);
   }
 
   /** Hydrate a list of order rows with nested data (BOMs, entries, etc.) */
@@ -452,34 +523,45 @@ export class SupabaseOrderRepository {
 
     const bomIds = (bomRows ?? []).map((b) => b.id);
 
+    const emptyAtt: (DbAttachment & { bom_id: string })[] = [];
+    const emptyEntries: DbEntry[] = [];
+    const emptyTeam: (DbTeamSummary & { bom_id: string })[] = [];
+    const emptyQc: (DbQCReport & { bom_id: string })[] = [];
+
     const [
       { data: bomAttRows },
       { data: entryRows },
       { data: teamSummaryRows },
       { data: qcReportRows },
-    ] = await Promise.all([
-      supabase
-        .from("bom_attachments")
-        .select("*")
-        .in("bom_id", bomIds)
-        .returns<(DbAttachment & { bom_id: string })[]>(),
-      supabase
-        .from("worker_entries")
-        .select("*")
-        .in("bom_id", bomIds)
-        .returns<DbEntry[]>(),
-      supabase
-        .from("team_summaries")
-        .select("*")
-        .in("bom_id", bomIds)
-        .returns<(DbTeamSummary & { bom_id: string })[]>(),
-      supabase
-        .from("qc_reports")
-        .select("*")
-        .in("bom_id", bomIds)
-        .returns<(DbQCReport & { bom_id: string })[]>(),
-    ]);
-
+    ] = bomIds.length
+      ? await Promise.all([
+          supabase
+            .from("bom_attachments")
+            .select("*")
+            .in("bom_id", bomIds)
+            .returns<(DbAttachment & { bom_id: string })[]>(),
+          supabase
+            .from("worker_entries")
+            .select("*")
+            .in("bom_id", bomIds)
+            .returns<DbEntry[]>(),
+          supabase
+            .from("team_summaries")
+            .select("*")
+            .in("bom_id", bomIds)
+            .returns<(DbTeamSummary & { bom_id: string })[]>(),
+          supabase
+            .from("qc_reports")
+            .select("*")
+            .in("bom_id", bomIds)
+            .returns<(DbQCReport & { bom_id: string })[]>(),
+        ])
+      : [
+          { data: emptyAtt },
+          { data: emptyEntries },
+          { data: emptyTeam },
+          { data: emptyQc },
+        ];
     const entryIds = (entryRows ?? []).map((e) => e.id);
     const { data: dimensionRows } = await supabase
       .from("worker_entry_rows")

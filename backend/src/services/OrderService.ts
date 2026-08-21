@@ -67,19 +67,51 @@ export class OrderService extends BaseService<ProductionOrder> {
     return this.update(orderId, { boms: [...order.boms, bom] })!;
   }
 
-  assignWorkers(orderId: string, bomId: string, workerNames: string[]): ProductionOrder {
+  assignWorkers(
+    orderId: string,
+    bomId: string,
+    workerNames: string[],
+    assignments?: Array<{
+      workerId: string;
+      workerName: string;
+      machineId?: string;
+      machineName: string;
+    }>,
+  ): ProductionOrder {
     const order = this.getById(orderId);
     if (!order) throw new Error("Không tìm thấy lệnh sản xuất");
+    const names =
+      assignments && assignments.length > 0
+        ? assignments.map((a) => a.workerName)
+        : workerNames;
+    const primaryMachine = assignments?.find((a) => a.machineName)?.machineName;
     const boms = order.boms.map((b) =>
       b.id === bomId
         ? {
             ...b,
-            assignedWorkers: workerNames,
-            status: (workerNames.length ? "in_progress" : b.status) as BOMStatus,
+            assignedWorkers: names,
+            workerAssignments: assignments ?? [],
+            machine: primaryMachine || b.machine,
+            status: (names.length ? "in_progress" : b.status) as BOMStatus,
           }
         : b,
     );
-    return this.update(orderId, { boms })!;
+    return this.update(orderId, {
+      boms,
+      status:
+        names.length && order.status === "approved"
+          ? ("in_progress" as OrderStatus)
+          : order.status,
+    })!;
+  }
+
+  completeOrder(orderId: string, note?: string): ProductionOrder {
+    const order = this.getById(orderId);
+    if (!order) throw new Error("Không tìm thấy lệnh sản xuất");
+    return this.update(orderId, {
+      status: "completed" as OrderStatus,
+      note: note ? [order.note, note].filter(Boolean).join("\n") : order.note,
+    })!;
   }
 
   assignBOM(orderId: string, bomId: string, teamId: string): ProductionOrder {

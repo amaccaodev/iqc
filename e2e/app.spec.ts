@@ -65,7 +65,7 @@ test.describe("IQC Production Management", () => {
     await expect(page.getByText("File thông số & bản vẽ")).toBeVisible();
     await expect(page.getByText("ThongSoKyThuat_NOVO20.xlsx")).toBeVisible();
 
-    await page.getByTestId("tab-Nhập liệu").click();
+    await page.getByTestId("tab-Sản xuất").click();
     await page.getByTestId("dim-input-0").fill("19");
     await expect(page.getByTestId("spec-warning")).toBeVisible();
   });

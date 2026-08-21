@@ -27,8 +27,12 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
-      const items = await workflowApi.getNotifications(user.id, true);
-      setUnreadCount(items.length);
+      const data = await workflowApi.listNotifications(user.id, {
+        unreadOnly: true,
+        page: 1,
+        pageSize: 1,
+      });
+      setUnreadCount(data.total);
     } catch {
       setUnreadCount(0);
     }

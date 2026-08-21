@@ -8,7 +8,7 @@ import DayQtySummary from "./components/dashboard/DayQtySummary"
 import PaginationBar from "./components/ui/PaginationBar"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Role = "director" | "supervisor" | "teamlead" | "worker" | "qc" | "stats" | "admin"
+type Role = "director" | "supervisor" | "teamlead" | "worker" | "qc" | "stats" | "admin" | "mechanic"
 type OrderStatus = "draft" | "pending_approval" | "approved" | "in_progress" | "completed"
 type BOMStatus = "unassigned" | "assigned" | "in_progress" | "team_reported" | "qc_passed" | "qc_failed"
 type Priority = "normal" | "high" | "urgent"
@@ -85,6 +85,7 @@ interface BOMItem {
   assignedWorkers: string[]
   status: BOMStatus
   specCols: string[]
+  materialSpecs?: import("@shared/types/spec").MaterialSpec[]
   techNote: string
   workerEntries: WorkerEntry[]
   attachments?: Attachment[]
@@ -114,10 +115,9 @@ interface ProductionOrder {
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 const TEAMS = [
-  { id: "t1", name: "Tổ 1", lead: "Phạm Văn Chí", leadShort: "P.V.Chí" },
-  { id: "t2", name: "Tổ 2", lead: "Phạm Văn Sang", leadShort: "P.V.Sang" },
-  { id: "t3", name: "Tổ 3", lead: "Nguyễn Thị Hoa", leadShort: "N.T.Hoa" },
-  { id: "t4", name: "Tổ 4", lead: "Trần Văn Bình", leadShort: "T.V.Bình" },
+  { id: "t_hot", name: "Tổ Dập nóng", lead: "Phạm Văn Chí", leadShort: "P.V.Chí" },
+  { id: "t_auto", name: "Tổ Tự động", lead: "Phạm Văn Sang", leadShort: "P.V.Sang" },
+  { id: "t_asm", name: "Tổ Lắp ráp", lead: "Nguyễn Thị Hoa", leadShort: "N.T.Hoa" },
 ]
 
 const SEED_USERS: User[] = [
@@ -221,6 +221,37 @@ const SEED_ORDERS: ProductionOrder[] = [
         assignedTeamId: "t1", assignedTeamName: "Tổ 1 – P.V.Chí", assignedWorkers: ["Nga 3/43"],
         status: "assigned",
         specCols: ["Ø9.5+0.2", "Ø6", "42", "38.5", "82", "T8x4/2_L", "", "", "", "", ""],
+        materialSpecs: [
+          {
+            index: 2,
+            pointNo: 1,
+            label: "42",
+            type: "numeric",
+            target: 42,
+            min: 41.95,
+            max: 42.05,
+            unit: "mm",
+            hint: "Chiều dài đoạn ren — vị trí (1) trên bản vẽ",
+          },
+          {
+            index: 3,
+            pointNo: 2,
+            label: "(38.5)",
+            type: "numeric",
+            target: 38.5,
+            min: 38.3,
+            max: 38.7,
+            unit: "mm",
+            hint: "Kích thước tham chiếu — vị trí (2) trên bản vẽ",
+          },
+          {
+            index: 5,
+            pointNo: 3,
+            label: "T8x4/2_L",
+            type: "qualitative",
+            hint: "Thử ren với đĩa chuẩn — vị trí (3) trên bản vẽ",
+          },
+        ],
         techNote: "SP mối ghép ren theo tiêu chuẩn (Thử ren với đĩa). Không trầy xước sâu, bavia.",
         workerEntries: [], teamSummary: undefined, qcReport: undefined
       }
@@ -258,7 +289,7 @@ const BOM_STATUS_LABEL: Record<BOMStatus, string> = {
 const PRIORITY_LABEL: Record<Priority, string> = { normal: "Thường", high: "Cao", urgent: "Khẩn cấp" }
 const ROLE_LABEL: Record<Role, string> = {
   director: "GĐ/PGĐ", supervisor: "Quản đốc", teamlead: "Tổ trưởng",
-  worker: "Công nhân", qc: "QC", stats: "Thống kê", admin: "Admin"
+  worker: "Công nhân", qc: "QC", stats: "Thống kê", admin: "Admin", mechanic: "Cơ điện"
 }
 
 const sColor = (s: OrderStatus) => ({ draft:"bg-gray-100 text-gray-600", pending_approval:"bg-yellow-100 text-yellow-700", approved:"bg-blue-100 text-blue-700", in_progress:"bg-indigo-100 text-indigo-700", completed:"bg-green-100 text-green-700" }[s])
@@ -272,22 +303,22 @@ const Badge = ({ children, cls }: { children: React.ReactNode; cls?: string }) =
   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{children}</span>
 )
 const Card = ({ children, cls }: { children: React.ReactNode; cls?: string }) => (
-  <div className={`bg-white rounded-xl border border-[#CBD5E1] shadow-sm ${cls ?? ""}`}>{children}</div>
+  <div className={`bg-card text-card-foreground rounded-xl border border-border shadow-sm ${cls ?? ""}`}>{children}</div>
 )
-const Divider = () => <div className="h-px bg-[#F1F5F9] my-3" />
+const Divider = () => <div className="h-px bg-border my-3" />
 
-function Btn({ children, onClick, variant = "primary", size = "md", cls, type = "button" }: {
-  children: React.ReactNode; onClick?: () => void; variant?: "primary"|"secondary"|"danger"|"ghost"|"success"; size?: "sm"|"md"|"lg"; cls?: string; type?: "button"|"submit"
+function Btn({ children, onClick, variant = "primary", size = "md", cls, type = "button", disabled }: {
+  children: React.ReactNode; onClick?: () => void; variant?: "primary"|"secondary"|"danger"|"ghost"|"success"; size?: "sm"|"md"|"lg"; cls?: string; type?: "button"|"submit"; disabled?: boolean
 }) {
   const s = { sm:"px-3 py-1.5 text-xs gap-1", md:"px-4 py-2 text-sm gap-1.5", lg:"px-5 py-3 text-base gap-2" }[size]
   const v = {
-    primary:"bg-[#1B3A5C] text-white hover:bg-[#2D6EBD] active:bg-[#163050]",
-    secondary:"bg-[#E8EDF5] text-[#1B3A5C] hover:bg-[#CBD5E1]",
-    danger:"bg-[#DC2626] text-white hover:bg-[#B91C1C]",
-    ghost:"bg-transparent text-[#64748B] hover:bg-[#EFF2F7]",
-    success:"bg-[#16A34A] text-white hover:bg-[#15803D]"
+    primary:"bg-primary text-primary-foreground hover:bg-ring active:opacity-90",
+    secondary:"bg-secondary text-secondary-foreground hover:opacity-90",
+    danger:"bg-accent text-accent-foreground hover:opacity-90",
+    ghost:"bg-transparent text-muted hover:bg-surface",
+    success:"bg-green-600 text-white hover:bg-green-700"
   }[variant]
-  return <button type={type} onClick={onClick} className={`inline-flex items-center font-medium rounded-lg transition-all cursor-pointer border-0 select-none ${s} ${v} ${cls ?? ""}`}>{children}</button>
+  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center font-medium rounded-lg transition-all border-0 select-none ${s} ${v} ${cls ?? ""} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>{children}</button>
 }
 
 function Input({ label, value, onChange, placeholder, type="text", required, hint }: {
@@ -295,10 +326,10 @@ function Input({ label, value, onChange, placeholder, type="text", required, hin
 }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-[#475569] mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="block text-xs font-semibold text-muted mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full border border-[#CBD5E1] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD] focus:border-transparent bg-white" />
-      {hint && <div className="text-xs text-[#94A3B8] mt-1">{hint}</div>}
+        className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-input text-foreground" />
+      {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </div>
   )
 }
@@ -308,9 +339,9 @@ function Select({ label, value, onChange, options, required }: {
 }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-[#475569] mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="block text-xs font-semibold text-muted mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <select value={value} onChange={e => onChange(e.target.value)}
-        className="w-full border border-[#CBD5E1] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD] bg-white">
+        className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-input text-foreground">
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -322,10 +353,10 @@ function Modal({ title, children, onClose, size = "md" }: { title: string; child
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div onClick={e => e.stopPropagation()}
-        className={`relative bg-white rounded-t-2xl sm:rounded-2xl w-full ${size === "lg" ? "sm:max-w-3xl" : "sm:max-w-xl"} max-h-[92vh] flex flex-col shadow-2xl`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0]">
-          <h3 className="font-display font-700 text-base text-[#0F172A]">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F1F5F9] text-[#64748B] cursor-pointer border-0 bg-transparent text-lg">✕</button>
+        className={`relative bg-card text-card-foreground rounded-t-2xl sm:rounded-2xl w-full ${size === "lg" ? "sm:max-w-3xl" : "sm:max-w-xl"} max-h-[92vh] flex flex-col shadow-2xl`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h3 className="font-display font-700 text-base text-foreground">{title}</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface text-muted cursor-pointer border-0 bg-transparent text-lg">✕</button>
         </div>
         <div className="overflow-y-auto p-5 flex-1">{children}</div>
       </div>
@@ -335,15 +366,15 @@ function Modal({ title, children, onClose, size = "md" }: { title: string; child
 
 function StatTile({ label, value, icon, color, sub, onClick }: { label: string; value: string|number; icon: string; color: string; sub?: string; onClick?: () => void }) {
   const inner = (
-    <Card cls={`p-4 ${onClick ? "hover:border-[#2D6EBD] transition-all" : ""}`}>
+    <Card cls={`p-4 ${onClick ? "hover:border-ring transition-all" : ""}`}>
       <div className="flex items-center justify-between mb-2">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
           <i className={`fas ${icon} text-sm`} />
         </div>
       </div>
-      <div className="font-display font-800 text-2xl text-[#0F172A]">{value}</div>
-      <div className="text-xs font-medium text-[#64748B] mt-0.5">{label}</div>
-      {sub && <div className="text-xs text-[#94A3B8]">{sub}</div>}
+      <div className="font-display font-800 text-2xl text-foreground">{value}</div>
+      <div className="text-xs font-medium text-muted mt-0.5">{label}</div>
+      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </Card>
   )
   if (!onClick) return inner
@@ -379,24 +410,24 @@ function LoginScreen({ users, onLogin }: { users: User[]; onLogin: (u: User) => 
           <p className="text-white/50 text-sm mt-1">Hệ thống Quản lý Sản xuất</p>
         </div>
         <Card cls="p-6 shadow-2xl">
-          <h2 className="font-display font-700 text-lg text-[#0F172A] mb-5">Đăng nhập</h2>
+          <h2 className="font-display font-700 text-lg text-foreground mb-5">Đăng nhập</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-1">Mã nhân viên <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-semibold text-muted mb-1">Mã nhân viên <span className="text-red-500">*</span></label>
               <div className="relative">
-                <i className="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-sm" />
+                <i className="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
                 <input value={empId} onChange={e => setEmpId(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
-                  placeholder="VD: NV001" className="w-full pl-9 pr-3 py-2.5 border border-[#CBD5E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD]" />
+                  placeholder="VD: NV001" className="w-full pl-9 pr-3 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-1">Mật khẩu <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-semibold text-muted mb-1">Mật khẩu <span className="text-red-500">*</span></label>
               <div className="relative">
-                <i className="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-sm" />
+                <i className="fas fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
                 <input value={pwd} onChange={e => setPwd(e.target.value)} onKeyDown={e => e.key === "Enter" && submit()}
                   type={showPwd ? "text" : "password"} placeholder="Nhập mật khẩu"
-                  className="w-full pl-9 pr-10 py-2.5 border border-[#CBD5E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD]" />
-                <button onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#64748B] cursor-pointer bg-transparent border-0">
+                  className="w-full pl-9 pr-10 py-2.5 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                <button onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted cursor-pointer bg-transparent border-0">
                   <i className={`fas ${showPwd ? "fa-eye-slash" : "fa-eye"} text-sm`} />
                 </button>
               </div>
@@ -406,13 +437,13 @@ function LoginScreen({ users, onLogin }: { users: User[]; onLogin: (u: User) => 
               <i className="fas fa-right-to-bracket" /> Đăng nhập
             </Btn>
           </div>
-          <div className="mt-5 pt-4 border-t border-[#F1F5F9]">
-            <p className="text-xs text-[#94A3B8] font-medium mb-2">Tài khoản demo:</p>
-            <div className="grid grid-cols-2 gap-1 text-xs text-[#64748B]">
+          <div className="mt-5 pt-4 border-t border-border">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Tài khoản demo:</p>
+            <div className="grid grid-cols-2 gap-1 text-xs text-muted">
               {[["NV001","GĐ"],["NV010","Quản đốc"],["NV020","Tổ trưởng"],["NV030","Công nhân"],["NV040","QC"],["NV000","Admin"]].map(([id, r]) => (
                 <button key={id} onClick={() => { setEmpId(id); setPwd(id === "NV000" ? "admin123" : "123456") }}
-                  className="text-left px-2 py-1 rounded hover:bg-[#EFF2F7] cursor-pointer bg-transparent border-0 transition-colors">
-                  <span className="font-mono text-[#1B3A5C]">{id}</span> – {r}
+                  className="text-left px-2 py-1 rounded hover:bg-surface cursor-pointer bg-transparent border-0 transition-colors">
+                  <span className="font-mono text-primary">{id}</span> – {r}
                 </button>
               ))}
             </div>
@@ -442,7 +473,7 @@ const NAV_CFG: Record<Role, { id: string; label: string; fa: string }[]> = {
   ],
   worker: [
     { id: "dashboard", label: "Việc của tôi", fa: "fa-screwdriver-wrench" },
-    { id: "entry", label: "Nhập liệu", fa: "fa-pen-to-square" },
+    { id: "entry", label: "Sản xuất", fa: "fa-faucet" },
   ],
   qc: [
     { id: "dashboard", label: "Tổng quan", fa: "fa-gauge-high" },
@@ -456,11 +487,16 @@ const NAV_CFG: Record<Role, { id: string; label: string; fa: string }[]> = {
     { id: "dashboard", label: "Tổng quan", fa: "fa-gauge-high" },
     { id: "accounts", label: "Tài khoản", fa: "fa-users" },
   ],
+  mechanic: [
+    { id: "incidents", label: "Sự cố máy", fa: "fa-triangle-exclamation" },
+    { id: "approvals", label: "Phê duyệt", fa: "fa-hand" },
+  ],
 }
 
 const ROLE_ICON: Record<Role, string> = {
   director: "fa-star", supervisor: "fa-hard-hat", teamlead: "fa-wrench",
-  worker: "fa-gear", qc: "fa-magnifying-glass", stats: "fa-chart-line", admin: "fa-shield"
+  worker: "fa-gear", qc: "fa-magnifying-glass", stats: "fa-chart-line", admin: "fa-shield",
+  mechanic: "fa-screwdriver-wrench",
 }
 
 function AppShell({ user, screen, setScreen, onLogout, badge, children }: {
@@ -468,8 +504,8 @@ function AppShell({ user, screen, setScreen, onLogout, badge, children }: {
 }) {
   const nav = NAV_CFG[user.role]
   return (
-    <div className="flex flex-col min-h-screen bg-[#EFF2F7]">
-      <header className="bg-[#1B3A5C] text-white px-4 h-14 flex items-center justify-between shadow-lg z-30 sticky top-0">
+    <div className="flex flex-col min-h-screen bg-background">
+      <header className="bg-primary text-white px-4 h-14 flex items-center justify-between shadow-lg z-30 sticky top-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
             <i className={`fas ${ROLE_ICON[user.role]} text-sm text-white/90`} />
@@ -499,10 +535,10 @@ function AppShell({ user, screen, setScreen, onLogout, badge, children }: {
       <main className="flex-1 overflow-auto pb-20 sm:pb-6">
         <div className="max-w-5xl mx-auto px-4 py-5">{children}</div>
       </main>
-      <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-white border-t border-[#E2E8F0] flex z-30 shadow-xl">
+      <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-card border-t border-border flex z-30 shadow-xl">
         {nav.map(n => (
           <button key={n.id} onClick={() => setScreen(n.id)}
-            className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-all cursor-pointer border-0 bg-transparent relative ${screen === n.id ? "text-[#1B3A5C]" : "text-[#94A3B8]"}`}>
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-all cursor-pointer border-0 bg-transparent relative ${screen === n.id ? "text-primary" : "text-muted-foreground"}`}>
             <i className={`fas ${n.fa} text-lg`} />
             {n.label}
             {n.id === "approvals" && badge ? <span className="absolute top-1.5 right-1/3 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">{badge}</span> : null}
@@ -545,7 +581,7 @@ function AttachmentList({ attachments, onAdd }: { attachments: Attachment[]; onA
         <>
           <input ref={fileRef} type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleFile} />
           <button onClick={() => fileRef.current?.click()}
-            className="mt-2 flex items-center gap-2 text-sm text-[#2D6EBD] hover:text-[#1B3A5C] cursor-pointer bg-transparent border-0 font-medium">
+            className="mt-2 flex items-center gap-2 text-sm text-[#2D6EBD] hover:text-primary cursor-pointer bg-transparent border-0 font-medium">
             <i className="fas fa-paperclip" /> Đính kèm ảnh / PDF
           </button>
         </>
@@ -555,25 +591,26 @@ function AttachmentList({ attachments, onAdd }: { attachments: Attachment[]; onA
 }
 
 // ─── Shared: Order list ────────────────────────────────────────────────────────
-function OrderList({ orders, onSelect }: { orders: ProductionOrder[]; onSelect: (o: ProductionOrder) => void }) {
+function OrderList({ orders, onSelect, columns = 1 }: { orders: ProductionOrder[]; onSelect: (o: ProductionOrder) => void; columns?: 1 | 2 }) {
   const [page, setPage] = useState(1)
   const pageSize = 8
-  if (!orders.length) return <Card cls="p-10 text-center text-[#94A3B8] text-sm"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có lệnh sản xuất nào</Card>
+  if (!orders.length) return <Card cls="p-10 text-center text-muted-foreground text-sm"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có lệnh sản xuất nào</Card>
   const slice = orders.slice((page - 1) * pageSize, page * pageSize)
+  const listClass = columns === 2 ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0" : "space-y-2"
   return (
-    <div className="space-y-2">
+    <div className={listClass}>
       {slice.map(o => (
         <button key={o.id} onClick={() => onSelect(o)} className="w-full text-left cursor-pointer bg-transparent border-0 p-0 group">
-          <Card cls="p-4 hover:border-[#2D6EBD] hover:shadow-md transition-all group-active:scale-[0.99]">
+          <Card cls="p-4 hover:border-ring hover:shadow-md transition-all group-active:scale-[0.99]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-display font-700 text-sm text-[#1B3A5C]">{o.orderNo}</span>
+                  <span className="font-display font-700 text-sm text-primary">{o.orderNo}</span>
                   <Badge cls={pColor(o.priority)}>{PRIORITY_LABEL[o.priority]}</Badge>
                   {o.pendingApproval && <Badge cls="bg-yellow-100 text-yellow-700"><i className="fas fa-clock text-[10px]" /> Chờ duyệt</Badge>}
                 </div>
-                <div className="text-sm text-[#0F172A] font-medium truncate">{o.productLine}</div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-[#94A3B8] flex-wrap">
+                <div className="text-sm text-foreground font-medium truncate">{o.productLine}</div>
+                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
                   <span><i className="fas fa-user-tie mr-1" />{o.createdBy}</span>
                   <span><i className="fas fa-boxes-stacked mr-1" />SL: {(o.targetQty ?? 0).toLocaleString()} cái</span>
                   <span><i className="fas fa-calendar mr-1" />Hạn: {formatDeadline(o.deadline)}</span>
@@ -610,7 +647,7 @@ function BOMDetail({
 
   return (
     <div>
-      <button onClick={onBack} className="flex items-center gap-1.5 text-[#64748B] hover:text-[#1B3A5C] text-sm mb-4 cursor-pointer bg-transparent border-0 font-medium">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-muted hover:text-primary text-sm mb-4 cursor-pointer bg-transparent border-0 font-medium">
         <i className="fas fa-arrow-left text-xs" /> Quay lại
       </button>
       <Card cls="p-4 mb-4 border-l-4 border-[#1B3A5C]">
@@ -618,17 +655,17 @@ function BOMDetail({
           <div>
             <div className="font-display font-700 text-base">{bom.partName}</div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <code className="text-xs bg-[#EFF2F7] text-[#1B3A5C] px-2 py-0.5 rounded font-mono font-bold">{bom.bomCode}</code>
-              <span className="text-xs text-[#64748B]">{bom.partCode}</span>
+              <code className="text-xs bg-background text-primary px-2 py-0.5 rounded font-mono font-bold">{bom.bomCode}</code>
+              <span className="text-xs text-muted">{bom.partCode}</span>
             </div>
           </div>
           <Badge cls={bColor(bom.status)}>{BOM_STATUS_LABEL[bom.status]}</Badge>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-xs">
-          <div><span className="text-[#94A3B8] block mb-0.5">Máy</span><span className="font-medium">{bom.machine}</span></div>
-          <div><span className="text-[#94A3B8] block mb-0.5">Nguyên vật liệu</span><span className="font-medium">{bom.rawMaterial}</span></div>
-          <div><span className="text-[#94A3B8] block mb-0.5">Số lượng</span><span className="font-bold text-[#1B3A5C]">{bom.targetQty.toLocaleString()}</span></div>
-          <div><span className="text-[#94A3B8] block mb-0.5">Tổ</span><span className="font-medium">{bom.assignedTeamName || "—"}</span></div>
+          <div><span className="text-muted-foreground block mb-0.5">Máy</span><span className="font-medium">{bom.machine}</span></div>
+          <div><span className="text-muted-foreground block mb-0.5">Nguyên vật liệu</span><span className="font-medium">{bom.rawMaterial}</span></div>
+          <div><span className="text-muted-foreground block mb-0.5">Số lượng</span><span className="font-bold text-primary">{bom.targetQty.toLocaleString()}</span></div>
+          <div><span className="text-muted-foreground block mb-0.5">Tổ</span><span className="font-medium">{bom.assignedTeamName || "—"}</span></div>
         </div>
         {bom.techNote && <div className="mt-3 bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-xs text-blue-800"><i className="fas fa-circle-info mr-1.5" />{bom.techNote}</div>}
       </Card>
@@ -642,15 +679,15 @@ function BOMDetail({
           <i className="fas fa-qrcode" /> QR cho công nhân
         </div>
         <div className="flex items-start gap-4">
-          <QrCodeImage value={workerTaskUrl} size={120} className="rounded-lg bg-white border border-[#E2E8F0]" />
+          <QrCodeImage value={workerTaskUrl} size={120} className="rounded-lg bg-card border border-border" />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-[#0F172A]">Quét để mở trang nhập liệu</div>
-            <div className="text-xs text-[#64748B] mt-1 break-all">{workerTaskUrl}</div>
+            <div className="text-sm font-semibold text-foreground">Quét để mở trang Sản xuất</div>
+            <div className="text-xs text-muted mt-1 break-all">{workerTaskUrl}</div>
             <a
               href={workerTaskUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-[#2D6EBD] hover:text-[#1B3A5C]"
+              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-[#2D6EBD] hover:text-primary"
             >
               <i className="fas fa-arrow-up-right-from-square text-[10px]" /> Mở trang nhập
             </a>
@@ -659,14 +696,14 @@ function BOMDetail({
       </Card>
       {bom.teamSummary && (
         <Card cls="p-4 mb-4">
-          <div className="font-display font-600 text-sm mb-3 flex items-center gap-2"><i className="fas fa-chart-bar text-[#1B3A5C]" /> Báo cáo Tổ trưởng</div>
+          <div className="font-display font-600 text-sm mb-3 flex items-center gap-2"><i className="fas fa-chart-bar text-primary" /> Báo cáo Tổ trưởng</div>
           <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="bg-green-50 rounded-lg p-3"><div className="text-xl font-bold text-green-600">{bom.teamSummary.passQty}</div><div className="text-xs text-[#64748B]">Đạt</div></div>
-            <div className="bg-red-50 rounded-lg p-3"><div className="text-xl font-bold text-red-500">{bom.teamSummary.failQty}</div><div className="text-xs text-[#64748B]">Hỏng</div></div>
-            <div className="bg-[#EFF2F7] rounded-lg p-3"><div className="text-xl font-bold text-[#1B3A5C]">{Math.round((bom.teamSummary.passQty / bom.targetQty) * 100)}%</div><div className="text-xs text-[#64748B]">Tỷ lệ</div></div>
+            <div className="bg-green-50 rounded-lg p-3"><div className="text-xl font-bold text-green-600">{bom.teamSummary.passQty}</div><div className="text-xs text-muted">Đạt</div></div>
+            <div className="bg-red-50 rounded-lg p-3"><div className="text-xl font-bold text-red-500">{bom.teamSummary.failQty}</div><div className="text-xs text-muted">Hỏng</div></div>
+            <div className="bg-background rounded-lg p-3"><div className="text-xl font-bold text-primary">{Math.round((bom.teamSummary.passQty / bom.targetQty) * 100)}%</div><div className="text-xs text-muted">Tỷ lệ</div></div>
           </div>
-          {bom.teamSummary.note && <div className="text-xs text-[#64748B] mt-2 italic">"{bom.teamSummary.note}"</div>}
-          <div className="text-xs text-[#94A3B8] mt-2">Báo cáo bởi {bom.teamSummary.reportedBy} · {bom.teamSummary.reportedAt}</div>
+          {bom.teamSummary.note && <div className="text-xs text-muted mt-2 italic">"{bom.teamSummary.note}"</div>}
+          <div className="text-xs text-muted-foreground mt-2">Báo cáo bởi {bom.teamSummary.reportedBy} · {bom.teamSummary.reportedAt}</div>
         </Card>
       )}
       {bom.qcReport && (
@@ -675,30 +712,30 @@ function BOMDetail({
             <i className={`fas ${bom.qcReport.status === "approved" ? "fa-circle-check text-green-600" : "fa-circle-xmark text-red-500"}`} />
             Kết quả QC – {bom.qcReport.status === "approved" ? "ĐẠT" : "KHÔNG ĐẠT"}
           </div>
-          <div className="text-xs text-[#64748B]">{bom.qcReport.passQty} đạt · {bom.qcReport.failQty} hỏng · {bom.qcReport.inspectedBy} · {bom.qcReport.inspectedAt}</div>
+          <div className="text-xs text-muted">{bom.qcReport.passQty} đạt · {bom.qcReport.failQty} hỏng · {bom.qcReport.inspectedBy} · {bom.qcReport.inspectedAt}</div>
           {bom.qcReport.complaint && <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2 text-xs text-red-700"><i className="fas fa-triangle-exclamation mr-1" />Khiếu nại: {bom.qcReport.complaint}</div>}
         </Card>
       )}
       {bom.workerEntries.length > 0 && (
         <Card cls="p-4">
-          <div className="font-display font-600 text-sm mb-3 flex items-center gap-2"><i className="fas fa-table text-[#1B3A5C]" /> Bảng kiểm tra ({bom.workerEntries.length} lần nhập)</div>
+          <div className="font-display font-600 text-sm mb-3 flex items-center gap-2"><i className="fas fa-table text-primary" /> Bảng kiểm tra ({bom.workerEntries.length} lần nhập)</div>
           {bom.workerEntries.map(e => (
             <div key={e.id} className="mb-3">
-              <div className="flex justify-between text-xs text-[#64748B] mb-2">
-                <span className="font-semibold text-[#0F172A]"><i className="fas fa-user mr-1" />{e.workerName}</span>
+              <div className="flex justify-between text-xs text-muted mb-2">
+                <span className="font-semibold text-foreground"><i className="fas fa-user mr-1" />{e.workerName}</span>
                 <span>{e.submittedAt}</span>
               </div>
-              <div className="overflow-x-auto rounded-lg border border-[#E2E8F0]">
+              <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-xs border-collapse">
-                  <thead><tr className="bg-[#F8FAFC]">
-                    <th className="border-b border-r border-[#E2E8F0] px-2 py-1.5 text-left font-semibold w-8">TT</th>
-                    {bom.specCols.filter(c => c && c !== "NQ").map((c, i) => <th key={i} className="border-b border-r border-[#E2E8F0] px-2 py-1.5 font-mono font-semibold">{c}</th>)}
+                  <thead><tr className="bg-surface">
+                    <th className="border-b border-r border-border px-2 py-1.5 text-left font-semibold w-8">TT</th>
+                    {bom.specCols.filter(c => c && c !== "NQ").map((c, i) => <th key={i} className="border-b border-r border-border px-2 py-1.5 font-mono font-semibold">{c}</th>)}
                   </tr></thead>
                   <tbody>{e.rows.map(r => (
-                    <tr key={r.tt} className="hover:bg-[#F8FAFC]">
-                      <td className="border-b border-r border-[#E2E8F0] px-2 py-1.5 text-center font-mono font-medium text-[#64748B]">{r.tt}</td>
+                    <tr key={r.tt} className="hover:bg-surface">
+                      <td className="border-b border-r border-border px-2 py-1.5 text-center font-mono font-medium text-muted">{r.tt}</td>
                       {bom.specCols.filter(c => c && c !== "NQ").map((_, i) => (
-                        <td key={i} className={`border-b border-r border-[#E2E8F0] px-2 py-1.5 text-center font-mono ${r.dims[i] === "v" || r.dims[i] === "✓" ? "text-green-600 font-bold" : ""}`}>{r.dims[i] || "—"}</td>
+                        <td key={i} className={`border-b border-r border-border px-2 py-1.5 text-center font-mono ${r.dims[i] === "v" || r.dims[i] === "✓" ? "text-green-600 font-bold" : ""}`}>{r.dims[i] || "—"}</td>
                       ))}
                     </tr>
                   ))}</tbody>
@@ -713,7 +750,7 @@ function BOMDetail({
 }
 
 // ─── Director view ─────────────────────────────────────────────────────────────
-function DirectorView({ user, orders, setOrders, screen }: { user: User; orders: ProductionOrder[]; setOrders: (o: ProductionOrder[]) => void; screen: string }) {
+function DirectorView({ user, orders, setOrders, screen, onCreateOrder }: { user: User; orders: ProductionOrder[]; setOrders: (o: ProductionOrder[]) => void; screen: string; onCreateOrder?: () => void }) {
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null)
   const [selectedBOM, setSelectedBOM] = useState<BOMItem | null>(null)
   const [showCreate, setShowCreate] = useState(false)
@@ -873,21 +910,21 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
 
   if (selectedOrder) return (
     <div>
-      <button onClick={() => setSelectedOrder(null)} className="flex items-center gap-1.5 text-[#64748B] hover:text-[#1B3A5C] text-sm mb-4 cursor-pointer bg-transparent border-0 font-medium">
+      <button onClick={() => setSelectedOrder(null)} className="flex items-center gap-1.5 text-muted hover:text-primary text-sm mb-4 cursor-pointer bg-transparent border-0 font-medium">
         <i className="fas fa-arrow-left text-xs" /> Quay lại
       </button>
       <Card cls="p-5 mb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="font-display font-800 text-lg">{selectedOrder.orderNo}</div>
-            <div className="text-[#64748B] text-sm mt-0.5">{selectedOrder.productLine}</div>
+            <div className="text-muted text-sm mt-0.5">{selectedOrder.productLine}</div>
           </div>
           <div className="flex gap-2 flex-wrap">
             <Badge cls={pColor(selectedOrder.priority)}>{PRIORITY_LABEL[selectedOrder.priority]}</Badge>
             <Badge cls={sColor(selectedOrder.status)}>{STATUS_LABEL[selectedOrder.status]}</Badge>
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 text-xs text-[#64748B]">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4 text-xs text-muted">
           <div><i className="fas fa-barcode mr-1" />Mã SP: {selectedOrder.productCode || selectedOrder.boms[0]?.partCode || "—"}</div>
           <div><i className="fas fa-boxes-stacked mr-1" />SL cần: {(selectedOrder.targetQty ?? 0).toLocaleString()}</div>
           <div><i className="fas fa-clock mr-1" />Ca: {selectedOrder.shift === "night" ? "Ca đêm" : selectedOrder.shift === "ot" ? "Ca tăng" : selectedOrder.shift === "day" ? "Ca ngày" : (selectedOrder.shift || "—")}</div>
@@ -896,7 +933,7 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
           <div><i className="fas fa-calendar-days mr-1" />Hạn: {formatDeadline(selectedOrder.deadline)}</div>
         </div>
         <Divider />
-        <div className="font-semibold text-xs text-[#475569] mb-2 flex items-center gap-2"><i className="fas fa-paperclip text-[#94A3B8]" /> Tài liệu đính kèm</div>
+        <div className="font-semibold text-xs text-muted mb-2 flex items-center gap-2"><i className="fas fa-paperclip text-muted-foreground" /> Tài liệu đính kèm</div>
         <AttachmentList attachments={selectedOrder.attachments} onAdd={(a) => addAttachment(selectedOrder.id, a)} />
       </Card>
       <div className="flex items-center justify-between mb-3">
@@ -905,17 +942,17 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
       <div className="space-y-2">
         {selectedOrder.boms.map(b => (
           <button key={b.id} onClick={() => setSelectedBOM(b)} className="w-full text-left cursor-pointer border-0 bg-transparent p-0">
-            <Card cls="p-4 hover:border-[#2D6EBD] transition-all">
+            <Card cls="p-4 hover:border-ring transition-all">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <code className="text-[11px] bg-[#EFF2F7] text-[#1B3A5C] px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
+                    <code className="text-[11px] bg-background text-primary px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
                     <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
                   </div>
                   <div className="font-semibold text-sm mt-1">{b.partName}</div>
-                  <div className="text-xs text-[#94A3B8] mt-0.5">{b.machine} · {b.targetQty.toLocaleString()} cái · {b.assignedTeamName || "Chưa phân"}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{b.machine} · {b.targetQty.toLocaleString()} cái · {b.assignedTeamName || "Chưa phân"}</div>
                 </div>
-                <div className="text-right text-xs text-[#94A3B8]">
+                <div className="text-right text-xs text-muted-foreground">
                   {b.passQty > 0 && <div className="text-green-600 font-semibold">{b.passQty.toLocaleString()} đạt</div>}
                   {b.failQty > 0 && <div className="text-red-500">{b.failQty} hỏng</div>}
                   <i className="fas fa-chevron-right text-[#CBD5E1] mt-1" />
@@ -924,7 +961,7 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
             </Card>
           </button>
         ))}
-        {selectedOrder.boms.length === 0 && <div className="text-sm text-[#94A3B8] text-center py-4">Chưa có BOM nào</div>}
+        {selectedOrder.boms.length === 0 && <div className="text-sm text-muted-foreground text-center py-4">Chưa có BOM nào</div>}
       </div>
     </div>
   )
@@ -933,34 +970,41 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
     <div>
       {screen === "dashboard" && (
         <>
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-5 lg:mb-6 gap-3">
             <div>
-              <h2 className="font-display font-800 text-xl text-[#0F172A]">Xin chào, {user.name.split(" ").pop()} 👋</h2>
-              <p className="text-sm text-[#64748B]">Tổng quan sản xuất hôm nay</p>
+              <h2 className="font-display font-800 text-xl lg:text-2xl text-foreground">Xin chào, {user.name.split(" ").pop()} 👋</h2>
+              <p className="text-sm lg:text-base text-muted">Tổng quan sản xuất hôm nay</p>
             </div>
-            <Btn onClick={startCreate}><i className="fas fa-plus" /> Tạo lệnh</Btn>
+            <Btn onClick={onCreateOrder ?? startCreate}><i className="fas fa-plus" /> Tạo lệnh</Btn>
           </div>
-          <DayQtySummary orders={orders} onOpenJob={({ orderId, bomId }) => {
-            const o = orders.find(x => x.id === orderId)
-            if (!o) return
-            setSelectedOrder(o)
-            setSelectedBOM(o.boms.find(b => b.id === bomId) ?? null)
-          }} />
-          <DashboardCharts orders={orders} onOpenItem={({ orderId, bomId }) => {
-            const o = orders.find(x => x.id === orderId)
-            if (!o) return
-            setSelectedOrder(o)
-            setSelectedBOM(bomId ? o.boms.find(b => b.id === bomId) ?? null : null)
-          }} />
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 lg:gap-6 mb-5 lg:mb-6">
+            <div className="xl:col-span-4 min-w-0">
+              <DayQtySummary orders={orders} onOpenJob={({ orderId, bomId }) => {
+                const o = orders.find(x => x.id === orderId)
+                if (!o) return
+                setSelectedOrder(o)
+                setSelectedBOM(o.boms.find(b => b.id === bomId) ?? null)
+              }} />
+            </div>
+            <div className="xl:col-span-8 min-w-0">
+              <DashboardCharts orders={orders} onOpenItem={({ orderId, bomId }) => {
+                const o = orders.find(x => x.id === orderId)
+                if (!o) return
+                setSelectedOrder(o)
+                setSelectedBOM(bomId ? o.boms.find(b => b.id === bomId) ?? null : null)
+              }} />
+            </div>
+          </div>
+          <div className={`grid grid-cols-1 gap-5 lg:gap-6 ${pending.length > 0 ? "xl:grid-cols-2" : ""}`}>
           {pending.length > 0 && (
-            <div className="mb-5">
-              <h3 className="font-display font-700 text-base mb-3 flex items-center gap-2"><i className="fas fa-bell text-yellow-500" /> Phân công chờ phê duyệt</h3>
+            <div>
+              <h3 className="font-display font-700 text-base lg:text-lg mb-3 flex items-center gap-2"><i className="fas fa-bell text-yellow-500" /> Phân công chờ phê duyệt</h3>
               {pending.map(o => (
                 <Card key={o.id} cls="p-4 mb-2 border-l-4 border-yellow-400">
                   <div className="flex items-center justify-between flex-wrap gap-3">
                     <div>
                       <div className="font-semibold text-sm">{o.orderNo} – {o.productLine}</div>
-                      <div className="text-xs text-[#64748B]">Quản đốc đã điều chỉnh phân công</div>
+                      <div className="text-xs text-muted">Quản đốc đã điều chỉnh phân công</div>
                     </div>
                     <div className="flex gap-2">
                       <Btn size="sm" variant="success" onClick={async () => {
@@ -979,32 +1023,35 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
               ))}
             </div>
           )}
-          <h3 className="font-display font-700 text-base mb-3">Lệnh gần đây</h3>
-          <OrderList orders={orders.slice(0, 5)} onSelect={setSelectedOrder} />
+          <div className="min-w-0">
+          <h3 className="font-display font-700 text-base lg:text-lg mb-3">Lệnh gần đây</h3>
+          <OrderList orders={orders.slice(0, 5)} onSelect={setSelectedOrder} columns={2} />
+          </div>
+          </div>
         </>
       )}
       {screen === "orders" && (
         <>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display font-700 text-xl">Lệnh sản xuất</h2>
-            <Btn onClick={startCreate}><i className="fas fa-plus" /> Tạo lệnh</Btn>
+          <div className="flex items-center justify-between mb-4 lg:mb-6 gap-3">
+            <h2 className="font-display font-700 text-xl lg:text-2xl">Lệnh sản xuất</h2>
+            <Btn onClick={onCreateOrder ?? startCreate}><i className="fas fa-plus" /> Tạo lệnh</Btn>
           </div>
-          <OrderList orders={orders} onSelect={setSelectedOrder} />
+          <OrderList orders={orders} onSelect={setSelectedOrder} columns={2} />
         </>
       )}
       {screen === "approvals" && (
         <>
-          <h2 className="font-display font-700 text-xl mb-4">Phê duyệt Phân công</h2>
+          <h2 className="font-display font-700 text-xl lg:text-2xl mb-4 lg:mb-6">Phê duyệt Phân công</h2>
           {pending.length === 0
-            ? <Card cls="p-10 text-center text-[#94A3B8]"><i className="fas fa-check-circle text-3xl block mb-2 text-green-400 opacity-60" />Không có phân công nào cần duyệt</Card>
-            : pending.map(o => (
-              <Card key={o.id} cls="p-4 mb-3 border-l-4 border-yellow-400">
+            ? <Card cls="p-10 text-center text-muted-foreground"><i className="fas fa-check-circle text-3xl block mb-2 text-green-400 opacity-60" />Không có phân công nào cần duyệt</Card>
+            : <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">{pending.map(o => (
+              <Card key={o.id} cls="p-4 mb-0 border-l-4 border-yellow-400">
                 <div className="flex items-start justify-between flex-wrap gap-3">
                   <div>
                     <div className="font-display font-600 text-sm">{o.orderNo} – {o.productLine}</div>
-                    <div className="text-xs text-[#64748B] mt-1">Quản đốc đã điều chỉnh phân công tổ:</div>
+                    <div className="text-xs text-muted mt-1">Quản đốc đã điều chỉnh phân công tổ:</div>
                     {o.boms.filter(b => b.assignedTeamName).map(b => (
-                      <div key={b.id} className="text-xs text-[#1B3A5C] mt-0.5 flex items-center gap-1"><i className="fas fa-arrow-right text-[10px]" />{b.partName} → {b.assignedTeamName}</div>
+                      <div key={b.id} className="text-xs text-primary mt-0.5 flex items-center gap-1"><i className="fas fa-arrow-right text-[10px]" />{b.partName} → {b.assignedTeamName}</div>
                     ))}
                   </div>
                   <div className="flex gap-2">
@@ -1021,22 +1068,22 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
                   </div>
                 </div>
               </Card>
-            ))
+            ))}</div>
           }
         </>
       )}
 
-      {/* Create order modal */}
-      {showCreate && draftOrder && (
+      {/* Create order modal (legacy — dùng onCreateOrder để mở form danh mục SP) */}
+      {!onCreateOrder && showCreate && draftOrder && (
         <Modal title={`Tạo lệnh – ${draftOrder.orderNo}`} onClose={() => { setShowCreate(false); setDraftOrder(null) }} size="lg">
           <div className="space-y-4">
-            <div className="flex items-center gap-3 bg-[#EFF2F7] rounded-xl p-3">
-              <div className="w-10 h-10 rounded-lg bg-[#1B3A5C] flex items-center justify-center flex-shrink-0">
+            <div className="flex items-center gap-3 bg-background rounded-xl p-3">
+              <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
                 <i className="fas fa-hashtag text-white text-sm" />
               </div>
               <div>
-                <div className="text-xs text-[#64748B]">Số lệnh SX (tự động)</div>
-                <div className="font-display font-800 text-lg text-[#1B3A5C]">{draftOrder.orderNo}</div>
+                <div className="text-xs text-muted">Số lệnh SX (tự động)</div>
+                <div className="font-display font-800 text-lg text-primary">{draftOrder.orderNo}</div>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1055,18 +1102,18 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-[#475569]">Danh sách BOM & phân công tổ ({draftOrder.boms.length})</span>
+                <span className="text-xs font-semibold text-muted">Danh sách BOM & phân công tổ ({draftOrder.boms.length})</span>
                 <Btn size="sm" variant="secondary" onClick={() => setShowBOMForm(true)}><i className="fas fa-plus" /> Thêm BOM</Btn>
               </div>
-              {draftOrder.boms.length === 0 && <div className="text-xs text-[#94A3B8] italic px-1">Chưa có BOM. Thêm BOM và chọn tổ phụ trách từng loại.</div>}
+              {draftOrder.boms.length === 0 && <div className="text-xs text-muted-foreground italic px-1">Chưa có BOM. Thêm BOM và chọn tổ phụ trách từng loại.</div>}
               <div className="space-y-2">
                 {draftOrder.boms.map(b => (
-                  <div key={b.id} className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-lg px-3 py-2.5">
+                  <div key={b.id} className="bg-surface border border-border rounded-lg px-3 py-2.5">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0">
-                        <code className="text-[11px] font-mono text-[#1B3A5C] font-bold">{b.bomCode}</code>
+                        <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
                         <span className="text-sm font-medium ml-2">{b.partName}</span>
-                        <div className="text-xs text-[#94A3B8] mt-0.5">{b.targetQty.toLocaleString()} cái · {b.machine || "—"}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{b.targetQty.toLocaleString()} cái · {b.machine || "—"}</div>
                       </div>
                     </div>
                     <Select
@@ -1081,17 +1128,17 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
             </div>
 
             {draftTeamSummary.length > 0 && (
-              <div className="bg-[#EEF2FF] border border-[#C7D2FE] rounded-xl p-4">
+              <div className="bg-secondary border border-[#C7D2FE] rounded-xl p-4">
                 <div className="text-xs font-semibold text-[#4338CA] mb-3 flex items-center gap-2">
                   <i className="fas fa-users-gear" /> Phân công tổ — ai làm gì
                 </div>
                 <div className="space-y-2">
                   {draftTeamSummary.map(({ team, boms }) => (
-                    <div key={team.id} className="bg-white rounded-lg px-3 py-2 border border-[#E0E7FF]">
-                      <div className="text-sm font-semibold text-[#1B3A5C]">{team.name} – {team.lead}</div>
+                    <div key={team.id} className="bg-card rounded-lg px-3 py-2 border border-[#E0E7FF]">
+                      <div className="text-sm font-semibold text-primary">{team.name} – {team.lead}</div>
                       <ul className="mt-1 space-y-0.5">
                         {boms.map(b => (
-                          <li key={b.id} className="text-xs text-[#64748B] flex items-center gap-1.5">
+                          <li key={b.id} className="text-xs text-muted flex items-center gap-1.5">
                             <i className="fas fa-arrow-right text-[10px] text-[#6366F1]" />
                             {b.partName} ({b.targetQty.toLocaleString()} cái)
                           </li>
@@ -1115,11 +1162,11 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
       {showBOMForm && draftOrder && (
         <Modal title={`Thêm BOM – ${genBOMCode(draftOrder.orderNo, draftOrder.boms)}`} onClose={() => setShowBOMForm(false)} size="lg">
           <div className="space-y-3">
-            <div className="bg-[#EFF2F7] rounded-lg p-3 flex items-center gap-3">
-              <i className="fas fa-qrcode text-[#1B3A5C] text-xl" />
+            <div className="bg-background rounded-lg p-3 flex items-center gap-3">
+              <i className="fas fa-qrcode text-primary text-xl" />
               <div>
-                <div className="text-xs text-[#64748B]">Mã BOM (tự động)</div>
-                <code className="font-display font-800 text-base text-[#1B3A5C]">{genBOMCode(draftOrder.orderNo, draftOrder.boms)}</code>
+                <div className="text-xs text-muted">Mã BOM (tự động)</div>
+                <code className="font-display font-800 text-base text-primary">{genBOMCode(draftOrder.orderNo, draftOrder.boms)}</code>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1133,19 +1180,19 @@ function DirectorView({ user, orders, setOrders, screen }: { user: User; orders:
             <Select label="Phân cho Tổ *" value={bomForm.teamId} onChange={v => setBomForm({ ...bomForm, teamId: v })}
               options={[{ value: "", label: "— Chọn tổ phụ trách —" }, ...TEAMS.map(t => ({ value: t.id, label: `${t.name} – ${t.lead}` }))]} />
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-1">Các cột kích thước (tối đa 11)</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Các cột kích thước (tối đa 11)</label>
               <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                 {bomForm.specCols.map((c, i) => (
                   <input key={i} value={c} onChange={e => { const s = [...bomForm.specCols]; s[i] = e.target.value; setBomForm({ ...bomForm, specCols: s }) }}
-                    placeholder={`Cột ${i+1}`} className="border border-[#CBD5E1] rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-[#2D6EBD]" />
+                    placeholder={`Cột ${i+1}`} className="border border-border rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-ring" />
                 ))}
               </div>
-              <div className="text-xs text-[#94A3B8] mt-1">Để trống nếu không dùng (VD: Ø20, 1.5, M6…)</div>
+              <div className="text-xs text-muted-foreground mt-1">Để trống nếu không dùng (VD: Ø20, 1.5, M6…)</div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-1">Yêu cầu kỹ thuật</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Yêu cầu kỹ thuật</label>
               <textarea value={bomForm.techNote} onChange={e => setBomForm({ ...bomForm, techNote: e.target.value })} rows={2}
-                className="w-full border border-[#CBD5E1] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD]"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="VD: Lắp ghép ren theo tiêu chuẩn. Không bavia." />
             </div>
             <div className="flex gap-3">
@@ -1182,14 +1229,14 @@ function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder
 
   if (selectedOrder) return (
     <div>
-      <button onClick={() => setSelectedOrder(null)} className="flex items-center gap-1.5 text-[#64748B] hover:text-[#1B3A5C] text-sm mb-4 cursor-pointer bg-transparent border-0 font-medium">
+      <button onClick={() => setSelectedOrder(null)} className="flex items-center gap-1.5 text-muted hover:text-primary text-sm mb-4 cursor-pointer bg-transparent border-0 font-medium">
         <i className="fas fa-arrow-left text-xs" /> Quay lại
       </button>
       <Card cls="p-4 mb-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <div className="font-display font-800 text-lg">{selectedOrder.orderNo}</div>
-            <div className="text-sm text-[#64748B]">{selectedOrder.productLine}</div>
+            <div className="text-sm text-muted">{selectedOrder.productLine}</div>
           </div>
           <div className="flex gap-2 flex-wrap">
             <Badge cls={pColor(selectedOrder.priority)}>{PRIORITY_LABEL[selectedOrder.priority]}</Badge>
@@ -1198,7 +1245,7 @@ function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder
           </div>
         </div>
         {selectedOrder.attachments.length > 0 && (
-          <div className="mt-3"><div className="text-xs font-semibold text-[#475569] mb-2"><i className="fas fa-paperclip mr-1" /> Tài liệu</div>
+          <div className="mt-3"><div className="text-xs font-semibold text-muted mb-2"><i className="fas fa-paperclip mr-1" /> Tài liệu</div>
           <AttachmentList attachments={selectedOrder.attachments} /></div>
         )}
       </Card>
@@ -1208,15 +1255,15 @@ function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder
           <Card key={b.id} cls="p-4">
             <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
               <div>
-                <code className="text-[11px] bg-[#EFF2F7] text-[#1B3A5C] px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
+                <code className="text-[11px] bg-background text-primary px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
                 <div className="font-semibold text-sm mt-1">{b.partName}</div>
-                <div className="text-xs text-[#94A3B8]">{b.machine} · {b.process} · {b.targetQty.toLocaleString()} cái</div>
+                <div className="text-xs text-muted-foreground">{b.machine} · {b.process} · {b.targetQty.toLocaleString()} cái</div>
               </div>
               <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
             </div>
             {b.assignedTeamName
               ? <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-2 text-sm text-[#1B3A5C] font-medium"><i className="fas fa-users" />{b.assignedTeamName}</div>
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium"><i className="fas fa-users" />{b.assignedTeamName}</div>
                   <Btn size="sm" variant="ghost" onClick={() => { setAssignModal(b); setAssignTeamId(b.assignedTeamId) }}><i className="fas fa-pen text-xs" /> Chỉnh</Btn>
                 </div>
               : <Btn size="sm" onClick={() => { setAssignModal(b); setAssignTeamId("") }}><i className="fas fa-users-gear" /> Phân tổ</Btn>
@@ -1227,20 +1274,20 @@ function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder
       {assignModal && (
         <Modal title={`Phân công: ${assignModal.partName}`} onClose={() => setAssignModal(null)}>
           <div className="space-y-4">
-            <div className="bg-[#EFF2F7] rounded-xl p-3">
-              <code className="text-xs font-mono text-[#1B3A5C] font-bold">{assignModal.bomCode}</code>
+            <div className="bg-background rounded-xl p-3">
+              <code className="text-xs font-mono text-primary font-bold">{assignModal.bomCode}</code>
               <div className="font-semibold text-sm mt-0.5">{assignModal.partName}</div>
-              <div className="text-xs text-[#94A3B8]">{assignModal.targetQty.toLocaleString()} cái · {assignModal.machine}</div>
+              <div className="text-xs text-muted-foreground">{assignModal.targetQty.toLocaleString()} cái · {assignModal.machine}</div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-2">Chọn Tổ phụ trách</label>
+              <label className="block text-xs font-semibold text-muted mb-2">Chọn Tổ phụ trách</label>
               <div className="space-y-2">
                 {TEAMS.map(t => (
-                  <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${assignTeamId === t.id ? "border-[#1B3A5C] bg-[#EEF2FF]" : "border-[#E2E8F0] hover:border-[#CBD5E1]"}`}>
+                  <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${assignTeamId === t.id ? "border-[#1B3A5C] bg-secondary" : "border-border hover:border-border"}`}>
                     <input type="radio" name="teamRadio" value={t.id} checked={assignTeamId === t.id} onChange={() => setAssignTeamId(t.id)} className="accent-[#1B3A5C]" />
                     <div>
                       <div className="font-semibold text-sm">{t.name}</div>
-                      <div className="text-xs text-[#64748B]">Tổ trưởng: {t.lead}</div>
+                      <div className="text-xs text-muted">Tổ trưởng: {t.lead}</div>
                     </div>
                   </label>
                 ))}
@@ -1293,13 +1340,13 @@ function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder
         <>
           <h2 className="font-display font-800 text-xl mb-4">BOM chưa phân tổ</h2>
           {orders.flatMap(o => o.boms.filter(b => !b.assignedTeamId).map(b => ({ o, b }))).length === 0
-            ? <Card cls="p-10 text-center text-[#94A3B8]"><i className="fas fa-check-circle text-3xl text-green-400 opacity-60 block mb-2" />Tất cả BOM đã được phân công</Card>
+            ? <Card cls="p-10 text-center text-muted-foreground"><i className="fas fa-check-circle text-3xl text-green-400 opacity-60 block mb-2" />Tất cả BOM đã được phân công</Card>
             : orders.flatMap(o => o.boms.filter(b => !b.assignedTeamId).map(b => (
               <Card key={b.id} cls="p-4 mb-3 border-l-4 border-orange-300">
-                <div className="text-xs text-[#94A3B8] mb-1">{o.orderNo} · {o.productLine}</div>
-                <code className="text-[11px] font-mono text-[#1B3A5C] font-bold">{b.bomCode}</code>
+                <div className="text-xs text-muted-foreground mb-1">{o.orderNo} · {o.productLine}</div>
+                <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
                 <div className="font-semibold text-sm">{b.partName}</div>
-                <div className="text-xs text-[#94A3B8] mb-3">{b.machine} · {b.targetQty.toLocaleString()} cái</div>
+                <div className="text-xs text-muted-foreground mb-3">{b.machine} · {b.targetQty.toLocaleString()} cái</div>
                 <Btn size="sm" onClick={() => { setSelectedOrder(o); setAssignModal(b); setAssignTeamId("") }}><i className="fas fa-users-gear" /> Phân tổ ngay</Btn>
               </Card>
             )))
@@ -1367,22 +1414,22 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
       {(screen === "dashboard" || screen === "boms") && (
         <>
           <h2 className="font-display font-800 text-xl mb-1">{team?.name || "Tổ của tôi"}</h2>
-          <p className="text-sm text-[#64748B] mb-4">Tổ trưởng: {team?.lead} · {myBOMs.length} BOM được giao</p>
+          <p className="text-sm text-muted mb-4">Tổ trưởng: {team?.lead} · {myBOMs.length} BOM được giao</p>
           {myBOMs.length === 0
-            ? <Card cls="p-10 text-center text-[#94A3B8]"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có BOM nào được phân công</Card>
+            ? <Card cls="p-10 text-center text-muted-foreground"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có BOM nào được phân công</Card>
             : <div className="space-y-2">
                 {myBOMs.map(({ o, b }) => (
                   <button key={b.id} onClick={() => setSelectedItem({ o, b })} className="w-full text-left cursor-pointer border-0 bg-transparent p-0">
-                    <Card cls="p-4 hover:border-[#2D6EBD] transition-all">
+                    <Card cls="p-4 hover:border-ring transition-all">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <code className="text-[11px] bg-[#EFF2F7] text-[#1B3A5C] px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
+                            <code className="text-[11px] bg-background text-primary px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
                             <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
                           </div>
                           <div className="font-semibold text-sm truncate">{b.partName}</div>
-                          <div className="text-xs text-[#94A3B8] mt-0.5">{o.orderNo} · {b.targetQty.toLocaleString()} cái</div>
-                          {b.assignedWorkers.length > 0 && <div className="text-xs text-[#64748B] mt-0.5"><i className="fas fa-users text-[10px] mr-1" />{b.assignedWorkers.join(", ")}</div>}
+                          <div className="text-xs text-muted-foreground mt-0.5">{o.orderNo} · {b.targetQty.toLocaleString()} cái</div>
+                          {b.assignedWorkers.length > 0 && <div className="text-xs text-muted mt-0.5"><i className="fas fa-users text-[10px] mr-1" />{b.assignedWorkers.join(", ")}</div>}
                         </div>
                         <div className="text-right flex-shrink-0">
                           {b.passQty > 0 && <div className="text-xs text-green-600 font-bold">{b.passQty.toLocaleString()}/{b.targetQty.toLocaleString()}</div>}
@@ -1399,12 +1446,12 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
       {screen === "report" && (
         <>
           <h2 className="font-display font-800 text-xl mb-1">Tổng kết sản lượng BOM</h2>
-          <p className="text-sm text-[#64748B] mb-4">Tổ trưởng báo cáo số lượng đạt/hỏng theo lô — gửi QC kiểm tra</p>
+          <p className="text-sm text-muted mb-4">Tổ trưởng báo cáo số lượng đạt/hỏng theo lô — gửi QC kiểm tra</p>
           {myBOMs.filter(({ b }) => b.status !== "team_reported" && b.status !== "qc_passed" && b.status !== "qc_failed").map(({ o, b }) => (
             <Card key={b.id} cls="p-4 mb-3">
-              <code className="text-[11px] font-mono text-[#1B3A5C] font-bold">{b.bomCode}</code>
+              <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
               <div className="font-semibold text-sm">{b.partName}</div>
-              <div className="text-xs text-[#94A3B8] mb-3">{o.orderNo} · {b.targetQty.toLocaleString()} cái</div>
+              <div className="text-xs text-muted-foreground mb-3">{o.orderNo} · {b.targetQty.toLocaleString()} cái</div>
               <Btn size="sm" onClick={() => { setReportModal({ o, b }); setRForm({ passQty: String(b.passQty || ""), failQty: String(b.failQty || ""), note: "" }) }}>
                 <i className="fas fa-file-pen" /> Lập báo cáo
               </Btn>
@@ -1412,9 +1459,9 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
           ))}
           {myBOMs.filter(({ b }) => b.status === "team_reported" || b.status === "qc_passed" || b.status === "qc_failed").map(({ b }) => (
             <Card key={b.id} cls="p-4 mb-3 border-l-4 border-green-400 opacity-80">
-              <code className="text-[11px] font-mono text-[#1B3A5C] font-bold">{b.bomCode}</code>
+              <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
               <div className="font-semibold text-sm">{b.partName}</div>
-              {b.teamSummary && <div className="text-xs text-[#64748B] mt-1"><i className="fas fa-check text-green-500 mr-1" />Đã BC: {b.teamSummary.passQty} đạt / {b.teamSummary.failQty} hỏng · {b.teamSummary.reportedAt}</div>}
+              {b.teamSummary && <div className="text-xs text-muted mt-1"><i className="fas fa-check text-green-500 mr-1" />Đã BC: {b.teamSummary.passQty} đạt / {b.teamSummary.failQty} hỏng · {b.teamSummary.reportedAt}</div>}
             </Card>
           ))}
         </>
@@ -1422,16 +1469,16 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
       {screen === "assign" && (
         <>
           <h2 className="font-display font-800 text-xl mb-1">Phân công Công nhân</h2>
-          <p className="text-sm text-[#64748B] mb-4">Chỉ định người lao động nhập liệu từng linh kiện theo BOM được giao</p>
+          <p className="text-sm text-muted mb-4">Chỉ định người lao động Sản xuất từng linh kiện theo BOM được giao</p>
           {myBOMs.length === 0
-            ? <Card cls="p-10 text-center text-[#94A3B8]"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có BOM nào được phân cho tổ</Card>
+            ? <Card cls="p-10 text-center text-muted-foreground"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có BOM nào được phân cho tổ</Card>
             : myBOMs.map(({ o, b }) => (
               <Card key={b.id} cls="p-4 mb-3">
-                <code className="text-[11px] font-mono text-[#1B3A5C] font-bold">{b.bomCode}</code>
+                <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
                 <div className="font-semibold text-sm">{b.partName}</div>
-                <div className="text-xs text-[#94A3B8] mb-2">{o.orderNo} · {b.targetQty.toLocaleString()} cái</div>
+                <div className="text-xs text-muted-foreground mb-2">{o.orderNo} · {b.targetQty.toLocaleString()} cái</div>
                 {b.assignedWorkers.length > 0
-                  ? <div className="text-xs text-[#64748B] mb-3"><i className="fas fa-users mr-1" />{b.assignedWorkers.join(", ")}</div>
+                  ? <div className="text-xs text-muted mb-3"><i className="fas fa-users mr-1" />{b.assignedWorkers.join(", ")}</div>
                   : <div className="text-xs text-orange-600 mb-3"><i className="fas fa-circle-exclamation mr-1" />Chưa phân công nhân</div>
                 }
                 <Btn size="sm" onClick={() => {
@@ -1446,22 +1493,22 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
       {assignModal && (
         <Modal title={`Phân công: ${assignModal.b.partName}`} onClose={() => setAssignModal(null)}>
           <div className="space-y-4">
-            <div className="bg-[#EFF2F7] rounded-xl p-3">
-              <code className="text-xs font-mono text-[#1B3A5C] font-bold">{assignModal.b.bomCode}</code>
+            <div className="bg-background rounded-xl p-3">
+              <code className="text-xs font-mono text-primary font-bold">{assignModal.b.bomCode}</code>
               <div className="font-semibold text-sm mt-0.5">{assignModal.b.partName}</div>
-              <div className="text-xs text-[#94A3B8]">{assignModal.o.orderNo}</div>
+              <div className="text-xs text-muted-foreground">{assignModal.o.orderNo}</div>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-2">Chọn công nhân phụ trách nhập liệu</label>
+              <label className="block text-xs font-semibold text-muted mb-2">Chọn công nhân phụ trách Sản xuất</label>
               {teamWorkers.length === 0
-                ? <div className="text-xs text-[#94A3B8] italic">Không có công nhân trong tổ</div>
+                ? <div className="text-xs text-muted-foreground italic">Không có công nhân trong tổ</div>
                 : <div className="space-y-2">
                     {teamWorkers.map(w => (
-                      <label key={w.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedWorkers.includes(w.id) ? "border-[#1B3A5C] bg-[#EEF2FF]" : "border-[#E2E8F0]"}`}>
+                      <label key={w.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedWorkers.includes(w.id) ? "border-[#1B3A5C] bg-secondary" : "border-border"}`}>
                         <input type="checkbox" checked={selectedWorkers.includes(w.id)} onChange={() => setSelectedWorkers(prev => prev.includes(w.id) ? prev.filter(id => id !== w.id) : [...prev, w.id])} className="accent-[#1B3A5C]" />
                         <div>
                           <div className="font-semibold text-sm">{w.name}</div>
-                          <div className="text-xs text-[#64748B] font-mono">{w.employeeId}</div>
+                          <div className="text-xs text-muted font-mono">{w.employeeId}</div>
                         </div>
                       </label>
                     ))}
@@ -1478,19 +1525,19 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
       {reportModal && (
         <Modal title={`Báo cáo: ${reportModal.b.partName}`} onClose={() => setReportModal(null)}>
           <div className="space-y-4">
-            <div className="bg-[#EFF2F7] rounded-xl p-3">
-              <code className="text-xs font-mono text-[#1B3A5C] font-bold">{reportModal.b.bomCode}</code>
+            <div className="bg-background rounded-xl p-3">
+              <code className="text-xs font-mono text-primary font-bold">{reportModal.b.bomCode}</code>
               <div className="font-semibold text-sm mt-0.5">{reportModal.b.partName}</div>
-              <div className="text-xs text-[#94A3B8]">Mục tiêu: {reportModal.b.targetQty.toLocaleString()} cái</div>
+              <div className="text-xs text-muted-foreground">Mục tiêu: {reportModal.b.targetQty.toLocaleString()} cái</div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Input label="Số lượng ĐẠT" value={rForm.passQty} onChange={v => setRForm({ ...rForm, passQty: v })} type="number" required placeholder="VD: 1250" />
               <Input label="Số lượng HỎNG" value={rForm.failQty} onChange={v => setRForm({ ...rForm, failQty: v })} type="number" placeholder="VD: 23" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-1">Ghi chú</label>
+              <label className="block text-xs font-semibold text-muted mb-1">Ghi chú</label>
               <textarea value={rForm.note} onChange={e => setRForm({ ...rForm, note: e.target.value })} rows={3}
-                className="w-full border border-[#CBD5E1] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD]"
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="Ghi chú thêm nếu có..." />
             </div>
             <div className="flex gap-3">
@@ -1514,12 +1561,12 @@ function WorkerView({ user, orders, screen }: { user: User; orders: ProductionOr
     <div>
       <h2 className="font-display font-800 text-xl tracking-wide mb-3">CÔNG VIỆC</h2>
       {unfinished.length > 0 && (
-        <div className="bg-[#E2E8F0] text-red-600 text-sm font-medium rounded-xl px-4 py-3 mb-4">
+        <div className="bg-border text-red-600 text-sm font-medium rounded-xl px-4 py-3 mb-4">
           Còn {unfinished.length} công việc chưa hoàn thành
         </div>
       )}
       {myTasks.length === 0
-        ? <Card cls="p-10 text-center text-[#94A3B8]"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa được tổ trưởng phân công</Card>
+        ? <Card cls="p-10 text-center text-muted-foreground"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa được tổ trưởng phân công</Card>
         : <div className="space-y-3">
             {myTasks.map(({ o, b }) => {
               const produced = b.workerEntries.reduce((s, e) => s + e.rows.length, 0)
@@ -1531,15 +1578,15 @@ function WorkerView({ user, orders, screen }: { user: User; orders: ProductionOr
                   onClick={() => navigate(`/worker/task/${o.id}/${b.id}`)}
                   className="w-full text-left cursor-pointer border-0 bg-transparent p-0"
                 >
-                  <Card cls="p-4 hover:border-[#2D6EBD]">
+                  <Card cls="p-4 hover:border-ring">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="font-semibold text-sm">{b.partName}</div>
-                        <div className="text-xs text-[#94A3B8] mt-0.5">{b.partCode || o.productCode || o.orderNo}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{b.partCode || o.productCode || o.orderNo}</div>
                       </div>
                       <div className="text-green-600 font-bold text-sm">{pct}%</div>
                     </div>
-                    <div className="h-1.5 bg-[#E2E8F0] rounded-full mt-3 overflow-hidden">
+                    <div className="h-1.5 bg-border rounded-full mt-3 overflow-hidden">
                       <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                   </Card>
@@ -1637,14 +1684,14 @@ function QCView({ user, orders, setOrders, screen }: { user: User; orders: Produ
       )}
       <h3 className="font-display font-700 text-base mb-3 flex items-center gap-2"><i className="fas fa-hourglass-half text-yellow-500" /> Chờ kiểm tra ({pending.length})</h3>
       {pending.length === 0
-        ? <Card cls="p-8 text-center text-[#94A3B8] mb-4"><i className="fas fa-check-circle text-3xl text-green-400 opacity-60 block mb-2" />Không có BOM nào chờ QC</Card>
+        ? <Card cls="p-8 text-center text-muted-foreground mb-4"><i className="fas fa-check-circle text-3xl text-green-400 opacity-60 block mb-2" />Không có BOM nào chờ QC</Card>
         : <div className="space-y-3 mb-5">
             {pending.map(({ o, b }) => (
               <Card key={b.id} cls="p-4 border-l-4 border-yellow-400">
                 <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                   <div>
-                    <div className="text-xs text-[#94A3B8]">{o.orderNo}</div>
-                    <code className="text-[11px] bg-[#EFF2F7] text-[#1B3A5C] px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
+                    <div className="text-xs text-muted-foreground">{o.orderNo}</div>
+                    <code className="text-[11px] bg-background text-primary px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
                     <div className="font-semibold text-sm mt-0.5">{b.partName}</div>
                   </div>
                   <Badge cls="bg-yellow-100 text-yellow-700"><i className="fas fa-clock text-[10px]" /> Chờ QC</Badge>
@@ -1653,10 +1700,10 @@ function QCView({ user, orders, setOrders, screen }: { user: User; orders: Produ
                   <div className="flex gap-3 text-xs mb-3">
                     <span className="text-green-600 font-semibold"><i className="fas fa-check mr-1" />{b.teamSummary.passQty} đạt</span>
                     <span className="text-red-500 font-semibold"><i className="fas fa-times mr-1" />{b.teamSummary.failQty} hỏng</span>
-                    <span className="text-[#94A3B8]">BC bởi {b.teamSummary.reportedBy}</span>
+                    <span className="text-muted-foreground">BC bởi {b.teamSummary.reportedBy}</span>
                   </div>
                 )}
-                {b.workerEntries.length > 0 && <div className="text-xs text-[#64748B] mb-3"><i className="fas fa-table mr-1" />{b.workerEntries.length} bảng đo · {b.workerEntries.reduce((s, e) => s + e.rows.length, 0)} mẫu</div>}
+                {b.workerEntries.length > 0 && <div className="text-xs text-muted mb-3"><i className="fas fa-table mr-1" />{b.workerEntries.length} bảng đo · {b.workerEntries.reduce((s, e) => s + e.rows.length, 0)} mẫu</div>}
                 <Btn size="sm" onClick={() => { setQCModal({ o, b }); setQCForm({ passQty: String(b.teamSummary?.passQty ?? ""), failQty: String(b.teamSummary?.failQty ?? ""), complaint: "", decision: "approve" }) }}>
                   <i className="fas fa-magnifying-glass" /> Kiểm tra
                 </Btn>
@@ -1666,16 +1713,16 @@ function QCView({ user, orders, setOrders, screen }: { user: User; orders: Produ
       }
       {done.length > 0 && (
         <>
-          <h3 className="font-display font-700 text-base mb-3 flex items-center gap-2"><i className="fas fa-history text-[#94A3B8]" /> Đã kiểm tra</h3>
+          <h3 className="font-display font-700 text-base mb-3 flex items-center gap-2"><i className="fas fa-history text-muted-foreground" /> Đã kiểm tra</h3>
           <div className="space-y-2">
             {done.map(({ o, b }) => (
               <Card key={b.id} cls="p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-xs text-[#94A3B8]">{o.orderNo}</div>
-                    <code className="text-[11px] font-mono text-[#1B3A5C] font-bold">{b.bomCode}</code>
+                    <div className="text-xs text-muted-foreground">{o.orderNo}</div>
+                    <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
                     <div className="text-sm font-medium truncate">{b.partName}</div>
-                    {b.qcReport && <div className="text-xs text-[#94A3B8] mt-0.5">{b.qcReport.passQty} đạt · {b.qcReport.inspectedBy} · {b.qcReport.inspectedAt}</div>}
+                    {b.qcReport && <div className="text-xs text-muted-foreground mt-0.5">{b.qcReport.passQty} đạt · {b.qcReport.inspectedBy} · {b.qcReport.inspectedAt}</div>}
                   </div>
                   <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
                 </div>
@@ -1688,10 +1735,10 @@ function QCView({ user, orders, setOrders, screen }: { user: User; orders: Produ
       {qcModal && (
         <Modal title={`QC: ${qcModal.b.partName}`} onClose={() => setQCModal(null)}>
           <div className="space-y-4">
-            <div className="bg-[#EFF2F7] rounded-xl p-3">
-              <code className="text-xs font-mono text-[#1B3A5C] font-bold">{qcModal.b.bomCode}</code>
+            <div className="bg-background rounded-xl p-3">
+              <code className="text-xs font-mono text-primary font-bold">{qcModal.b.bomCode}</code>
               <div className="font-semibold text-sm mt-0.5">{qcModal.b.partName}</div>
-              {qcModal.b.teamSummary && <div className="text-xs text-[#64748B] mt-1">Tổ báo cáo: <span className="text-green-600 font-semibold">{qcModal.b.teamSummary.passQty} đạt</span> · <span className="text-red-500 font-semibold">{qcModal.b.teamSummary.failQty} hỏng</span></div>}
+              {qcModal.b.teamSummary && <div className="text-xs text-muted mt-1">Tổ báo cáo: <span className="text-green-600 font-semibold">{qcModal.b.teamSummary.passQty} đạt</span> · <span className="text-red-500 font-semibold">{qcModal.b.teamSummary.failQty} hỏng</span></div>}
             </div>
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-800">
               <i className="fas fa-circle-info mr-1" />
@@ -1702,10 +1749,10 @@ function QCView({ user, orders, setOrders, screen }: { user: User; orders: Produ
               <Input label="Số lượng HỎNG" value={qcForm.failQty} onChange={v => setQCForm({ ...qcForm, failQty: v })} type="number" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#475569] mb-2">Kết quả kiểm tra</label>
+              <label className="block text-xs font-semibold text-muted mb-2">Kết quả kiểm tra</label>
               <div className="grid grid-cols-2 gap-2">
                 {[{ v: "approve", label: "Xác nhận đúng BC tổ", icon: "fa-circle-check", c: "border-green-500 bg-green-50 text-green-700" }, { v: "reject", label: "Không đạt chuẩn", icon: "fa-circle-xmark", c: "border-red-500 bg-red-50 text-red-700" }].map(opt => (
-                  <label key={opt.v} className={`flex items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${qcForm.decision === opt.v ? opt.c : "border-[#E2E8F0] hover:border-[#CBD5E1]"}`}>
+                  <label key={opt.v} className={`flex items-center gap-2 p-3 rounded-xl border-2 cursor-pointer transition-all ${qcForm.decision === opt.v ? opt.c : "border-border hover:border-border"}`}>
                     <input type="radio" name="qcDecision" value={opt.v} checked={qcForm.decision === opt.v} onChange={() => setQCForm({ ...qcForm, decision: opt.v })} className="sr-only" />
                     <i className={`fas ${opt.icon} text-lg`} />
                     <span className="font-semibold text-sm">{opt.label}</span>
@@ -1715,7 +1762,7 @@ function QCView({ user, orders, setOrders, screen }: { user: User; orders: Produ
             </div>
             {qcForm.decision === "reject" && (
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">Đơn khiếu nại (gửi Tổ trưởng & Quản đốc) <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-muted mb-1">Đơn khiếu nại (gửi Tổ trưởng & Quản đốc) <span className="text-red-500">*</span></label>
                 <textarea value={qcForm.complaint} onChange={e => setQCForm({ ...qcForm, complaint: e.target.value })} rows={3}
                   className="w-full border-2 border-red-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
                   placeholder="Mô tả lỗi, kích thước không đạt, vị trí lỗi..." />
@@ -1768,9 +1815,9 @@ function StatsView({ orders, screen }: { orders: ProductionOrder[]; screen: stri
         if (b) setPeek({ o, b })
       }} />
       <Card cls="p-4 mb-4">
-        <div className="flex justify-between text-sm font-semibold mb-2"><span>Tiến độ tổng</span><span className="text-[#64748B]">{totalPass.toLocaleString()} / {totalTarget.toLocaleString()}</span></div>
-        <div className="h-3 bg-[#F1F5F9] rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#1B3A5C] to-[#2D6EBD] rounded-full transition-all" style={{ width: `${rate}%` }} /></div>
-        <div className="flex justify-between text-xs text-[#94A3B8] mt-1.5"><span>Đạt: {totalPass.toLocaleString()}</span><span>Hỏng: {totalFail}</span><span>Chưa: {(totalTarget - totalPass - totalFail).toLocaleString()}</span></div>
+        <div className="flex justify-between text-sm font-semibold mb-2"><span>Tiến độ tổng</span><span className="text-muted">{totalPass.toLocaleString()} / {totalTarget.toLocaleString()}</span></div>
+        <div className="h-3 bg-surface rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#1B3A5C] to-[#2D6EBD] rounded-full transition-all" style={{ width: `${rate}%` }} /></div>
+        <div className="flex justify-between text-xs text-muted-foreground mt-1.5"><span>Đạt: {totalPass.toLocaleString()}</span><span>Hỏng: {totalFail}</span><span>Chưa: {(totalTarget - totalPass - totalFail).toLocaleString()}</span></div>
       </Card>
       <h3 className="font-display font-700 text-base mb-3">Chi tiết theo Lệnh SX</h3>
       <div className="space-y-3 mb-5">
@@ -1783,16 +1830,16 @@ function StatsView({ orders, screen }: { orders: ProductionOrder[]; screen: stri
               <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                 <div>
                   <div className="font-display font-700 text-sm">{o.orderNo}</div>
-                  <div className="text-xs text-[#64748B]">{o.productLine}</div>
+                  <div className="text-xs text-muted">{o.productLine}</div>
                 </div>
                 <Badge cls={sColor(o.status)}>{STATUS_LABEL[o.status]}</Badge>
               </div>
               <div className="grid grid-cols-4 gap-1 text-xs text-center mb-2">
-                {[["BOM",o.boms.length,"text-[#1B3A5C]"],["Mục tiêu",tgt.toLocaleString(),"text-[#0F172A]"],["Đạt",pass.toLocaleString(),"text-green-600"],["Tỷ lệ",`${r}%`,r>=90?"text-green-600":r>=70?"text-yellow-600":"text-red-500"]].map(([l,v,c]) => (
-                  <div key={l as string}><div className={`font-bold ${c}`}>{v}</div><div className="text-[#94A3B8]">{l}</div></div>
+                {[["BOM",o.boms.length,"text-primary"],["Mục tiêu",tgt.toLocaleString(),"text-foreground"],["Đạt",pass.toLocaleString(),"text-green-600"],["Tỷ lệ",`${r}%`,r>=90?"text-green-600":r>=70?"text-yellow-600":"text-red-500"]].map(([l,v,c]) => (
+                  <div key={l as string}><div className={`font-bold ${c}`}>{v}</div><div className="text-muted-foreground">{l}</div></div>
                 ))}
               </div>
-              <div className="h-1.5 bg-[#F1F5F9] rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#1B3A5C] to-[#2D6EBD] rounded-full" style={{ width: `${r}%` }} /></div>
+              <div className="h-1.5 bg-surface rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#1B3A5C] to-[#2D6EBD] rounded-full" style={{ width: `${r}%` }} /></div>
             </Card>
           )
         })}
@@ -1807,11 +1854,11 @@ function StatsView({ orders, screen }: { orders: ProductionOrder[]; screen: stri
             <div key={t.id} className="flex items-center justify-between px-4 py-3">
               <div>
                 <div className="font-semibold text-sm">{t.name}</div>
-                <div className="text-xs text-[#94A3B8]">{t.lead} · {tBOMs.length} BOM</div>
+                <div className="text-xs text-muted-foreground">{t.lead} · {tBOMs.length} BOM</div>
               </div>
               <div className="text-right text-xs">
                 <div className="font-bold text-green-600">{p.toLocaleString()} đạt</div>
-                <div className="text-[#94A3B8]">/ {tgt.toLocaleString()}</div>
+                <div className="text-muted-foreground">/ {tgt.toLocaleString()}</div>
               </div>
             </div>
           )
@@ -1860,10 +1907,10 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
   }
 
   const ROLE_COLOR: Record<Role, string> = {
-    director: "bg-[#EEF2FF] text-[#4F46E5]", supervisor: "bg-[#EFF6FF] text-[#2563EB]",
+    director: "bg-secondary text-[#4F46E5]", supervisor: "bg-[#EFF6FF] text-[#2563EB]",
     teamlead: "bg-[#FFFBEB] text-[#D97706]", worker: "bg-[#F0FDF4] text-[#16A34A]",
     qc: "bg-[#FAF5FF] text-[#7C3AED]", stats: "bg-[#F0FDFA] text-[#0F766E]",
-    admin: "bg-[#FFF1F2] text-[#DC2626]"
+    admin: "bg-[#FFF1F2] text-[#DC2626]", mechanic: "bg-surface text-muted",
   }
 
   return (
@@ -1880,12 +1927,12 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
       </div>
       <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
-          <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-sm" />
+          <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên, mã NV..."
-            className="w-full pl-9 pr-3 py-2 border border-[#CBD5E1] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD]" />
+            className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
         <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
-          className="border border-[#CBD5E1] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6EBD] bg-white">
+          className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-card">
           <option value="all">Tất cả</option>
           {(["director","supervisor","teamlead","worker","qc","stats","admin"] as Role[]).map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
         </select>
@@ -1904,26 +1951,26 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
                     {!u.active && <Badge cls="bg-red-100 text-red-600"><i className="fas fa-ban text-[10px]" /> Vô hiệu</Badge>}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <code className="text-xs font-mono font-bold text-[#1B3A5C] bg-[#EFF2F7] px-1.5 py-0.5 rounded">{u.employeeId}</code>
+                    <code className="text-xs font-mono font-bold text-primary bg-background px-1.5 py-0.5 rounded">{u.employeeId}</code>
                     <Badge cls={ROLE_COLOR[u.role]}>{ROLE_LABEL[u.role]}</Badge>
                   </div>
-                  <div className="text-xs text-[#94A3B8] mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     {u.department}{u.teamId && ` · ${TEAMS.find(t => t.id === u.teamId)?.name}`}{u.phone && ` · ${u.phone}`}
                   </div>
                 </div>
               </div>
               <div className="flex gap-1 flex-shrink-0">
-                <button onClick={() => openEdit(u)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#EFF2F7] text-[#64748B] cursor-pointer border-0 bg-transparent transition-all">
+                <button onClick={() => openEdit(u)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface text-muted cursor-pointer border-0 bg-transparent transition-all">
                   <i className="fas fa-pen text-sm" />
                 </button>
-                <button onClick={() => toggleActive(u.id)} className={`w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer border-0 transition-all ${u.active ? "hover:bg-red-50 text-[#94A3B8] hover:text-red-500" : "hover:bg-green-50 text-[#94A3B8] hover:text-green-500"}`}>
+                <button onClick={() => toggleActive(u.id)} className={`w-8 h-8 flex items-center justify-center rounded-lg cursor-pointer border-0 transition-all ${u.active ? "hover:bg-red-50 text-muted-foreground hover:text-red-500" : "hover:bg-green-50 text-muted-foreground hover:text-green-500"}`}>
                   <i className={`fas ${u.active ? "fa-ban" : "fa-circle-check"} text-sm`} />
                 </button>
               </div>
             </div>
           </Card>
         ))}
-        {filtered.length === 0 && <Card cls="p-8 text-center text-[#94A3B8]"><i className="fas fa-search text-2xl block mb-2 opacity-30" />Không tìm thấy tài khoản</Card>}
+        {filtered.length === 0 && <Card cls="p-8 text-center text-muted-foreground"><i className="fas fa-search text-2xl block mb-2 opacity-30" />Không tìm thấy tài khoản</Card>}
       </div>
 
       {showForm && (
@@ -1931,13 +1978,13 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">Mã nhân viên <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-muted mb-1">Mã nhân viên <span className="text-red-500">*</span></label>
                 <div className="relative">
-                  <i className="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-[#94A3B8] text-sm" />
+                  <i className="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
                   <input value={form.employeeId} onChange={e => setForm({ ...form, employeeId: e.target.value })}
-                    className="w-full pl-9 pr-3 py-2.5 border border-[#CBD5E1] rounded-lg text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-[#2D6EBD]" placeholder="NV001" />
+                    className="w-full pl-9 pr-3 py-2.5 border border-border rounded-lg text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-ring" placeholder="NV001" />
                 </div>
-                <div className="text-xs text-[#94A3B8] mt-1">Tự động tạo, có thể sửa</div>
+                <div className="text-xs text-muted-foreground mt-1">Tự động tạo, có thể sửa</div>
               </div>
               <Input label="Họ và tên" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Nguyễn Văn A" required />
               <Input label="Mật khẩu" value={form.password} onChange={v => setForm({ ...form, password: v })} type="password" required />

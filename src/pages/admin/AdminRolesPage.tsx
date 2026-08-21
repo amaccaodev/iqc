@@ -70,13 +70,13 @@ export default function AdminRolesPage() {
   return (
     <div>
       <h2 className="font-display font-800 text-xl mb-1">Quản lý Roles & Tổ</h2>
-      <p className="text-sm text-[#64748B] mb-5">Thêm, sửa, xóa vai trò và nhóm/tổ trong hệ thống</p>
+      <p className="text-sm text-muted mb-5">Thêm, sửa, xóa vai trò và nhóm/tổ trong hệ thống</p>
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5">
         {([["roles", "fa-shield-halved", "Roles"], ["groups", "fa-users", "Tổ / Nhóm"]] as const).map(([t, icon, label]) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border-0 transition ${tab === t ? "bg-[#1B3A5C] text-white" : "bg-white text-[#64748B] hover:bg-[#EFF2F7]"}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border-0 transition ${tab === t ? "bg-primary text-white" : "bg-card text-muted hover:bg-surface"}`}>
             <i className={`fas ${icon}`} /> {label}
           </button>
         ))}
@@ -84,41 +84,41 @@ export default function AdminRolesPage() {
 
       {tab === "roles" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E2E8F0]">
+          <div className="bg-card rounded-2xl p-4 shadow-sm border border-border">
             <h3 className="font-semibold text-sm mb-3">Thêm Role mới</h3>
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">ID (slug) <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-muted mb-1">ID (slug) <span className="text-red-500">*</span></label>
                 <input value={newRole.id} onChange={e => setNewRole({ ...newRole, id: e.target.value.toLowerCase().replace(/\s/g, "_") })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
                   placeholder="vd: mechanic" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">Tên hiển thị <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-muted mb-1">Tên hiển thị <span className="text-red-500">*</span></label>
                 <input value={newRole.label} onChange={e => setNewRole({ ...newRole, label: e.target.value })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
                   placeholder="vd: Cơ điện" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">Mô tả</label>
+                <label className="block text-xs font-semibold text-muted mb-1">Mô tả</label>
                 <input value={newRole.description} onChange={e => setNewRole({ ...newRole, description: e.target.value })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
                   placeholder="Mô tả quyền..." />
               </div>
             </div>
             <button onClick={() => void addRole()} disabled={saving}
-              className="bg-[#1B3A5C] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
+              className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
               <i className="fas fa-plus mr-2" />Thêm Role
             </button>
           </div>
 
           <div className="space-y-2">
             {roles.map(r => (
-              <div key={r.id} className="bg-white rounded-xl p-3 shadow-sm border border-[#E2E8F0] flex items-center justify-between">
+              <div key={r.id} className="bg-card rounded-xl p-3 shadow-sm border border-border flex items-center justify-between">
                 <div>
-                  <span className="bg-[#EFF2F7] text-[#1B3A5C] text-xs font-mono font-bold px-2 py-0.5 rounded mr-2">{r.id}</span>
+                  <span className="bg-background text-primary text-xs font-mono font-bold px-2 py-0.5 rounded mr-2">{r.id}</span>
                   <span className="font-semibold text-sm">{r.label}</span>
-                  {r.description && <span className="text-xs text-[#94A3B8] ml-2">— {r.description}</span>}
+                  {r.description && <span className="text-xs text-muted-foreground ml-2">— {r.description}</span>}
                 </div>
                 <button onClick={() => void deleteRole(r.id)}
                   className="text-red-400 hover:text-red-600 text-xs px-2 py-1 cursor-pointer border-0 bg-transparent">
@@ -132,47 +132,47 @@ export default function AdminRolesPage() {
 
       {tab === "groups" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-[#E2E8F0]">
+          <div className="bg-card rounded-2xl p-4 shadow-sm border border-border">
             <h3 className="font-semibold text-sm mb-3">Thêm Tổ / Nhóm mới</h3>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">ID <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-muted mb-1">ID <span className="text-red-500">*</span></label>
                 <input value={newGroup.id} onChange={e => setNewGroup({ ...newGroup, id: e.target.value })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
                   placeholder="vd: t5" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">Tên tổ <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-semibold text-muted mb-1">Tên tổ <span className="text-red-500">*</span></label>
                 <input value={newGroup.name} onChange={e => setNewGroup({ ...newGroup, name: e.target.value })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
                   placeholder="vd: Tổ 5" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">Tổ trưởng</label>
+                <label className="block text-xs font-semibold text-muted mb-1">Tổ trưởng</label>
                 <input value={newGroup.lead} onChange={e => setNewGroup({ ...newGroup, lead: e.target.value })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
                   placeholder="Họ tên tổ trưởng" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-[#475569] mb-1">Tên viết tắt</label>
+                <label className="block text-xs font-semibold text-muted mb-1">Tên viết tắt</label>
                 <input value={newGroup.lead_short} onChange={e => setNewGroup({ ...newGroup, lead_short: e.target.value })}
-                  className="w-full border border-[#E2E8F0] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
                   placeholder="VD: N.V.A" />
               </div>
             </div>
             <button onClick={() => void addGroup()} disabled={saving}
-              className="bg-[#1B3A5C] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
+              className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
               <i className="fas fa-plus mr-2" />Thêm Tổ
             </button>
           </div>
 
           <div className="space-y-2">
             {groups.map(g => (
-              <div key={g.id} className="bg-white rounded-xl p-3 shadow-sm border border-[#E2E8F0] flex items-center justify-between">
+              <div key={g.id} className="bg-card rounded-xl p-3 shadow-sm border border-border flex items-center justify-between">
                 <div>
-                  <span className="bg-[#EFF2F7] text-[#1B3A5C] text-xs font-mono font-bold px-2 py-0.5 rounded mr-2">{g.id}</span>
+                  <span className="bg-background text-primary text-xs font-mono font-bold px-2 py-0.5 rounded mr-2">{g.id}</span>
                   <span className="font-semibold text-sm">{g.name}</span>
-                  {g.lead && <span className="text-xs text-[#64748B] ml-2">TT: {g.lead}</span>}
+                  {g.lead && <span className="text-xs text-muted ml-2">TT: {g.lead}</span>}
                 </div>
                 <button onClick={() => void deleteGroup(g.id)}
                   className="text-red-400 hover:text-red-600 text-xs px-2 py-1 cursor-pointer border-0 bg-transparent">

@@ -1,4 +1,4 @@
-import type { BOMItem, ProductionOrder } from "../types/index.js";
+import type { BOMItem, ProductionOrder, WorkerMachineAssignment } from "../types/index.js";
 
 const PLAN_PREFIX = "[[PLAN]]";
 
@@ -7,10 +7,18 @@ export interface WorkPlan {
   shift?: string;
   quota?: string;
   workTime?: string;
+  workerAssignments?: WorkerMachineAssignment[];
 }
 
 export function encodeTechNote(note: string, plan?: WorkPlan): string {
-  if (!plan || (!plan.productCode && !plan.shift && !plan.quota && !plan.workTime)) {
+  if (
+    !plan ||
+    (!plan.productCode &&
+      !plan.shift &&
+      !plan.quota &&
+      !plan.workTime &&
+      !(plan.workerAssignments && plan.workerAssignments.length))
+  ) {
     return note;
   }
   return `${PLAN_PREFIX}${JSON.stringify(plan)}\n${note}`;
@@ -38,6 +46,9 @@ export function applyPlanToBom(bom: BOMItem): BOMItem {
     quota: bom.quota || plan.quota,
     workTime: bom.workTime || plan.workTime,
     partCode: bom.partCode || plan.productCode || "",
+    workerAssignments: bom.workerAssignments?.length
+      ? bom.workerAssignments
+      : plan.workerAssignments,
   };
 }
 

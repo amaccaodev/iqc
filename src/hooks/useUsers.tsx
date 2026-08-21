@@ -22,8 +22,12 @@ export function UsersProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<UserPublic[]>([]);
 
   const refreshUsers = useCallback(async () => {
-    const data = await userApi.getAll();
-    setUsers(data);
+    try {
+      const data = await userApi.getAll();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch {
+      setUsers([]);
+    }
   }, []);
 
   useEffect(() => {
