@@ -609,9 +609,9 @@ function EntryPanel({
       )}
 
       {rowWarnings > 0 && (
-        <div className="mb-3 flex items-start gap-2 bg-amber-50 border border-amber-300 rounded-xl p-3 text-sm text-amber-800">
+        <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700">
           <i className="fas fa-triangle-exclamation mt-0.5" />
-          {rowWarnings} thông số ngoài chuẩn — vẫn nộp được
+          {rowWarnings} thông số ngoài chuẩn / ngoài khoảng — ô đỏ; vẫn nộp được
         </div>
       )}
 
@@ -658,7 +658,9 @@ function EntryPanel({
                         onChange={(e) => updateDim(ci, e.target.value)}
                         onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
                         className={`w-full h-12 border-2 rounded-xl px-3 text-base font-mono text-center focus:outline-none bg-card ${
-                          outOfSpec ? "border-amber-400 bg-amber-50" : "border-border focus:border-ring"
+                          outOfSpec
+                            ? "border-red-400 bg-red-50 text-red-700"
+                            : "border-border focus:border-ring"
                         } ${spec.unit ? "pr-12" : ""}`}
                         placeholder={
                           spec.type === "qualitative" || spec.type === "text"
@@ -678,7 +680,7 @@ function EntryPanel({
                   </div>
                 </div>
                 {outOfSpec && vResult.warning && (
-                  <div className="mt-1.5 ml-14 text-xs text-amber-700">{vResult.warning}</div>
+                  <div className="mt-1.5 ml-14 text-xs text-red-600">{vResult.warning}</div>
                 )}
                 {spec.type === "numeric" && spec.target !== undefined && !outOfSpec && val && (
                   <div className="mt-1 ml-14 text-[10px] text-muted-foreground">Chuẩn: {formatSpecRange(spec)}</div>
@@ -733,6 +735,12 @@ function InfoPanel({
     i: s.index,
     label: s.pointNo != null ? `(${s.pointNo}) ${s.label}` : s.label,
   }));
+  const materialSpecs = resolveMaterialSpecs(bom.specCols, bom.materialSpecs);
+  const enteredValidation = validateEntryRows(
+    bom.specCols,
+    myRows.map((r) => ({ dims: r.dims })),
+    materialSpecs,
+  );
   const siblingSteps = order.boms
     .filter(
       (b) =>
@@ -824,16 +832,27 @@ function InfoPanel({
               </tr>
             </thead>
             <tbody>
-              {myRows.map((r) => (
-                <tr key={r.tt} className="border-b border-border">
-                  <td className="py-1.5 pr-2 font-semibold">{r.tt}</td>
-                  {cols.map((c) => (
-                    <td key={c.i} className="py-1.5 pr-2 font-mono">
-                      {r.dims[c.i] ?? ""}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {myRows.map((r, ri) => {
+                const rowResults = enteredValidation.results[ri] ?? [];
+                return (
+                  <tr key={r.tt} className="border-b border-border">
+                    <td className="py-1.5 pr-2 font-semibold">{r.tt}</td>
+                    {cols.map((c) => {
+                      const cell = rowResults.find((v) => v.index === c.i);
+                      const bad = cell ? !cell.valid : false;
+                      return (
+                        <td
+                          key={c.i}
+                          className={`py-1.5 pr-2 font-mono ${bad ? "text-red-600 font-semibold" : ""}`}
+                          title={bad ? cell?.warning || "Ngoài chuẩn" : undefined}
+                        >
+                          {r.dims[c.i] ?? ""}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -192,6 +192,23 @@ export function formatSpecFieldTitle(spec: MaterialSpec): string {
   return `${spec.label} · ${spec.target}${u}`;
 }
 
+/** Ngoại quan / qualitative đạt chuẩn */
+function isQualitativePass(value: string): boolean {
+  const v = value.trim().toLowerCase().normalize("NFC");
+  return (
+    v === "đạt" ||
+    v === "dat" ||
+    v === "ok" ||
+    v === "pass" ||
+    v === "good" ||
+    v === "v" ||
+    v === "✓" ||
+    v === "√" ||
+    v === "đạt yêu cầu" ||
+    v === "dat yeu cau"
+  );
+}
+
 export function validateDimensionValue(
   spec: MaterialSpec,
   value: string,
@@ -204,9 +221,33 @@ export function validateDimensionValue(
     severity: "ok",
   };
 
-  if (!value || value === "v" || value === "✓") return base;
+  if (!value.trim()) return base;
+  if (value === "v" || value === "✓" || value === "√") return base;
 
-  if (spec.type !== "numeric") return base;
+  if (spec.type === "qualitative" || spec.type === "text") {
+    if (spec.target !== undefined) {
+      const expected = String(spec.target).trim().toLowerCase();
+      const got = value.trim().toLowerCase();
+      if (got !== expected && !isQualitativePass(value)) {
+        return {
+          ...base,
+          valid: false,
+          severity: "error",
+          warning: `Không đúng thông số — yêu cầu «${spec.target}», nhập «${value}»`,
+        };
+      }
+      return base;
+    }
+    if (spec.type === "qualitative" && !isQualitativePass(value)) {
+      return {
+        ...base,
+        valid: false,
+        severity: "error",
+        warning: `Ngoại quan không chuẩn — nhập Đạt / OK (hiện: «${value}»)`,
+      };
+    }
+    return base;
+  }
 
   const num = parseFloat(value.replace(",", "."));
   if (Number.isNaN(num)) {
