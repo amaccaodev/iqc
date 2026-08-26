@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import { API_BASE } from "../../lib/apiBase";
+import { toast } from "../../hooks/useToast";
 
 interface Role { id: string; label: string; description: string }
 interface Group { id: string; name: string; lead: string; lead_short: string; description: string }
@@ -28,43 +29,55 @@ export default function AdminRolesPage() {
   useEffect(() => { void load(); }, [load]);
 
   const addRole = async () => {
-    if (!newRole.id.trim() || !newRole.label.trim()) { alert("ID và tên role là bắt buộc."); return; }
+    if (!newRole.id.trim() || !newRole.label.trim()) { toast.error("ID và tên role là bắt buộc."); return; }
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/roles`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newRole) });
       if (!res.ok) throw new Error(await res.text());
       setNewRole({ id: "", label: "", description: "" });
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 
   const deleteRole = async (id: string) => {
-    if (!confirm(`Xóa role "${id}"?`)) return;
+    const ok = await toast.confirm({
+      title: "Xóa role",
+      message: `Xóa role "${id}"?`,
+      confirmLabel: "Xóa",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await fetch(`${API_BASE}/roles/${id}`, { method: "DELETE" });
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
   };
 
   const addGroup = async () => {
-    if (!newGroup.id.trim() || !newGroup.name.trim()) { alert("ID và tên tổ là bắt buộc."); return; }
+    if (!newGroup.id.trim() || !newGroup.name.trim()) { toast.error("ID và tên tổ là bắt buộc."); return; }
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/groups`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newGroup) });
       if (!res.ok) throw new Error(await res.text());
       setNewGroup({ id: "", name: "", lead: "", lead_short: "", description: "" });
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 
   const deleteGroup = async (id: string) => {
-    if (!confirm(`Xóa tổ "${id}"?`)) return;
+    const ok = await toast.confirm({
+      title: "Xóa tổ",
+      message: `Xóa tổ "${id}"?`,
+      confirmLabel: "Xóa",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await fetch(`${API_BASE}/groups/${id}`, { method: "DELETE" });
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
   };
 
   return (

@@ -1,4 +1,13 @@
-import type { EmployeeProductRate, ShiftClose, ShiftCloseStatus } from "../../../shared/src/types/index.js";
+import type {
+  EmployeeProductRate,
+  ShiftClose,
+  ShiftCloseStatus,
+  ShiftUnlockRequest,
+} from "../../../shared/src/types/index.js";
+import {
+  assertCanCreateShiftClose,
+  assertCanRequestUnlock,
+} from "../../../shared/src/utils/shiftCloseGuard.js";
 
 function id(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -75,6 +84,8 @@ const closes: ShiftClose[] = [
   },
 ];
 
+const unlocks: ShiftUnlockRequest[] = [];
+
 const NEXT: Record<Exclude<ShiftCloseStatus, "approved" | "rejected">, ShiftCloseStatus> = {
   pending_teamlead: "pending_qc",
   pending_qc: "pending_supervisor",
@@ -105,16 +116,20 @@ export const shiftSalaryStore = {
     rates.push(row);
     return row;
   },
-  listCloses(filter?: { status?: string; workerId?: string }) {
+  listCloses(filter?: { status?: string; workerId?: string; orderId?: string; bomId?: string }) {
     let list = [...closes];
     if (filter?.status) list = list.filter((c) => c.status === filter.status);
     if (filter?.workerId) list = list.filter((c) => c.workerId === filter.workerId);
+    if (filter?.orderId) list = list.filter((c) => c.orderId === filter.orderId);
+    if (filter?.bomId) list = list.filter((c) => c.bomId === filter.bomId);
     return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
   getClose(cid: string) {
     return closes.find((c) => c.id === cid) ?? null;
   },
   createClose(input: Omit<ShiftClose, "id" | "status" | "amountVnd" | "createdAt" | "rateVnd"> & { rateVnd?: number }) {
+    const scope = { workerId: input.workerId, orderId: input.orderId, bomId: input.bomId };
+    assertCanCreateShiftClose(closes, unlocks, scope);
     const rate = input.rateVnd ?? this.getRate(input.workerId, input.productId)?.rateVnd ?? 0;
     const row: ShiftClose = {
       ...input,
@@ -125,6 +140,48 @@ export const shiftSalaryStore = {
       createdAt: new Date().toISOString(),
     };
     closes.unshift(row);
+    return row;
+  },
+  listUnlocks(filter?: { status?: string; workerId?: string; orderId?: string; bomId?: string }) {
+    let list = [...unlocks];
+    if (filter?.status) list = list.filter((u) => u.status === filter.status);
+    if (filter?.workerId) list = list.filter((u) => u.workerId === filter.workerId);
+    if (filter?.orderId) list = list.filter((u) => u.orderId === filter.orderId);
+    if (filter?.bomId) list = list.filter((u) => u.bomId === filter.bomId);
+    return list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+  requestUnlock(input: {
+    orderId: string;
+    bomId: string;
+    workerId: string;
+    workerName: string;
+    partName: string;
+    reason?: string;
+  }) {
+    const scope = { workerId: input.workerId, orderId: input.orderId, bomId: input.bomId };
+    assertCanRequestUnlock(closes, unlocks, scope);
+    const row: ShiftUnlockRequest = {
+      id: id("su"),
+      orderId: input.orderId,
+      bomId: input.bomId,
+      workerId: input.workerId,
+      workerName: input.workerName,
+      partName: input.partName,
+      reason: (input.reason ?? "").trim() || "Xin mở khóa để chốt ca tiếp trong ngày",
+      status: "pending_teamlead",
+      createdAt: new Date().toISOString(),
+    };
+    unlocks.unshift(row);
+    return row;
+  },
+  reviewUnlock(id: string, approved: boolean, reviewerName: string, rejectReason = "") {
+    const row = unlocks.find((u) => u.id === id);
+    if (!row) throw new Error("Không tìm thấy yêu cầu mở khóa");
+    if (row.status !== "pending_teamlead") throw new Error("Yêu cầu không còn chờ tổ trưởng");
+    row.status = approved ? "approved" : "rejected";
+    row.reviewedBy = reviewerName;
+    row.reviewedAt = new Date().toISOString();
+    if (!approved) row.rejectReason = rejectReason;
     return row;
   },
   reviewClose(

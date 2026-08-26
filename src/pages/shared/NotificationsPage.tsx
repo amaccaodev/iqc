@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Notification } from "@shared/types";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
+import { notificationTargetPath } from "@shared/utils/notificationLinks";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { authApi } from "../../services/api/AuthApiService";
 import { useRoleUser } from "../../components/layout/RoleLayout";
 import { useNotifications } from "../../hooks/useNotifications";
 import { ResponsiveDataList } from "../../components/ui";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
+import { toast } from "../../hooks/useToast";
 
 const TYPE_ICON: Record<string, string> = {
   incident: "fa-triangle-exclamation text-orange-500",
@@ -22,13 +25,13 @@ function NotificationBody({
   n,
   canReviewDevice,
   busyId,
-  onMark,
+  onOpen,
   onReview,
 }: {
   n: Notification;
   canReviewDevice: boolean;
   busyId: string | null;
-  onMark: (id: string) => void;
+  onOpen: (n: Notification) => void;
   onReview: (n: Notification, approved: boolean) => void;
 }) {
   return (
@@ -39,7 +42,7 @@ function NotificationBody({
     >
       <button
         type="button"
-        onClick={() => onMark(n.id)}
+        onClick={() => onOpen(n)}
         className="w-full text-left bg-transparent border-0 p-0 cursor-pointer"
       >
         <div className="flex gap-3">
@@ -86,6 +89,7 @@ function NotificationBody({
 
 export default function NotificationsPage() {
   const user = useRoleUser();
+  const navigate = useNavigate();
   const { refreshUnread } = useNotifications();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [unreadTotal, setUnreadTotal] = useState(0);
@@ -113,6 +117,12 @@ export default function NotificationsPage() {
     }
   };
 
+  const openNotification = async (n: Notification) => {
+    if (!n.isRead) await markOne(n.id);
+    const href = notificationTargetPath(user.role, n);
+    if (href) navigate(href);
+  };
+
   const markAll = async () => {
     try {
       await workflowApi.markAllRead(user.id);
@@ -131,7 +141,7 @@ export default function NotificationsPage() {
       await authApi.reviewDevice(n.refId, approved);
       await markOne(n.id);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Không phê duyệt được thiết bị");
+      toast.error(e instanceof Error ? e.message : "Không phê duyệt được thiết bị");
     } finally {
       setBusyId(null);
     }
@@ -149,11 +159,11 @@ export default function NotificationsPage() {
         n={n}
         canReviewDevice={canReviewDevice}
         busyId={busyId}
-        onMark={(id) => void markOne(id)}
+        onOpen={(item) => void openNotification(item)}
         onReview={(item, ok) => void reviewDevice(item, ok)}
       />
     ),
-    [canReviewDevice, busyId],
+    [canReviewDevice, busyId, user.role],
   );
 
   return (
@@ -236,7 +246,7 @@ export default function NotificationsPage() {
             },
           ]}
           renderCard={renderItem}
-          onRowClick={(n) => void markOne(n.id)}
+          onRowClick={(n) => void openNotification(n)}
         />
       )}
     </div>

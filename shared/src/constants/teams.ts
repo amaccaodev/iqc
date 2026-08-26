@@ -78,3 +78,29 @@ export function resolveUserTeamId(user: {
 }): string {
   return canonicalTeamId(user.teamId) || inferTeamIdFromDepartment(user.department) || "";
 }
+
+/** Nhãn tổ chuẩn (Tên – viết tắt tổ trưởng) */
+export function teamDisplayName(teamId?: string | null): string {
+  const id = canonicalTeamId(teamId);
+  const t = TEAMS.find((x) => x.id === id);
+  return t ? `${t.name} – ${t.leadShort}` : "";
+}
+
+/** Máy thuộc tổ (không gán teamId = dùng chung / legacy) */
+export function machineBelongsToTeam(
+  machine: { teamId?: string | null; active?: boolean },
+  teamId?: string | null,
+): boolean {
+  if (machine.active === false) return false;
+  const want = canonicalTeamId(teamId);
+  if (!want) return true;
+  if (!machine.teamId) return true;
+  return teamIdsMatch(machine.teamId, want);
+}
+
+export function filterMachinesForTeam<T extends { teamId?: string | null; active?: boolean }>(
+  machines: T[],
+  teamId?: string | null,
+): T[] {
+  return machines.filter((m) => machineBelongsToTeam(m, teamId));
+}

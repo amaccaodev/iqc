@@ -1,9 +1,9 @@
-import { WorkerView, type User } from "../../_AppLegacy";
+import WorkerJobsList from "../../components/worker/WorkerJobsList";
 import { useRoleUser } from "../../components/layout/RoleLayout";
 import { useOrders } from "../../hooks/useOrders";
 
 export default function WorkerEntryPage() {
   const user = useRoleUser();
-  const { orders, setOrders } = useOrders();
-  return <WorkerView user={user as User} orders={orders} setOrders={setOrders} screen="entry" />;
+  const { orders } = useOrders();
+  return <WorkerJobsList user={user} orders={orders} />;
 }

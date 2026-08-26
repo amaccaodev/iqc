@@ -118,6 +118,31 @@ export function checklistToSpecCols(items: PartChecklistItem[], padTo = 11): str
   return cols;
 }
 
+/** Checklist ưu tiên theo nguyên công, fallback linh kiện */
+export function resolvePartChecklist(
+  part: { checklist?: PartChecklistItem[] },
+  step?: { checklist?: PartChecklistItem[] } | null,
+): PartChecklistItem[] {
+  const fromStep = step?.checklist?.filter((i) => i.name?.trim()) ?? [];
+  if (fromStep.length) return fromStep;
+  return part.checklist?.filter((i) => i.name?.trim()) ?? [];
+}
+
+/** Full specs để gắn vào BOM khi tạo lệnh — không chọn lẻ */
+export function bomSpecsFromChecklist(items: PartChecklistItem[]): {
+  materialSpecs: MaterialSpec[];
+  specCols: string[];
+} {
+  const list = items.filter((i) => i.name?.trim());
+  if (!list.length) {
+    return { materialSpecs: [], specCols: Array.from({ length: 11 }, () => "") };
+  }
+  return {
+    materialSpecs: buildMaterialSpecsFromChecklist(list),
+    specCols: checklistToSpecCols(list),
+  };
+}
+
 export function resolveMaterialSpecs(
   specCols: string[],
   materialSpecs?: MaterialSpec[],

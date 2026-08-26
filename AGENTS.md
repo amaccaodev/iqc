@@ -67,16 +67,20 @@ Dùng **cùng một stack** cho mọi màn hình có danh sách lớn (NV, SP, B
 
 ```
 Sản phẩm (ProductionOrder / Product)
- └── Linh kiện (BOMItem) — mỗi BOM có checklist riêng
-      └── Thông số (materialSpecs[]) — tên + target + unit + dung sai
+ └── Linh kiện (chi tiết sheet Mẫu van)
+      └── Quy trình / nguyên công = 1 BOM (processSeq tuần tự)
+           └── Thông số (materialSpecs[])
 ```
 
-- Thiết kế checklist: `buildMaterialSpecsFromChecklist()` + `checklistToSpecCols()` trong `shared/src/utils/specValidation.ts`
-- Công nhân vào **một linh kiện** → form chỉ hiện thông số của linh kiện đó (Cuộn dây ≠ Quạt)
-- Demo: lệnh `LSX-2024-004` — Máy biến áp ABC-1000 (Cuộn dây / Vỏ máy / Quạt)
-- Theo dõi GĐ / Quản đốc: `/director/production`, `/supervisor/production` — chọn thành phẩm → xem linh kiện `đã làm / cần` (`shared/src/utils/productionProgress.ts`). GĐ có nút Hoàn thành; Quản đốc chỉ xem + chấm đỏ khi có chốt ca chờ duyệt.
-- File ĐMKT gốc: `documents/*.xlsx` (Mẫu van = chi tiết + nguyên công; Đóng gói; Vật tư tiêu hao)
-- Bản vẽ / thông số: lưu **Base64/WebP trong DB** (`contentBase64`), không cloud. Sản phẩm & linh kiện đều có nhiều file (`product_attachments` / `semi_product_attachments`). FE: `fileToAttachment` + `AttachmentUploader`.
+- Mỗi nguyên công ĐMKT = **1 BOM = 1 quy trình**; hết QT trước mới mở QT sau (`shared/src/utils/bomProcess.ts`).
+- Tổ trưởng phân công: **tên quy trình + máy + người** (`TeamLeadAssignPage`).
+- Đề xuất CN: chỉ **Thay máy / Thêm máy / Báo hỏng** (bỏ “Xin phê duyệt”); nút đồng bộ style (`ProposalActionButtons`).
+- Checklist: `buildMaterialSpecsFromChecklist()` + `checklistToSpecCols()` trong `shared/src/utils/specValidation.ts`.
+- Demo: `LSX-2024-005` Van góc NOVO 15 (Nắp / Thân — từng nguyên công một BOM).
+- Theo dõi GĐ / Quản đốc: `/director/production`, `/supervisor/production` (`productionProgress.ts`).
+- File ĐMKT: `documents/*.xlsx` (Mẫu van = chi tiết + nguyên công).
+- Import BOM CSV: Admin → **Import BOM** — `downloadProductBomTemplate` / `parseProductBomCsv` (`src/utils/productBomImport.ts`); API `POST /products/import-bom`. Mỗi dòng = 1 quy trình của 1 linh kiện thuộc 1 SP.
+- Bản vẽ / thông số: Base64/WebP trong DB (`contentBase64`); FE `fileToAttachment` + `AttachmentUploader`.
 
 ### Scale-up path
 

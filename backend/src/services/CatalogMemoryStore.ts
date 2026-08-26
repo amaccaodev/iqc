@@ -38,15 +38,91 @@ const products: Product[] = [
 ];
 
 const semiProducts: SemiProduct[] = [
-  { id: "sp1", code: "BTP-BODY-20", name: "Thân van NOVO20", processStage: "hot_forge", description: "", active: true },
-  { id: "sp2", code: "BTP-SPRING-20", name: "Lò xo NOVO20", processStage: "auto", description: "", active: true },
-  { id: "sp3", code: "BTP-ASM-20", name: "Bộ lắp ráp NOVO20", processStage: "assembly", description: "", active: true },
-  { id: "sp-vc-body", code: "VC20-THAN", name: "Thân van cửa NOVO 20", processStage: "hot_forge", description: "", active: true },
-  { id: "sp-vc-cap", code: "VC20-NAP", name: "Nắp van cửa NOVO 20", processStage: "hot_forge", description: "", active: true },
-  { id: "sp-vc-disc", code: "VC20-DIA", name: "Đĩa van cửa NOVO 20", processStage: "hot_forge", description: "", active: true },
-  { id: "sp-vc-shaft", code: "VC20-TRUC", name: "Trục van cửa NOVO 20", processStage: "auto", description: "", active: true },
-  { id: "sp-vc-nut", code: "VC20-OCAL", name: "Ốc áp lực van cửa NOVO 20", processStage: "auto", description: "", active: true },
-  { id: "sp-vc-washer", code: "VC20-OCDT8", name: "Ốc đệm T8", processStage: "auto", description: "", active: true },
+  {
+    id: "sp1",
+    code: "BTP-BODY-20",
+    name: "Thân van NOVO20",
+    processStage: "hot_forge",
+    description: "",
+    active: true,
+    checklist: [
+      { name: "Ø ngoài thân", target: 20, unit: "mm", min: 19.9, max: 20.1 },
+      { name: "Ø lỗ", target: 9, unit: "mm", min: 8.95, max: 9.05 },
+      { name: "Chiều dày thành", target: 1.5, unit: "mm" },
+      { name: "Ren M6", type: "qualitative", hint: "Thử ren chuẩn" },
+      { name: "NQ", type: "qualitative", hint: "Ngoại quan" },
+    ],
+  },
+  {
+    id: "sp2",
+    code: "BTP-SPRING-20",
+    name: "Lò xo NOVO20",
+    processStage: "auto",
+    description: "",
+    active: true,
+    checklist: [
+      { name: "Ø ngoài lò xo", target: 9.5, unit: "mm" },
+      { name: "Ø dây", target: 1.2, unit: "mm" },
+      { name: "Chiều dài tự do", target: 42, unit: "mm" },
+      { name: "Số vòng", target: 8, unit: "vòng" },
+      { name: "NQ", type: "qualitative" },
+    ],
+  },
+  {
+    id: "sp3",
+    code: "BTP-ASM-20",
+    name: "Bộ lắp ráp NOVO20",
+    processStage: "assembly",
+    description: "",
+    active: true,
+    checklist: [
+      { name: "Lực đóng", target: 12, unit: "N" },
+      { name: "Kín nước", type: "qualitative", hint: "Không rò" },
+      { name: "NQ", type: "qualitative" },
+    ],
+  },
+  {
+    id: "sp-vc-body",
+    code: "VC20-THAN",
+    name: "Thân van cửa NOVO 20",
+    processStage: "hot_forge",
+    description: "",
+    active: true,
+    checklist: [
+      { name: "Ø thân", target: 20, unit: "mm" },
+      { name: "Chiều cao", target: 28, unit: "mm" },
+      { name: "NQ", type: "qualitative" },
+    ],
+  },
+  {
+    id: "sp-vc-cap",
+    code: "VC20-NAP",
+    name: "Nắp van cửa NOVO 20",
+    processStage: "hot_forge",
+    description: "",
+    active: true,
+    checklist: [
+      { name: "Ø nắp", target: 22, unit: "mm" },
+      { name: "Độ phẳng", type: "qualitative" },
+      { name: "NQ", type: "qualitative" },
+    ],
+  },
+  {
+    id: "sp-vc-disc",
+    code: "VC20-DIA",
+    name: "Đĩa van cửa NOVO 20",
+    processStage: "hot_forge",
+    description: "",
+    active: true,
+    checklist: [
+      { name: "Ø đĩa", target: 18, unit: "mm" },
+      { name: "Độ dày", target: 3, unit: "mm" },
+      { name: "NQ", type: "qualitative" },
+    ],
+  },
+  { id: "sp-vc-shaft", code: "VC20-TRUC", name: "Trục van cửa NOVO 20", processStage: "auto", description: "", active: true, checklist: [{ name: "Ø trục", target: 6, unit: "mm" }, { name: "Chiều dài", target: 42, unit: "mm" }] },
+  { id: "sp-vc-nut", code: "VC20-OCAL", name: "Ốc áp lực van cửa NOVO 20", processStage: "auto", description: "", active: true, checklist: [{ name: "Ren", type: "qualitative", hint: "T8" }, { name: "NQ", type: "qualitative" }] },
+  { id: "sp-vc-washer", code: "VC20-OCDT8", name: "Ốc đệm T8", processStage: "auto", description: "", active: true, checklist: [{ name: "Ø trong", target: 8, unit: "mm" }, { name: "NQ", type: "qualitative" }] },
 ];
 
 const productBoms: ProductBomLine[] = [
@@ -80,6 +156,8 @@ const machines: Machine[] = [
     id: "m1",
     code: "CAM-01",
     name: "Cam 0.1",
+    location: "Khu Dập nóng — Dãy A1",
+    teamId: "t_hot",
     params: [{ label: "ĐK ngoài", unit: "mm", min: 19.9, max: 20.1 }],
     active: true,
   },
@@ -87,7 +165,36 @@ const machines: Machine[] = [
     id: "m2",
     code: "CNC-01",
     name: "Tiện CNC 1",
+    location: "Khu Dập nóng — Dãy A2",
+    teamId: "t_hot",
     params: [{ label: "Chiều dài", unit: "mm", min: 49.5, max: 50.5 }],
+    active: true,
+  },
+  {
+    id: "m3",
+    code: "AUTO-01",
+    name: "D80T-01",
+    location: "Khu Tự động — Line B",
+    teamId: "t_auto",
+    params: [],
+    active: true,
+  },
+  {
+    id: "m4",
+    code: "ASM-01",
+    name: "Bàn lắp 1",
+    location: "Khu Lắp ráp — Bàn C1",
+    teamId: "t_asm",
+    params: [],
+    active: true,
+  },
+  {
+    id: "m5",
+    code: "ASM-02",
+    name: "Bàn lắp",
+    location: "Khu Lắp ráp — Bàn C2",
+    teamId: "t_asm",
+    params: [],
     active: true,
   },
 ];
@@ -198,6 +305,161 @@ export const catalogStore = {
       });
     }
     return this.listBom(productId);
+  },
+
+  findProductByCode(code: string) {
+    const c = code.trim().toLowerCase();
+    return products.find((p) => p.code.toLowerCase() === c) ?? null;
+  },
+  findSemiByCode(code: string) {
+    const c = code.trim().toLowerCase();
+    return semiProducts.find((s) => s.code.toLowerCase() === c) ?? null;
+  },
+
+  /**
+   * Import BOM từ CSV Mẫu van: mỗi dòng = 1 quy trình của 1 linh kiện thuộc 1 SP.
+   * Upsert SP + BTP (kèm processSteps) + định mức product BOM.
+   */
+  importProductBom(
+    rows: Array<{
+      productCode: string;
+      productName?: string;
+      partCode: string;
+      partName?: string;
+      processSeq: number;
+      processName: string;
+      processStage?: ProcessStage;
+      teamCode?: string;
+      machine?: string;
+      qtyPerUnit?: number;
+      quota?: string;
+      techNote?: string;
+      people?: number;
+    }>,
+  ) {
+    if (!rows.length) throw new Error("File không có dòng dữ liệu");
+    const errors: string[] = [];
+    let productUpserts = 0;
+    let semiUpserts = 0;
+    let stepCount = 0;
+
+    type AccPart = {
+      productCode: string;
+      productName: string;
+      partCode: string;
+      partName: string;
+      qtyPerUnit: number;
+      steps: import("../../../shared/src/types/index.js").SemiProcessStep[];
+      stage: ProcessStage;
+    };
+    const byProduct = new Map<string, Map<string, AccPart>>();
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const productCode = String(r.productCode ?? "").trim();
+      const partCode = String(r.partCode ?? "").trim();
+      const processName = String(r.processName ?? "").trim();
+      if (!productCode || !partCode || !processName) {
+        errors.push(`Dòng ${i + 2}: thiếu Mã SP / Mã LK / Tên quy trình`);
+        continue;
+      }
+      const stage = (r.processStage ?? "hot_forge") as ProcessStage;
+      let parts = byProduct.get(productCode);
+      if (!parts) {
+        parts = new Map();
+        byProduct.set(productCode, parts);
+      }
+      let part = parts.get(partCode);
+      if (!part) {
+        part = {
+          productCode,
+          productName: String(r.productName ?? productCode).trim() || productCode,
+          partCode,
+          partName: String(r.partName ?? partCode).trim() || partCode,
+          qtyPerUnit: Math.max(1, Number(r.qtyPerUnit) || 1),
+          steps: [],
+          stage,
+        };
+        parts.set(partCode, part);
+      } else {
+        if (r.productName?.trim()) part.productName = r.productName.trim();
+        if (r.partName?.trim()) part.partName = r.partName.trim();
+        if (r.qtyPerUnit != null && Number(r.qtyPerUnit) > 0) {
+          part.qtyPerUnit = Number(r.qtyPerUnit);
+        }
+      }
+      part.steps.push({
+        seq: Math.max(1, Number(r.processSeq) || part.steps.length + 1),
+        process: processName,
+        machine: r.machine?.trim() || undefined,
+        processStage: stage,
+        teamCode: r.teamCode?.trim() || undefined,
+        people: r.people != null ? Number(r.people) : undefined,
+        techNote: r.techNote?.trim() || undefined,
+        quota: r.quota?.trim() || undefined,
+      });
+      stepCount += 1;
+    }
+
+    for (const [productCode, parts] of byProduct) {
+      const first = [...parts.values()][0];
+      let product = this.findProductByCode(productCode);
+      if (!product) {
+        product = this.createProduct({
+          code: productCode,
+          name: first.productName,
+          description: "Import BOM từ CSV",
+          active: true,
+        });
+        productUpserts += 1;
+      } else if (first.productName && first.productName !== product.name) {
+        this.updateProduct(product.id, { name: first.productName, active: true });
+        productUpserts += 1;
+      }
+
+      const bomLines: Array<{ semiProductId: string; qtyPerUnit: number }> = [];
+      for (const part of parts.values()) {
+        const steps = [...part.steps].sort((a, b) => a.seq - b.seq);
+        const stage =
+          steps.find((s) => s.processStage)?.processStage ?? part.stage ?? "hot_forge";
+        let semi = this.findSemiByCode(part.partCode);
+        if (!semi) {
+          semi = this.createSemi({
+            code: part.partCode,
+            name: part.partName,
+            processStage: stage,
+            description: `Import — ${steps.length} quy trình`,
+            active: true,
+            processSteps: steps,
+          });
+          semiUpserts += 1;
+        } else {
+          this.updateSemi(semi.id, {
+            name: part.partName || semi.name,
+            processStage: stage,
+            active: true,
+            description: `Import — ${steps.length} quy trình`,
+            processSteps: steps,
+            // Giữ checklist đã nhập — import BOM không xóa thông số đo
+            checklist: semi.checklist,
+          });
+          semiUpserts += 1;
+          semi = this.getSemi(semi.id)!;
+        }
+        bomLines.push({ semiProductId: semi.id, qtyPerUnit: part.qtyPerUnit });
+      }
+      this.setBom(product.id, bomLines);
+    }
+
+    return {
+      products: byProduct.size,
+      parts: [...byProduct.values()].reduce((s, m) => s + m.size, 0),
+      steps: stepCount,
+      productUpserts,
+      semiUpserts,
+      errors,
+      total: rows.length,
+    };
   },
 
   listStock() {

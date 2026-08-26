@@ -1,5 +1,5 @@
 import { Router } from "express";
-import type { ShiftClose, User } from "../../../shared/src/types/index.js";
+import type { ShiftClose, ShiftUnlockRequest, User } from "../../../shared/src/types/index.js";
 import { SEED_USERS } from "../data/seed.js";
 import { supabase } from "../lib/supabase.js";
 import { supabaseUserRepository } from "../repositories/SupabaseUserRepository.js";
@@ -7,6 +7,7 @@ import { catalogStore } from "../services/CatalogMemoryStore.js";
 import { shiftSalaryStore } from "../services/ShiftSalaryStore.js";
 import { workflowService } from "../services/WorkflowService.js";
 import { notifyRoles } from "./notifyHelpers.js";
+import { resolveActor } from "./routeHelpers.js";
 
 export const payrollRoutes = Router();
 
@@ -93,7 +94,96 @@ payrollRoutes.post("/payroll/import", async (req, res) => {
 payrollRoutes.get("/shift-closes", (req, res) => {
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   const workerId = typeof req.query.workerId === "string" ? req.query.workerId : undefined;
-  res.json({ success: true, data: shiftSalaryStore.listCloses({ status, workerId }) });
+  const orderId = typeof req.query.orderId === "string" ? req.query.orderId : undefined;
+  const bomId = typeof req.query.bomId === "string" ? req.query.bomId : undefined;
+  const actor = resolveActor(req);
+  const scopedWorker = actor?.role === "worker" ? actor.id : workerId;
+  res.json({
+    success: true,
+    data: shiftSalaryStore.listCloses({ status, workerId: scopedWorker, orderId, bomId }),
+  });
+});
+
+payrollRoutes.get("/shift-unlocks", (req, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const workerId = typeof req.query.workerId === "string" ? req.query.workerId : undefined;
+  const orderId = typeof req.query.orderId === "string" ? req.query.orderId : undefined;
+  const bomId = typeof req.query.bomId === "string" ? req.query.bomId : undefined;
+  const actor = resolveActor(req);
+  const scopedWorker = actor?.role === "worker" ? actor.id : workerId;
+  res.json({
+    success: true,
+    data: shiftSalaryStore.listUnlocks({ status, workerId: scopedWorker, orderId, bomId }),
+  });
+});
+
+payrollRoutes.post("/shift-unlocks", async (req, res) => {
+  try {
+    const body = req.body as {
+      orderId: string;
+      bomId: string;
+      workerId?: string;
+      workerName?: string;
+      partName?: string;
+      reason?: string;
+    };
+    const actor = resolveActor(req);
+    if (actor && actor.role !== "worker") throw new Error("Chỉ công nhân được xin mở khóa.");
+    const workerId = actor?.id || body.workerId || "";
+    const workerName = actor?.name || body.workerName || "";
+    if (!workerId || !body.orderId || !body.bomId) throw new Error("Thiếu thông tin mở khóa.");
+    const data: ShiftUnlockRequest = shiftSalaryStore.requestUnlock({
+      orderId: body.orderId,
+      bomId: body.bomId,
+      workerId,
+      workerName,
+      partName: body.partName ?? "",
+      reason: body.reason,
+    });
+    await notifyRoles(
+      ["teamlead"],
+      "Yêu cầu mở khóa chốt ca",
+      `${workerName} xin mở khóa — ${data.partName}`,
+      { refId: data.id, type: "shift", refType: "shift_unlock" },
+    );
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+  }
+});
+
+payrollRoutes.post("/shift-unlocks/:id/review", async (req, res) => {
+  try {
+    const { approved, reviewerName, rejectReason } = req.body as {
+      approved: boolean;
+      reviewerName?: string;
+      rejectReason?: string;
+    };
+    const actor = resolveActor(req);
+    if (actor && actor.role !== "teamlead" && actor.role !== "supervisor" && actor.role !== "admin") {
+      throw new Error("Không có quyền duyệt mở khóa.");
+    }
+    const name = actor?.name || reviewerName || "";
+    if (!name) throw new Error("Thiếu người duyệt");
+    const data = shiftSalaryStore.reviewUnlock(req.params.id, Boolean(approved), name, rejectReason ?? "");
+    try {
+      await workflowService.createNotification({
+        userId: data.workerId,
+        type: "shift",
+        refId: data.id,
+        refType: "shift_unlock",
+        title: approved ? "Đã mở khóa chốt ca" : "Từ chối mở khóa chốt ca",
+        body: approved
+          ? "Bạn có thể chốt ca tiếp trong ngày."
+          : data.rejectReason || "Tổ trưởng từ chối mở khóa.",
+      });
+    } catch {
+      /* optional */
+    }
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+  }
 });
 
 payrollRoutes.post("/shift-closes/:id/review", async (req, res) => {

@@ -1,20 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Attachment, ProcessStage, ProductBomLine } from "@shared/types";
+import type { PartChecklistItem } from "@shared/types/spec";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { PROCESS_STAGE_LABEL } from "@shared/constants/teams";
 import { Btn, Card, ResponsiveDataList, SearchPicker } from "../../components/ui";
 import AttachmentUploader from "../../components/files/AttachmentUploader";
+import PartChecklistEditor from "../../components/admin/PartChecklistEditor";
 import { catalogApi } from "../../services/api/CatalogApiService";
 import { createEntityPickerSearch } from "../../core/entityPicker";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { useAuth } from "../../hooks/useAuth";
+import { toast } from "../../hooks/useToast";
+import {
+  downloadProductBomTemplate,
+  parseProductBomCsv,
+  type ProductBomImportRow,
+} from "../../utils/productBomImport";
 
 const STAGES: ProcessStage[] = ["hot_forge", "auto", "assembly"];
 
 export default function AdminProductsPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<"products" | "semi">("products");
+  const [tab, setTab] = useState<"products" | "semi" | "import">("products");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<ProductBomImportRow[]>([]);
+  const [importMsg, setImportMsg] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
 
   const fetchProducts = useStableFetch((query) => catalogApi.searchProducts(query));
   const {
@@ -54,6 +66,8 @@ export default function AdminProductsPage() {
   const [selectedSemiId, setSelectedSemiId] = useState("");
   const [selectedSemiLabel, setSelectedSemiLabel] = useState("");
   const [semiFiles, setSemiFiles] = useState<Attachment[]>([]);
+  const [semiChecklist, setSemiChecklist] = useState<PartChecklistItem[]>([]);
+  const [checklistSaving, setChecklistSaving] = useState(false);
   const [newProduct, setNewProduct] = useState({ code: "", name: "", description: "" });
   const [newSemi, setNewSemi] = useState({
     code: "",
@@ -75,10 +89,33 @@ export default function AdminProductsPage() {
   useEffect(() => {
     if (!selectedSemiId) {
       setSemiFiles([]);
+      setSemiChecklist([]);
       return;
     }
     void catalogApi.listSemiAttachments(selectedSemiId).then(setSemiFiles).catch(() => setSemiFiles([]));
+    void catalogApi
+      .listSemiProducts()
+      .then((list) => {
+        const hit = list.find((s) => s.id === selectedSemiId);
+        setSemiChecklist(hit?.checklist?.length ? hit.checklist : []);
+      })
+      .catch(() => setSemiChecklist([]));
   }, [selectedSemiId]);
+
+  const saveChecklist = async () => {
+    if (!selectedSemiId) return;
+    const cleaned = semiChecklist.filter((c) => c.name?.trim());
+    setChecklistSaving(true);
+    try {
+      await catalogApi.updateSemi(selectedSemiId, { checklist: cleaned });
+      refreshSemis();
+      toast.success(`Đã lưu ${cleaned.length} thông số đo cho linh kiện.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setChecklistSaving(false);
+    }
+  };
 
   const searchProductsPicker = useMemo(
     () =>
@@ -103,28 +140,34 @@ export default function AdminProductsPage() {
   );
 
   const addProduct = async () => {
-    if (!newProduct.code.trim() || !newProduct.name.trim()) return alert("Nhập mã và tên SP");
+    if (!newProduct.code.trim() || !newProduct.name.trim()) {
+      toast.error("Nhập mã và tên SP");
+      return;
+    }
     setSaving(true);
     try {
       await catalogApi.createProduct(newProduct);
       setNewProduct({ code: "", name: "", description: "" });
       refreshProducts();
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSaving(false);
     }
   };
 
   const addSemi = async () => {
-    if (!newSemi.code.trim() || !newSemi.name.trim()) return alert("Nhập mã và tên BTP");
+    if (!newSemi.code.trim() || !newSemi.name.trim()) {
+      toast.error("Nhập mã và tên BTP");
+      return;
+    }
     setSaving(true);
     try {
       await catalogApi.createSemi(newSemi);
       setNewSemi({ code: "", name: "", processStage: "hot_forge" });
       refreshSemis();
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -140,9 +183,9 @@ export default function AdminProductsPage() {
       }));
       const next = await catalogApi.setBom(selectedProductId, lines);
       setBomLines(next);
-      alert("Đã lưu định mức BOM");
+      toast.success("Đã lưu định mức BOM");
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -160,11 +203,48 @@ export default function AdminProductsPage() {
     ]);
   };
 
+  const onPickImportFile = async (file: File) => {
+    const text = await file.text();
+    const rows = parseProductBomCsv(text);
+    setImportPreview(rows);
+    setImportMsg(
+      rows.length
+        ? `Đã đọc ${rows.length} dòng quy trình. Xem trước rồi bấm Xác nhận import.`
+        : "Không đọc được dòng hợp lệ. Kiểm tra header CSV (Mã SP, Mã LK, STT QT, Tên quy trình…).",
+    );
+  };
+
+  const runBomImport = async () => {
+    if (!importPreview.length) return;
+    setImportBusy(true);
+    setImportMsg("");
+    try {
+      const result = await catalogApi.importProductBom(importPreview);
+      const errBlock = result.errors.length
+        ? `\nLỗi:\n- ${result.errors.slice(0, 8).join("\n- ")}`
+        : "";
+      setImportMsg(
+        `Import xong: ${result.products} SP · ${result.parts} linh kiện · ${result.steps} quy trình.` +
+          errBlock,
+      );
+      refreshProducts();
+      refreshSemis();
+      if (selectedProductId) {
+        const next = await catalogApi.listBom(selectedProductId);
+        setBomLines(next);
+      }
+    } catch (e) {
+      setImportMsg((e as Error).message);
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   return (
     <div className="max-w-full min-w-0">
       <h2 className="font-display font-800 text-xl mb-1">Danh mục sản phẩm</h2>
       <p className="text-sm text-muted mb-5">
-        Thành phẩm, BTP và định mức — tìm kiếm + phân trang.{" "}
+        Thành phẩm, BTP/linh kiện và định mức quy trình (sheet Mẫu van).{" "}
         <Link to="/admin/warehouse" className="text-[#2D6EBD] underline">
           Quản lý tồn kho →
         </Link>
@@ -175,6 +255,7 @@ export default function AdminProductsPage() {
           [
             ["products", "Thành phẩm"],
             ["semi", "Bán thành phẩm"],
+            ["import", "Import BOM"],
           ] as const
         ).map(([t, label]) => (
           <button
@@ -234,7 +315,8 @@ export default function AdminProductsPage() {
             />
             <div className="space-y-2 mb-3">
               {bomLines.map((line, idx) => (
-                <div key={line.id} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                <div key={line.id} className="rounded-xl border border-border p-2.5 space-y-2">
+                  <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                   <SearchPicker
                     className="flex-1"
                     value={line.semiProductId}
@@ -245,7 +327,7 @@ export default function AdminProductsPage() {
                           ? line.semiProductId
                           : ""
                     }
-                    placeholder="Tìm BTP…"
+                    placeholder="Tìm BTP / linh kiện…"
                     onSearch={searchSemisPicker}
                     onChange={(id, item) => {
                       setBomLines((prev) =>
@@ -288,6 +370,22 @@ export default function AdminProductsPage() {
                   >
                     Xóa
                   </button>
+                  </div>
+                  {line.semiProduct?.processSteps && line.semiProduct.processSteps.length > 0 ? (
+                    <div className="text-[11px] text-muted pl-1 space-y-0.5">
+                      <div className="font-semibold text-foreground">
+                        {line.semiProduct.processSteps.length} quy trình (tuần tự)
+                      </div>
+                      {[...line.semiProduct.processSteps]
+                        .sort((a, b) => a.seq - b.seq)
+                        .map((s) => (
+                          <div key={`${line.id}-${s.seq}`}>
+                            QT {s.seq}: {s.process}
+                            {s.machine ? ` · máy ${s.machine}` : ""}
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -423,12 +521,16 @@ export default function AdminProductsPage() {
           </Card>
 
           <Card cls="p-4">
-            <div className="font-semibold mb-2">Bản vẽ / thông số linh kiện (BTP)</div>
+            <div className="font-semibold mb-2">Bản vẽ / checklist đo linh kiện (BTP)</div>
+            <p className="text-xs text-muted mb-3">
+              Mỗi linh kiện có checklist đo riêng. Nhập full thông số tại đây — tạo lệnh SX sẽ copy
+              nguyên sang BOM, không chọn lẻ.
+            </p>
             <SearchPicker
               className="mb-3"
               value={selectedSemiId}
               displayValue={selectedSemiLabel}
-              placeholder="Chọn BTP để gắn bản vẽ…"
+              placeholder="Chọn BTP để gắn bản vẽ + checklist…"
               onSearch={searchSemisPicker}
               onChange={(id, item) => {
                 setSelectedSemiId(id);
@@ -436,21 +538,37 @@ export default function AdminProductsPage() {
               }}
             />
             {selectedSemiId ? (
-              <AttachmentUploader
-                files={semiFiles}
-                uploadedBy={user?.name || "admin"}
-                kind="drawing"
-                onUploaded={async (att) => {
-                  const saved = await catalogApi.addSemiAttachment(selectedSemiId, att);
-                  setSemiFiles((prev) => [...prev, saved]);
-                }}
-                onRemove={async (attId) => {
-                  await catalogApi.removeSemiAttachment(selectedSemiId, attId);
-                  setSemiFiles((prev) => prev.filter((a) => a.id !== attId));
-                }}
-              />
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm font-semibold mb-2">Checklist đo kiểm</div>
+                  <PartChecklistEditor items={semiChecklist} onChange={setSemiChecklist} />
+                  <Btn
+                    cls="mt-3"
+                    onClick={() => void saveChecklist()}
+                    disabled={checklistSaving}
+                  >
+                    {checklistSaving ? "Đang lưu…" : "Lưu checklist"}
+                  </Btn>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold mb-2">Bản vẽ / file đính kèm</div>
+                  <AttachmentUploader
+                    files={semiFiles}
+                    uploadedBy={user?.name || "admin"}
+                    kind="drawing"
+                    onUploaded={async (att) => {
+                      const saved = await catalogApi.addSemiAttachment(selectedSemiId, att);
+                      setSemiFiles((prev) => [...prev, saved]);
+                    }}
+                    onRemove={async (attId) => {
+                      await catalogApi.removeSemiAttachment(selectedSemiId, attId);
+                      setSemiFiles((prev) => prev.filter((a) => a.id !== attId));
+                    }}
+                  />
+                </div>
+              </div>
             ) : (
-              <p className="text-xs text-muted-foreground">Chọn linh kiện ở trên để thêm nhiều bản vẽ.</p>
+              <p className="text-xs text-muted-foreground">Chọn linh kiện ở trên để nhập checklist + bản vẽ.</p>
             )}
           </Card>
 
@@ -485,6 +603,24 @@ export default function AdminProductsPage() {
                   header: "Công đoạn",
                   render: (s) => PROCESS_STAGE_LABEL[s.processStage],
                 },
+                {
+                  key: "steps",
+                  header: "Quy trình",
+                  render: (s) =>
+                    s.processSteps?.length
+                      ? `${s.processSteps.length} QT`
+                      : "—",
+                },
+                {
+                  key: "checklist",
+                  header: "Đo kiểm",
+                  render: (s) =>
+                    s.checklist?.length ? (
+                      <span className="text-emerald-700 font-semibold">{s.checklist.length} TS</span>
+                    ) : (
+                      <span className="text-amber-700">Thiếu</span>
+                    ),
+                },
               ]}
               renderCard={(s) => (
                 <Card cls="p-3">
@@ -492,12 +628,84 @@ export default function AdminProductsPage() {
                   <div className="font-semibold">{s.name}</div>
                   <div className="text-sm text-muted">
                     {PROCESS_STAGE_LABEL[s.processStage]}
+                    {s.processSteps?.length
+                      ? ` · ${s.processSteps.length} quy trình`
+                      : ""}
+                    {s.checklist?.length
+                      ? ` · ${s.checklist.length} thông số đo`
+                      : " · thiếu checklist"}
                   </div>
                 </Card>
               )}
             />
           </Card>
         </div>
+      )}
+
+      {tab === "import" && (
+        <Card cls="p-4 lg:p-5 space-y-4">
+          <div>
+            <div className="font-semibold mb-1">Import BOM theo linh kiện / quy trình</div>
+            <p className="text-xs text-muted">
+              Tải file mẫu CSV (UTF-8), điền theo sheet Mẫu van: mỗi dòng = 1 quy trình của 1 linh
+              kiện thuộc 1 sản phẩm chính. Hệ thống tạo/cập nhật SP, BTP và định mức; khi tạo lệnh SX
+              mỗi quy trình thành 1 BOM tuần tự.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Btn variant="secondary" onClick={downloadProductBomTemplate}>
+              <i className="fas fa-download" /> Tải file mẫu
+            </Btn>
+            <Btn variant="secondary" onClick={() => fileRef.current?.click()}>
+              <i className="fas fa-upload" /> Chọn file CSV
+            </Btn>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.txt"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onPickImportFile(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
+          {importPreview.length > 0 && (
+            <div className="text-xs border border-border rounded-lg overflow-hidden max-h-72 overflow-y-auto">
+              <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-surface font-semibold text-muted sticky top-0">
+                <span className="col-span-2">Mã SP</span>
+                <span className="col-span-2">Mã LK</span>
+                <span className="col-span-1">STT</span>
+                <span className="col-span-4">Quy trình</span>
+                <span className="col-span-3">Máy</span>
+              </div>
+              {importPreview.slice(0, 40).map((r, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-12 gap-1 px-3 py-2 border-t border-border"
+                >
+                  <code className="col-span-2 truncate">{r.productCode}</code>
+                  <code className="col-span-2 truncate">{r.partCode}</code>
+                  <span className="col-span-1 tabular-nums">{r.processSeq}</span>
+                  <span className="col-span-4 truncate">{r.processName}</span>
+                  <span className="col-span-3 truncate">{r.machine || "—"}</span>
+                </div>
+              ))}
+              {importPreview.length > 40 && (
+                <div className="px-3 py-2 text-muted border-t border-border">
+                  … và {importPreview.length - 40} dòng nữa
+                </div>
+              )}
+            </div>
+          )}
+          {importMsg && <p className="text-sm whitespace-pre-wrap">{importMsg}</p>}
+          {importPreview.length > 0 && (
+            <Btn onClick={() => void runBomImport()} disabled={importBusy}>
+              {importBusy ? "Đang import…" : "Xác nhận import"}
+            </Btn>
+          )}
+        </Card>
       )}
     </div>
   );

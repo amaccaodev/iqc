@@ -59,8 +59,8 @@ function LoginForm({
           <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-4 border border-white/20">
             <i className="fas fa-industry text-white text-2xl" />
           </div>
-          <div className="text-white/60 text-xs uppercase tracking-widest mb-1">Công ty Cổ phần</div>
-          <h1 className="font-display font-800 text-white text-2xl">NOVO-VIỆT TIỆP</h1>
+          <div className="text-white/60 text-xs uppercase tracking-widest mb-1">CTCP Công nghệ Đồng</div>
+          <h1 className="font-display font-800 text-white text-2xl">COPEX</h1>
           <p className="text-white/50 text-sm mt-1">Hệ thống Quản lý Sản xuất</p>
         </div>
         {demo && (

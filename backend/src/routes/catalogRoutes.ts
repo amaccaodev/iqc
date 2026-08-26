@@ -185,6 +185,34 @@ catalogRoutes.post("/warehouse-stock/import", (req, res) => {
   }
 });
 
+catalogRoutes.post("/products/import-bom", (req, res) => {
+  try {
+    const rows =
+      (req.body as {
+        rows?: Array<{
+          productCode: string;
+          productName?: string;
+          partCode: string;
+          partName?: string;
+          processSeq: number;
+          processName: string;
+          processStage?: string;
+          teamCode?: string;
+          machine?: string;
+          qtyPerUnit?: number;
+          quota?: string;
+          techNote?: string;
+          people?: number;
+        }>;
+      }).rows ?? [];
+    if (!rows.length) throw new Error("File không có dòng dữ liệu");
+    const data = catalogStore.importProductBom(rows as Parameters<typeof catalogStore.importProductBom>[0]);
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+  }
+});
+
 catalogRoutes.get("/machines", (_req, res) => {
   res.json({ success: true, data: catalogStore.listAllMachines() });
 });
@@ -237,30 +265,35 @@ catalogRoutes.post("/machine-change-requests", async (req, res) => {
       requestedBy: string;
       requestedName: string;
       reason: string;
+      kind?: "change_machine" | "add_machine" | "report_broken";
       target: "teamlead" | "mechanic";
       fromMachine?: string;
       toMachine?: string;
     };
-    if (!body.reason?.trim()) throw new Error("Nhập lý do xin phê duyệt");
+    if (!body.reason?.trim()) throw new Error("Nhập lý do đề xuất");
     if (!body.target) throw new Error("Chọn gửi Tổ trưởng hoặc Cơ điện");
+    const kind = body.kind ?? "change_machine";
     const data = catalogStore.createChangeRequest({
       orderId: body.orderId,
       bomId: body.bomId,
       requestedBy: body.requestedBy,
       requestedName: body.requestedName,
       reason: body.reason.trim(),
+      kind,
       target: body.target,
       fromMachine: body.fromMachine ?? "",
       toMachine: body.toMachine ?? "",
     });
 
+    const kindLabel =
+      kind === "add_machine" ? "Thêm máy" : kind === "report_broken" ? "Báo hỏng" : "Thay máy";
     const machineLine =
       data.fromMachine || data.toMachine
         ? `Máy: ${data.fromMachine || "—"} → ${data.toMachine || "—"}`
         : "";
     const targetLabel = body.target === "mechanic" ? "Cơ điện" : "Tổ trưởng";
     const bodyText = [
-      `${body.requestedName}: ${body.reason}`,
+      `${body.requestedName}: [${kindLabel}] ${body.reason}`,
       machineLine,
       `Chờ duyệt: ${targetLabel}`,
     ]
@@ -268,7 +301,7 @@ catalogRoutes.post("/machine-change-requests", async (req, res) => {
       .join(" · ");
 
     // Người duyệt trực tiếp (tổ trưởng / cơ điện)
-    await notifyRoles([body.target === "mechanic" ? "mechanic" : "teamlead"], "Đề xuất đổi/thêm máy", bodyText, {
+    await notifyRoles([body.target === "mechanic" ? "mechanic" : "teamlead"], `Đề xuất: ${kindLabel}`, bodyText, {
       refId: data.id,
       type: "approval",
       refType: "machine_change",
@@ -276,7 +309,7 @@ catalogRoutes.post("/machine-change-requests", async (req, res) => {
     // GĐ + Quản đốc theo dõi đề xuất
     await notifyRoles(
       ["director", "supervisor"],
-      "Đề xuất đổi/thêm máy",
+      `Đề xuất: ${kindLabel}`,
       `${bodyText} · Trạng thái: Chờ duyệt`,
       { refId: data.id, type: "approval", refType: "machine_change" },
     );

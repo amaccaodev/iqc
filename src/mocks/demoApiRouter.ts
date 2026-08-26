@@ -18,6 +18,7 @@ import type {
   QCComplaint,
   SemiProduct,
   ShiftClose,
+  ShiftUnlockRequest,
   User,
   UserPublic,
   WarehouseMovement,
@@ -26,6 +27,12 @@ import type {
 import { TEAMS } from "@shared/constants/teams";
 import { parseListQueryFromRequest } from "@shared/utils/listQuery";
 import { paginateInMemory } from "@shared/utils/pagedList";
+import { assertCanCreateShiftClose, assertCanRequestUnlock, assertCanSubmitWorkerRow } from "@shared/utils/shiftCloseGuard";
+import {
+  bomSpecsFromChecklist,
+  resolvePartChecklist,
+  validateEntryRows,
+} from "@shared/utils/specValidation";
 import { SEED_ORDERS, SEED_USERS } from "../../backend/src/data/seed";
 import {
   DEMO_MACHINES,
@@ -103,6 +110,7 @@ const shiftCloses: ShiftClose[] = [
     createdAt: new Date().toISOString(),
   },
 ];
+const shiftUnlocks: ShiftUnlockRequest[] = [];
 const payrollRates: Array<{ id: string; userId: string; productId: string; rateVnd: number }> = [
   { id: "pr1", userId: "u6", productId: "p1", rateVnd: 2500 },
   { id: "pr2", userId: "u7", productId: "p1", rateVnd: 2500 },
@@ -272,6 +280,9 @@ export async function handleDemoApi<T>(
       attachments: [],
       boms: lines.map((line, idx) => {
         const semi = semis.find((s) => s.id === line.semiProductId);
+        const { materialSpecs, specCols } = bomSpecsFromChecklist(
+          resolvePartChecklist(semi ?? {}),
+        );
         return {
           id: uid("b"),
           bomCode: `BOM-DEMO-${idx + 1}`,
@@ -279,7 +290,7 @@ export async function handleDemoApi<T>(
           partName: semi?.name ?? "Linh kiện",
           rawMaterial: "",
           machine: "",
-          process: semi?.processStage ?? "",
+          process: "",
           processStage: semi?.processStage,
           targetQty: Number(body?.targetQty ?? 100) * (line.qtyPerUnit || 1),
           passQty: 0,
@@ -288,10 +299,12 @@ export async function handleDemoApi<T>(
           assignedTeamName: "",
           assignedWorkers: [],
           status: "unassigned" as const,
-          specCols: [],
+          specCols,
+          materialSpecs: materialSpecs.length ? materialSpecs : undefined,
           techNote: "",
           workerEntries: [],
-          attachments: [],
+          semiProductId: semi?.id,
+          attachments: semiAttachments.get(semi?.id ?? "") ?? [],
         };
       }),
     };
@@ -413,6 +426,11 @@ export async function handleDemoApi<T>(
     if (!hit) throw new Error("Không tìm thấy BOM");
     const workerId = String(body?.workerId ?? "");
     const workerName = String(body?.workerName ?? "CN Demo");
+    assertCanSubmitWorkerRow(shiftCloses, shiftUnlocks, {
+      workerId,
+      orderId: hit.order.id,
+      bomId: hit.bom.id,
+    });
     let entry = hit.bom.workerEntries.find((e) => e.workerId === workerId);
     if (!entry) {
       entry = {
@@ -425,12 +443,42 @@ export async function handleDemoApi<T>(
       hit.bom.workerEntries.push(entry);
     }
     const row = {
-      tt: entry.rows.length + 1,
       dims: (body?.dims as string[]) ?? [],
       ngoaiQuan: String(body?.ngoaiQuan ?? "Đạt"),
     };
-    entry.rows.push(row);
-    return { order: hit.order, row } as T;
+    entry.rows.push({
+      tt: entry.rows.length + 1,
+      ...row,
+    });
+
+    // Chỉ báo tổ trưởng khi số đo ngoài chuẩn
+    const check = validateEntryRows(
+      hit.bom.specCols,
+      [row],
+      hit.bom.materialSpecs,
+    );
+    const bad = (check.results[0] ?? []).filter((v) => !v.valid);
+    if (bad.length > 0) {
+      const detail = bad
+        .map((v) => `${v.label}: ${v.value}${v.warning ? ` (${v.warning})` : ""}`)
+        .join("; ");
+      const spNo = entry.rows.length;
+      for (const u of users.filter((x) => x.role === "teamlead" && x.active)) {
+        notifications.unshift({
+          id: uid("n"),
+          userId: u.id,
+          type: "order",
+          refId: hit.order.id,
+          refType: "measurement_error",
+          title: "Số đo ngoài chuẩn",
+          body: `${workerName} — ${hit.bom.partName} (SP #${spNo}): ${detail}`,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    return { order: hit.order, row: entry.rows[entry.rows.length - 1] } as T;
   }
   const workerEntry = path.match(/^\/orders\/([^/]+)\/boms\/([^/]+)\/worker-entry$/);
   if (workerEntry && m === "POST") {
@@ -442,12 +490,18 @@ export async function handleDemoApi<T>(
   if (shiftCloseBom && m === "POST") {
     const hit = findBom(shiftCloseBom[1], shiftCloseBom[2]);
     if (!hit) throw new Error("Không tìm thấy BOM");
+    const workerId = String(body?.workerId ?? "");
+    assertCanCreateShiftClose(shiftCloses, shiftUnlocks, {
+      workerId,
+      orderId: hit.order.id,
+      bomId: hit.bom.id,
+    });
     const passQty = Number(body?.passQty ?? body?.qty ?? 0);
     const rateVnd = Number(body?.rateVnd ?? 2500);
-    shiftCloses.unshift({
+    const closeRow = {
       id: uid("sc"),
-      workerId: String(body?.workerId ?? ""),
-      workerName: String(body?.workerName ?? ""),
+      workerId,
+      workerName: String(body?.workerName ?? body?.reportedBy ?? ""),
       orderId: hit.order.id,
       bomId: hit.bom.id,
       productId: hit.order.productId ?? "p1",
@@ -456,11 +510,25 @@ export async function handleDemoApi<T>(
       passQty,
       failQty: Number(body?.failQty ?? 0),
       note: String(body?.note ?? ""),
-      status: "pending_teamlead",
+      status: "pending_teamlead" as const,
       rateVnd,
-      amountVnd: passQty * rateVnd,
+      amountVnd: 0,
       createdAt: new Date().toISOString(),
-    });
+    };
+    shiftCloses.unshift(closeRow);
+    for (const u of users.filter((x) => x.role === "teamlead" && x.active)) {
+      notifications.unshift({
+        id: uid("n"),
+        userId: u.id,
+        type: "shift",
+        refId: closeRow.id,
+        refType: "shift_close",
+        title: "Chốt ca chờ kiểm tra",
+        body: `${closeRow.workerName} chốt ${closeRow.passQty} đạt / ${closeRow.failQty} hỏng — ${closeRow.partName}`,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
     return hit.order as T;
   }
 
@@ -505,7 +573,12 @@ export async function handleDemoApi<T>(
   }
   if (/^\/products\/[^/]+\/bom$/.test(path) && m === "GET") {
     const productId = path.split("/")[2];
-    return productBoms.filter((b) => b.productId === productId) as T;
+    return productBoms
+      .filter((b) => b.productId === productId)
+      .map((b) => ({
+        ...b,
+        semiProduct: semis.find((s) => s.id === b.semiProductId),
+      })) as T;
   }
   if (/^\/products\/[^/]+\/bom$/.test(path) && (m === "PUT" || m === "POST")) {
     const productId = path.split("/")[2];
@@ -621,6 +694,133 @@ export async function handleDemoApi<T>(
   if (path === "/warehouse-stock/import" && m === "POST") {
     return { updated: 0, errors: [], total: 0 } as T;
   }
+  if (path === "/products/import-bom" && m === "POST") {
+    const rows = (body?.rows as Array<Record<string, unknown>>) ?? [];
+    if (!rows.length) throw new Error("File không có dòng dữ liệu");
+    const errors: string[] = [];
+    const byProduct = new Map<
+      string,
+      Map<
+        string,
+        {
+          productName: string;
+          partName: string;
+          qty: number;
+          steps: Array<{
+            seq: number;
+            process: string;
+            machine?: string;
+            processStage?: SemiProduct["processStage"];
+            teamCode?: string;
+            techNote?: string;
+            quota?: string;
+            people?: number;
+          }>;
+        }
+      >
+    >();
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const productCode = String(r.productCode ?? "").trim();
+      const partCode = String(r.partCode ?? "").trim();
+      const processName = String(r.processName ?? "").trim();
+      if (!productCode || !partCode || !processName) {
+        errors.push(`Dòng ${i + 2}: thiếu Mã SP / Mã LK / Tên quy trình`);
+        continue;
+      }
+      let parts = byProduct.get(productCode);
+      if (!parts) {
+        parts = new Map();
+        byProduct.set(productCode, parts);
+      }
+      let part = parts.get(partCode);
+      if (!part) {
+        part = {
+          productName: String(r.productName ?? productCode),
+          partName: String(r.partName ?? partCode),
+          qty: Math.max(1, Number(r.qtyPerUnit) || 1),
+          steps: [],
+        };
+        parts.set(partCode, part);
+      }
+      part.steps.push({
+        seq: Math.max(1, Number(r.processSeq) || part.steps.length + 1),
+        process: processName,
+        machine: r.machine ? String(r.machine) : undefined,
+        processStage: (r.processStage as SemiProduct["processStage"]) || "hot_forge",
+        teamCode: r.teamCode ? String(r.teamCode) : undefined,
+        techNote: r.techNote ? String(r.techNote) : undefined,
+        quota: r.quota ? String(r.quota) : undefined,
+        people: r.people != null ? Number(r.people) : undefined,
+      });
+    }
+    let productUpserts = 0;
+    let semiUpserts = 0;
+    let stepCount = 0;
+    for (const [productCode, parts] of byProduct) {
+      const first = [...parts.values()][0];
+      let product = products.find((p) => p.code.toLowerCase() === productCode.toLowerCase());
+      if (!product) {
+        product = {
+          id: uid("p"),
+          code: productCode,
+          name: first.productName,
+          description: "Import BOM demo",
+          active: true,
+        };
+        products.push(product);
+        productUpserts += 1;
+      } else {
+        product.name = first.productName || product.name;
+        product.active = true;
+        productUpserts += 1;
+      }
+      // clear old bom lines
+      for (let i = productBoms.length - 1; i >= 0; i--) {
+        if (productBoms[i].productId === product.id) productBoms.splice(i, 1);
+      }
+      for (const [partCode, part] of parts) {
+        const steps = [...part.steps].sort((a, b) => a.seq - b.seq);
+        stepCount += steps.length;
+        const stage = steps[0]?.processStage ?? "hot_forge";
+        let semi = semis.find((s) => s.code.toLowerCase() === partCode.toLowerCase());
+        if (!semi) {
+          semi = {
+            id: uid("sp"),
+            code: partCode,
+            name: part.partName,
+            processStage: stage,
+            description: `Import — ${steps.length} quy trình`,
+            active: true,
+            processSteps: steps,
+          };
+          semis.push(semi);
+          semiUpserts += 1;
+        } else {
+          semi.name = part.partName;
+          semi.processStage = stage;
+          semi.processSteps = steps;
+          semi.active = true;
+          semiUpserts += 1;
+        }
+        productBoms.push({
+          id: uid("pb"),
+          productId: product.id,
+          semiProductId: semi.id,
+          qtyPerUnit: part.qty,
+        });
+      }
+    }
+    return {
+      products: byProduct.size,
+      parts: [...byProduct.values()].reduce((s, m) => s + m.size, 0),
+      steps: stepCount,
+      productUpserts,
+      semiUpserts,
+      errors,
+      total: rows.length,
+    } as T;
+  }
   if (path === "/warehouse-movements" && m === "GET") {
     const limit = Number(sp.get("limit") ?? 50);
     return movements.slice(0, limit).map((mv) => ({
@@ -665,6 +865,7 @@ export async function handleDemoApi<T>(
       requestedName: String(body?.requestedName ?? ""),
       requestedAt: new Date().toISOString(),
       reason: String(body?.reason ?? ""),
+      kind: (body?.kind as MachineChangeRequest["kind"]) ?? "change_machine",
       target: (body?.target as MachineChangeRequest["target"]) ?? "teamlead",
       fromMachine: String(body?.fromMachine ?? ""),
       toMachine: String(body?.toMachine ?? ""),
@@ -827,12 +1028,85 @@ export async function handleDemoApi<T>(
   if (path === "/payroll/import" && m === "POST") {
     return { profileUpdates: 0, rateUpdates: 0, errors: [], total: 0 } as T;
   }
-  if (path === "/shift-closes" && m === "GET") return shiftCloses as T;
+  if (path === "/shift-closes" && m === "GET") {
+    let list = [...shiftCloses];
+    const workerId = sp.get("workerId");
+    const orderId = sp.get("orderId");
+    const bomId = sp.get("bomId");
+    const status = sp.get("status");
+    if (workerId) list = list.filter((s) => s.workerId === workerId);
+    if (orderId) list = list.filter((s) => s.orderId === orderId);
+    if (bomId) list = list.filter((s) => s.bomId === bomId);
+    if (status) list = list.filter((s) => s.status === status);
+    return list as T;
+  }
   if (/^\/shift-closes\/[^/]+\/review$/.test(path) && m === "POST") {
     const id = path.split("/")[2];
     const row = shiftCloses.find((s) => s.id === id);
     if (!row) throw new Error("Không tìm thấy chốt ca");
+    const stage = String(body?.stage ?? "teamlead");
+    const now = new Date().toISOString();
+    if (body?.approved === false) {
+      row.status = "rejected";
+      row.rejectReason = String(body?.rejectReason ?? "");
+    } else if (stage === "teamlead" && row.status === "pending_teamlead") {
+      row.status = "pending_qc";
+      row.teamleadBy = String(body?.reviewerName ?? "");
+      row.teamleadAt = now;
+    } else if (stage === "qc" && row.status === "pending_qc") {
+      row.status = "pending_supervisor";
+      row.qcBy = String(body?.reviewerName ?? "");
+      row.qcAt = now;
+    } else if (stage === "supervisor" && row.status === "pending_supervisor") {
+      row.status = "approved";
+      row.supervisorBy = String(body?.reviewerName ?? "");
+      row.supervisorAt = now;
+      row.amountVnd = Math.round(row.passQty * row.rateVnd);
+    } else {
+      throw new Error("Phiếu không ở bước duyệt này");
+    }
+    return row as T;
+  }
+  if (path === "/shift-unlocks" && m === "GET") {
+    let list = [...shiftUnlocks];
+    const workerId = sp.get("workerId");
+    const orderId = sp.get("orderId");
+    const bomId = sp.get("bomId");
+    const status = sp.get("status");
+    if (workerId) list = list.filter((s) => s.workerId === workerId);
+    if (orderId) list = list.filter((s) => s.orderId === orderId);
+    if (bomId) list = list.filter((s) => s.bomId === bomId);
+    if (status) list = list.filter((s) => s.status === status);
+    return list as T;
+  }
+  if (path === "/shift-unlocks" && m === "POST") {
+    const orderId = String(body?.orderId ?? "");
+    const bomId = String(body?.bomId ?? "");
+    const workerId = String(body?.workerId ?? "");
+    assertCanRequestUnlock(shiftCloses, shiftUnlocks, { workerId, orderId, bomId });
+    const row: ShiftUnlockRequest = {
+      id: uid("su"),
+      orderId,
+      bomId,
+      workerId,
+      workerName: String(body?.workerName ?? ""),
+      partName: String(body?.partName ?? ""),
+      reason: String(body?.reason ?? "Xin mở khóa để chốt ca tiếp trong ngày"),
+      status: "pending_teamlead",
+      createdAt: new Date().toISOString(),
+    };
+    shiftUnlocks.unshift(row);
+    return row as T;
+  }
+  if (/^\/shift-unlocks\/[^/]+\/review$/.test(path) && m === "POST") {
+    const id = path.split("/")[2];
+    const row = shiftUnlocks.find((s) => s.id === id);
+    if (!row) throw new Error("Không tìm thấy yêu cầu mở khóa");
+    if (row.status !== "pending_teamlead") throw new Error("Yêu cầu không còn chờ tổ trưởng");
     row.status = body?.approved === false ? "rejected" : "approved";
+    row.reviewedBy = String(body?.reviewerName ?? "");
+    row.reviewedAt = new Date().toISOString();
+    if (body?.approved === false) row.rejectReason = String(body?.rejectReason ?? "");
     return row as T;
   }
 

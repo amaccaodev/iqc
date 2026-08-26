@@ -75,11 +75,11 @@ export const NAV_CFG: Record<Role, NavItem[]> = {
   teamlead: [
     { id: "dashboard", label: "Tổng quan", fa: "fa-gauge-high", path: "/teamlead/dashboard" },
     { id: "production", label: "Công việc", fa: "fa-list-check", path: "/teamlead/production" },
-    { id: "assign", label: "Gán máy", fa: "fa-users-gear", path: "/teamlead/assign" },
+    { id: "assign", label: "Phân công", fa: "fa-users-gear", path: "/teamlead/assign" },
     { id: "boms", label: "BOM", fa: "fa-boxes-stacked", path: "/teamlead/boms" },
     { id: "report", label: "Báo cáo", fa: "fa-chart-bar", path: "/teamlead/report" },
     { id: "shifts", label: "Chốt ca", fa: "fa-clipboard-check", path: "/teamlead/shifts" },
-    { id: "approvals", label: "Phê duyệt", fa: "fa-hand", path: "/teamlead/approvals" },
+    { id: "approvals", label: "Đề xuất", fa: "fa-hand", path: "/teamlead/approvals" },
     { id: "complaints", label: "Khiếu nại", fa: "fa-comment-dots", path: "/teamlead/complaints" },
     { id: "incidents", label: "Báo hỏng", fa: "fa-triangle-exclamation", path: "/teamlead/incidents" },
     { id: "overtime", label: "OT", fa: "fa-clock", path: "/teamlead/overtime" },
@@ -143,13 +143,13 @@ export const MOBILE_NAV: Record<Role, NavItem[]> = {
   supervisor: [
     { id: "dashboard", label: "Tổng quan", fa: "fa-gauge-high", path: "/supervisor/dashboard" },
     { id: "production", label: "Công việc", fa: "fa-list-check", path: "/supervisor/production" },
-    { id: "machines", label: "Máy móc", fa: "fa-industry", path: "/supervisor/machines" },
+    { id: "shifts", label: "Chốt ca", fa: "fa-clipboard-check", path: "/supervisor/shifts" },
     { id: "profile", label: "Hồ sơ", fa: "fa-user", path: "/supervisor/profile" },
   ],
   teamlead: [
     { id: "dashboard", label: "Tổng quan", fa: "fa-gauge-high", path: "/teamlead/dashboard" },
     { id: "production", label: "Công việc", fa: "fa-list-check", path: "/teamlead/production" },
-    { id: "assign", label: "Gán máy", fa: "fa-users-gear", path: "/teamlead/assign" },
+    { id: "shifts", label: "Chốt ca", fa: "fa-clipboard-check", path: "/teamlead/shifts" },
     { id: "profile", label: "Hồ sơ", fa: "fa-user", path: "/teamlead/profile" },
   ],
   worker: [

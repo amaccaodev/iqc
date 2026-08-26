@@ -12,6 +12,7 @@ import { useOrders } from "../../hooks/useOrders";
 import { useRoleUser } from "../layout/RoleLayout";
 import { orderApi } from "../../services/api/OrderApiService";
 import { salaryApi } from "../../services/api/SalaryApiService";
+import { toast } from "../../hooks/useToast";
 
 const PENDING_SHIFT: ReadonlySet<string> = new Set([
   "pending_teamlead",
@@ -141,9 +142,11 @@ function ProductCard({
 
   const handleComplete = async () => {
     if (!canComplete || isDone || completing) return;
-    const ok = window.confirm(
-      `Hoàn thành lệnh ${order.orderNo}?\n\nDùng khi số lượng giao sai — sau đó tạo yêu cầu/lệnh mới với số lượng đúng.`,
-    );
+    const ok = await toast.confirm({
+      title: "Hoàn thành lệnh",
+      message: `Hoàn thành lệnh ${order.orderNo}?\n\nDùng khi số lượng giao sai — sau đó tạo yêu cầu/lệnh mới với số lượng đúng.`,
+      confirmLabel: "Hoàn thành",
+    });
     if (!ok) return;
     setCompleting(true);
     setMsg("");
@@ -154,8 +157,10 @@ function ProductCard({
       );
       onCompleted(updated);
       setMsg("Đã hoàn thành. Có thể tạo lệnh mới với số lượng đúng.");
+      toast.success("Đã hoàn thành lệnh");
     } catch (e) {
       setMsg((e as Error).message || "Không hoàn thành được lệnh");
+      toast.error((e as Error).message || "Không hoàn thành được lệnh");
     } finally {
       setCompleting(false);
     }

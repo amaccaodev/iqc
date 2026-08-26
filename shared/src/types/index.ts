@@ -12,6 +12,23 @@ export type Role =
 
 export type ProcessStage = "hot_forge" | "auto" | "assembly";
 
+/** Một nguyên công / quy trình gia công của linh kiện (ĐMKT sheet Mẫu van) */
+export interface SemiProcessStep {
+  /** Thứ tự tuần tự trong linh kiện (1, 2, 3…) */
+  seq: number;
+  /** Tên nguyên công, vd: "1: Cắt Phôi" */
+  process: string;
+  machine?: string;
+  processStage?: ProcessStage;
+  /** Mã tổ ĐMKT (CP, DẬP, TĐ…) */
+  teamCode?: string;
+  people?: number;
+  techNote?: string;
+  quota?: string;
+  /** Checklist đo kiểm riêng của nguyên công (nếu khác linh kiện) */
+  checklist?: import("./spec.js").PartChecklistItem[];
+}
+
 export interface Product extends IEntity {
   code: string;
   name: string;
@@ -31,6 +48,16 @@ export interface SemiProduct extends IEntity {
   createdAt?: string;
   /** Bản vẽ / thông số kỹ thuật của linh kiện (nhiều file) */
   attachments?: Attachment[];
+  /**
+   * Quy trình gia công tuần tự (import từ Mẫu van).
+   * Khi tạo lệnh SX: mỗi step → 1 BOM.
+   */
+  processSteps?: SemiProcessStep[];
+  /**
+   * Checklist đo kiểm đầy đủ của linh kiện (mỗi LK khác nhau).
+   * Khi tạo lệnh: copy nguyên sang BOM.materialSpecs — không chọn lẻ.
+   */
+  checklist?: import("./spec.js").PartChecklistItem[];
 }
 
 export interface ProductBomLine extends IEntity {
@@ -70,11 +97,17 @@ export interface Machine extends IEntity {
   name: string;
   params: MachineParam[];
   active: boolean;
+  /** Khu vực / vị trí máy trên xưởng (vd: "Khu Dập nóng A1") */
+  location?: string;
+  /** Tổ sở hữu / khu vực máy — liên kết TEAMS (t_hot / t_auto / t_asm) */
+  teamId?: string;
   createdAt?: string;
 }
 
 export type ChangeRequestTarget = "teamlead" | "mechanic";
 export type ChangeRequestStatus = "pending" | "approved" | "rejected";
+/** Đề xuất máy: chỉ 3 loại — không dùng “xin phê duyệt” chung */
+export type MachineChangeKind = "change_machine" | "add_machine" | "report_broken";
 
 export interface MachineChangeRequest extends IEntity {
   orderId?: string;
@@ -83,6 +116,8 @@ export interface MachineChangeRequest extends IEntity {
   requestedName: string;
   requestedAt: string;
   reason: string;
+  /** Mặc định change_machine nếu thiếu (data cũ) */
+  kind?: MachineChangeKind;
   target: ChangeRequestTarget;
   fromMachine: string;
   toMachine: string;
@@ -194,6 +229,23 @@ export interface ShiftClose extends IEntity {
   rejectReason?: string;
 }
 
+export type ShiftUnlockStatus = "pending_teamlead" | "approved" | "rejected";
+
+/** CN xin mở khóa để chốt ca tiếp trong cùng ngày — tổ trưởng duyệt */
+export interface ShiftUnlockRequest extends IEntity {
+  orderId: string;
+  bomId: string;
+  workerId: string;
+  workerName: string;
+  partName: string;
+  reason: string;
+  status: ShiftUnlockStatus;
+  createdAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectReason?: string;
+}
+
 export interface Attachment extends IEntity {
   name: string;
   type: "pdf" | "image" | "cad" | "excel" | "word" | "other";
@@ -262,7 +314,15 @@ export interface BOMItem extends IEntity {
   partName: string;
   rawMaterial: string;
   machine: string;
+  /**
+   * Tên quy trình / nguyên công (ĐMKT sheet Mẫu van cột “Tên nguyên công”).
+   * Mỗi BOM = 1 quy trình; hết quy trình này mới mở quy trình kế tiếp cùng linh kiện.
+   */
   process: string;
+  /** Thứ tự quy trình trong cùng linh kiện (1, 2, 3…) */
+  processSeq?: number;
+  /** Nhóm linh kiện (Tên SP/Chi tiết trên sheet) — gom các quy trình tuần tự */
+  partGroup?: string;
   /** Công đoạn trong quy trình 3 tổ */
   processStage?: ProcessStage;
   /** Ca làm việc do GĐ giao */
@@ -281,8 +341,7 @@ export interface BOMItem extends IEntity {
   assignedTeamName: string;
   assignedWorkers: string[];
   /**
-   * Phân công chi tiết: công nhân ↔ máy.
-   * Tổ trưởng gán máy để biết ai đang làm trên máy nào.
+   * Phân công: quy trình (BOM.process) + máy + công nhân.
    */
   workerAssignments?: WorkerMachineAssignment[];
   status: BOMStatus;

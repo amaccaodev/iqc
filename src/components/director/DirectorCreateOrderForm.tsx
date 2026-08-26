@@ -8,6 +8,7 @@ import { catalogApi } from "../../services/api/CatalogApiService";
 import { orderApi } from "../../services/api/OrderApiService";
 import { useAuth } from "../../hooks/useAuth";
 import { createEntityPickerSearch } from "../../core/entityPicker";
+import { toast } from "../../hooks/useToast";
 
 const SIZE_PRESETS = ["DN15", "DN20", "DN25", "15", "20", "25", "Ø15", "Ø20", "Ø25"];
 
@@ -22,6 +23,8 @@ interface BomLineState {
   useFromStock: boolean;
   stockUseQty: number;
   hasAttachments: boolean;
+  hasChecklist: boolean;
+  checklistCount: number;
 }
 
 interface ProductRow {
@@ -68,6 +71,7 @@ function bomLinesToState(
 ): BomLineState[] {
   return bom.map((b) => {
     const need = Math.ceil(finishedQty * Number(b.qtyPerUnit || 1));
+    const checklist = b.semiProduct?.checklist?.filter((c) => c.name?.trim()) ?? [];
     return {
       semiProductId: b.semiProductId,
       name: b.semiProduct?.name ?? b.semiProductId,
@@ -79,6 +83,8 @@ function bomLinesToState(
       useFromStock: false,
       stockUseQty: 0,
       hasAttachments: Boolean(attachFlags[b.semiProductId]),
+      hasChecklist: checklist.length > 0,
+      checklistCount: checklist.length,
     };
   });
 }
@@ -107,6 +113,7 @@ function readinessOf(
       name: l.name,
       code: l.code,
       hasAttachments: l.hasAttachments,
+      hasChecklist: l.hasChecklist,
     })),
   });
 }
@@ -229,18 +236,30 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
 
   const submit = async () => {
     if (!user) return;
-    if (!deadline) return alert("Nhập ngày hạn hoàn thành");
+    if (!deadline) {
+      toast.error("Nhập ngày hạn hoàn thành");
+      return;
+    }
     const valid = rows.filter((r) => r.productId && r.finishedQty > 0);
-    if (!valid.length) return alert("Thêm ít nhất một sản phẩm (có SL > 0)");
+    if (!valid.length) {
+      toast.error("Thêm ít nhất một sản phẩm (có SL > 0)");
+      return;
+    }
     for (const r of valid) {
-      if (!r.size.trim()) return alert(`Nhập kích cỡ cho «${r.productLabel || r.productCode}»`);
+      if (!r.size.trim()) {
+        toast.error(`Nhập kích cỡ cho «${r.productLabel || r.productCode}»`);
+        return;
+      }
       if (!r.bomLines.length) {
-        return alert(`«${r.productLabel}» chưa có định mức BTP — chưa hoàn thiện BOM`);
+        toast.error(`«${r.productLabel}» chưa có định mức BTP — chưa hoàn thiện BOM`);
+        return;
       }
       if (r.readiness && !r.readiness.complete) {
-        const ok = window.confirm(
-          `«${r.productLabel}»: ${r.readiness.summary}\n${r.readiness.warnings.join("\n")}\n\nVẫn tạo lệnh? (Quản đốc/GĐ sẽ nhận thông báo thiếu file)`,
-        );
+        const ok = await toast.confirm({
+          title: "Thiếu tài liệu ĐMKT",
+          message: `«${r.productLabel}»: ${r.readiness.summary}\n${r.readiness.warnings.join("\n")}\n\nVẫn tạo lệnh? (Quản đốc/GĐ sẽ nhận thông báo thiếu file)`,
+          confirmLabel: "Vẫn tạo",
+        });
         if (!ok) return;
       }
     }
@@ -263,10 +282,10 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
           })),
         })),
       });
-      alert(`Đã tạo ${created.length} lệnh sản xuất`);
+      toast.success(`Đã tạo ${created.length} lệnh sản xuất`);
       onCreated?.();
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -459,12 +478,19 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
                         key={l.semiProductId}
                         className="rounded-lg border border-border bg-surface p-2.5 text-sm"
                       >
-                        <div className="font-medium flex items-center gap-2">
+                        <div className="font-medium flex items-center gap-2 flex-wrap">
                           {l.name}
                           {l.hasAttachments ? (
                             <span className="text-[10px] text-emerald-700 font-semibold">Có file</span>
                           ) : (
                             <span className="text-[10px] text-amber-700 font-semibold">Thiếu bản vẽ</span>
+                          )}
+                          {l.hasChecklist ? (
+                            <span className="text-[10px] text-emerald-700 font-semibold">
+                              Checklist {l.checklistCount} điểm
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-amber-700 font-semibold">Thiếu checklist đo</span>
                           )}
                         </div>
                         <div className="text-[11px] text-muted">
@@ -472,6 +498,9 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
                             l.processStage}{" "}
                           · Cần {need} · SX {l.produceQty} · Kho {l.stockQty}
                         </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          Thông số đo lấy full từ danh mục BTP — không chọn lẻ khi tạo lệnh.
+                        </p>
                         <label className="flex items-center gap-2 text-xs mt-1.5 cursor-pointer">
                           <input
                             type="checkbox"

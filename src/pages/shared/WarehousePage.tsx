@@ -8,6 +8,7 @@ import { useRoleUser } from "../../components/layout/RoleLayout";
 import { createEntityPickerSearch } from "../../core/entityPicker";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { downloadWarehouseTemplate, parseWarehouseCsv } from "../../utils/warehouseImport";
+import { toast } from "../../hooks/useToast";
 
 type StockRow = WarehouseStock & { semiProduct?: SemiProduct };
 type MovementRow = WarehouseMovement & { semiProduct?: SemiProduct };
@@ -98,7 +99,10 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
   const runAdjust = async () => {
     if (!adjustId) return;
     const delta = Number(adjustDelta);
-    if (!delta || Number.isNaN(delta)) return alert("Nhập số lượng +/- hợp lệ");
+    if (!delta || Number.isNaN(delta)) {
+      toast.error("Nhập số lượng +/- hợp lệ");
+      return;
+    }
     await catalogApi.adjustStock(adjustId, delta, adjustNote || undefined, name);
     setAdjustDelta("");
     setAdjustNote("");

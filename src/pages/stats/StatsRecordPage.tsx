@@ -7,6 +7,7 @@ import type { ProductionStat } from "@shared/types";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { useOrders } from "../../hooks/useOrders";
 import { useRoleUser } from "../../components/layout/RoleLayout";
+import { toast } from "../../hooks/useToast";
 
 export default function StatsRecordPage() {
   const user = useRoleUser();
@@ -33,7 +34,7 @@ export default function StatsRecordPage() {
   useEffect(() => { void load(); }, [load]);
 
   const save = async () => {
-    if (!form.bomId || !form.qtyProduced) { alert("Vui lòng chọn BOM và nhập số lượng sản xuất."); return; }
+    if (!form.bomId || !form.qtyProduced) { toast.error("Vui lòng chọn BOM và nhập số lượng sản xuất."); return; }
     setSaving(true);
     try {
       await workflowApi.upsertStat({
@@ -46,7 +47,7 @@ export default function StatsRecordPage() {
       setShowForm(false);
       setForm({ bomId: "", orderId: "", statDate: new Date().toISOString().slice(0, 10), shift: "day", qtyProduced: "", qtyPass: "", qtyFail: "", qtyRework: "", downtimeMins: "0", note: "" });
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 

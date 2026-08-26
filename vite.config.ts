@@ -7,8 +7,12 @@ import siteConfiguration from './.figma/make/site.json'
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
-  const emitSourcemaps = mode === 'development'
+  // .figma/make/deploy-preview có thể truyền `--mode development`.
+  // Chỉ emit sourcemap khi bật tường minh — build production mặc định không lộ src.
+  const emitSourcemaps =
+    process.env.VITE_SOURCEMAP === "true" ||
+    (mode === "development" && process.env.FIGMA_EMIT_SOURCEMAP === "1")
+  const isProdBuild = mode === "production"
 
   return {
     base: process.env.GITHUB_PAGES === 'true'
@@ -16,9 +20,26 @@ export default defineConfig(({ mode }) => {
       : process.env.FIGMA_PUBLIC_URL
         ? `${process.env.FIGMA_PUBLIC_URL}/`
         : '/',
+    esbuild: {
+      // Production: bỏ console/debugger khỏi bundle
+      drop: isProdBuild ? ["console", "debugger"] : [],
+      legalComments: "none",
+    },
     build: {
-      sourcemap: emitSourcemaps ? 'inline' : false,
-      minify: !emitSourcemaps,
+      // false = DevTools Sources không map về file .tsx gốc
+      sourcemap: emitSourcemaps ? "inline" : false,
+      minify: "esbuild",
+      cssMinify: true,
+      // Không để lộ đường dẫn module gốc trong chunk
+      reportCompressedSize: false,
+      rollupOptions: {
+        output: {
+          // Tên file hash — khó đoán cấu trúc thư mục src
+          entryFileNames: "assets/[hash].js",
+          chunkFileNames: "assets/[hash].js",
+          assetFileNames: "assets/[hash][extname]",
+        },
+      },
     },
     plugins: [
       react(),

@@ -157,7 +157,15 @@ export class OrderApiService extends BaseApiService implements IOrderService {
       `/orders/${orderId}/boms/${bomId}/worker-row`,
       data,
     );
-    await this.refresh();
+    // Cập nhật cache tại chỗ — tránh remount form / mất tab đo kiểm
+    if (result?.order) {
+      const i = this.cache.findIndex((o) => o.id === result.order.id);
+      if (i >= 0) this.cache[i] = result.order;
+      else this.cache = [result.order, ...this.cache];
+      this.notify();
+    } else {
+      await this.refresh();
+    }
     return result;
   }
 

@@ -9,6 +9,7 @@ import type { QCComplaint } from "@shared/types";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { useOrders } from "../../hooks/useOrders";
 import { useRoleUser } from "../../components/layout/RoleLayout";
+import { toast } from "../../hooks/useToast";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "bg-red-100 text-red-700",
@@ -51,7 +52,7 @@ export default function ComplaintsPage() {
 
   const create = async () => {
     if (!createForm.bomId || !createForm.defectType.trim() || !createForm.defectDescription.trim()) {
-      alert("Vui lòng chọn BOM và điền thông tin lỗi."); return;
+      toast.error("Vui lòng chọn BOM và điền thông tin lỗi."); return;
     }
     setSaving(true);
     try {
@@ -65,17 +66,17 @@ export default function ComplaintsPage() {
       setShowCreate(false);
       setCreateForm({ bomId: "", orderId: "", defectType: "", defectDescription: "", defectQty: "1", sampleTt: "" });
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 
   const acknowledge = async (id: string) => {
     try { await workflowApi.acknowledgeComplaint(id, user.id, user.name); void load(); }
-    catch (e) { alert((e as Error).message); }
+    catch (e) { toast.error((e as Error).message); }
   };
 
   const respond = async () => {
-    if (!selected || !respondForm.actionNote.trim()) { alert("Vui lòng mô tả phương án xử lý."); return; }
+    if (!selected || !respondForm.actionNote.trim()) { toast.error("Vui lòng mô tả phương án xử lý."); return; }
     setSaving(true);
     try {
       await workflowApi.respondToComplaint(selected.id, {
@@ -86,7 +87,7 @@ export default function ComplaintsPage() {
       });
       setSelected(null);
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 
@@ -97,14 +98,20 @@ export default function ComplaintsPage() {
       await workflowApi.recheckComplaint(selected.id, user.id, user.name, recheckForm.result, recheckForm.note);
       setSelected(null);
       void load();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 
   const close = async (id: string) => {
-    if (!confirm("Đóng khiếu nại này?")) return;
+    const ok = await toast.confirm({
+      title: "Đóng khiếu nại",
+      message: "Đóng khiếu nại này?",
+      confirmLabel: "Đóng",
+      danger: true,
+    });
+    if (!ok) return;
     try { await workflowApi.closeComplaint(id, user.id); void load(); }
-    catch (e) { alert((e as Error).message); }
+    catch (e) { toast.error((e as Error).message); }
   };
 
   return (

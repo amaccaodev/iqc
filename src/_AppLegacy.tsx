@@ -6,6 +6,7 @@ import FileSlideshow from "./components/files/FileSlideshow"
 import DashboardCharts from "./components/charts/DashboardCharts"
 import DayQtySummary from "./components/dashboard/DayQtySummary"
 import PaginationBar from "./components/ui/PaginationBar"
+import { toast } from "./hooks/useToast"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Role = "director" | "supervisor" | "teamlead" | "worker" | "qc" | "stats" | "admin" | "mechanic"
@@ -405,8 +406,8 @@ function LoginScreen({ users, onLogin }: { users: User[]; onLogin: (u: User) => 
           <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-4 border border-white/20">
             <i className="fas fa-industry text-white text-2xl" />
           </div>
-          <div className="text-white/60 text-xs uppercase tracking-widest mb-1">Công ty Cổ phần</div>
-          <h1 className="font-display font-800 text-white text-2xl">NOVO-VIỆT TIỆP</h1>
+          <div className="text-white/60 text-xs uppercase tracking-widest mb-1">CTCP Công nghệ Đồng</div>
+          <h1 className="font-display font-800 text-white text-2xl">COPEX</h1>
           <p className="text-white/50 text-sm mt-1">Hệ thống Quản lý Sản xuất</p>
         </div>
         <Card cls="p-6 shadow-2xl">
@@ -511,7 +512,7 @@ function AppShell({ user, screen, setScreen, onLogout, badge, children }: {
             <i className={`fas ${ROLE_ICON[user.role]} text-sm text-white/90`} />
           </div>
           <div className="hidden sm:block">
-            <div className="font-display font-700 text-sm leading-tight">NOVO-VIỆT TIỆP</div>
+            <div className="font-display font-700 text-sm leading-tight">COPEX</div>
             <div className="text-xs text-blue-300">{ROLE_LABEL[user.role]} – {user.name}</div>
           </div>
           <div className="sm:hidden font-display font-700 text-sm">{user.name}</div>
@@ -805,7 +806,7 @@ function DirectorView({ user, orders, setOrders, screen, onCreateOrder }: { user
 
   const addBOMToDraft = () => {
     if (!draftOrder || !bomForm.partName || !bomForm.targetQty || !bomForm.teamId) {
-      alert("Vui lòng điền tên chi tiết, số lượng và chọn tổ phụ trách.")
+      toast.error("Vui lòng điền tên chi tiết, số lượng và chọn tổ phụ trách.")
       return
     }
     const bomCode = genBOMCode(draftOrder.orderNo, draftOrder.boms)
@@ -827,11 +828,11 @@ function DirectorView({ user, orders, setOrders, screen, onCreateOrder }: { user
 
   const saveOrder = async () => {
     if (!draftOrder || !form.productLine || !form.productCode || !form.targetQty || !form.shift || !form.quota || !form.workTime) {
-      alert("Vui lòng điền mã SP, tên sản phẩm, số lượng, ca làm việc, định mức và thời gian làm.")
+      toast.error("Vui lòng điền mã SP, tên sản phẩm, số lượng, ca làm việc, định mức và thời gian làm.")
       return
     }
     if (!form.deadline) {
-      alert("Vui lòng chọn ngày hạn hoàn thành.")
+      toast.error("Vui lòng chọn ngày hạn hoàn thành.")
       return
     }
     let boms = draftOrder.boms
@@ -1552,45 +1553,95 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
 }
 
 // ─── Worker view – danh sách công việc ───────────────────────────────────────
-function WorkerView({ user, orders, screen }: { user: User; orders: ProductionOrder[]; setOrders?: (o: ProductionOrder[]) => void; screen: string }) {
+/** @deprecated Dùng WorkerJobsList từ pages; giữ export tương thích. */
+function WorkerView({ user, orders }: { user: User; orders: ProductionOrder[]; setOrders?: (o: ProductionOrder[]) => void; screen: string }) {
   const navigate = useNavigate()
-  const myTasks = orders.flatMap(o => o.boms.filter(b => b.assignedWorkers.includes(user.name)).map(b => ({ o, b })))
-  const unfinished = myTasks.filter(({ b }) => b.status !== "qc_passed" && b.status !== "team_reported")
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const jobs = orders
+    .map((order) => {
+      const myBoms = order.boms.filter((b) => b.assignedWorkers.includes(user.name))
+      if (!myBoms.length) return null
+      const parts = myBoms.map((bom) => {
+        const done = bom.workerEntries.reduce((s, e) => s + e.rows.length, 0)
+        const target = bom.targetQty || 0
+        const pct = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0
+        return { bom, done, target, pct, fail: bom.failQty || 0 }
+      })
+      const unfinished = myBoms.filter((b) => b.status !== "qc_passed" && b.status !== "team_reported").length
+      const avgPct = parts.length ? Math.round(parts.reduce((s, p) => s + p.pct, 0) / parts.length) : 0
+      return { order, parts, unfinished, avgPct }
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null)
+  const unfinishedTotal = jobs.reduce((s, j) => s + j.unfinished, 0)
 
   return (
     <div>
       <h2 className="font-display font-800 text-xl tracking-wide mb-3">CÔNG VIỆC</h2>
-      {unfinished.length > 0 && (
+      {unfinishedTotal > 0 && (
         <div className="bg-border text-red-600 text-sm font-medium rounded-xl px-4 py-3 mb-4">
-          Còn {unfinished.length} công việc chưa hoàn thành
+          Còn {unfinishedTotal} công việc chưa hoàn thành
         </div>
       )}
-      {myTasks.length === 0
+      {jobs.length === 0
         ? <Card cls="p-10 text-center text-muted-foreground"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa được tổ trưởng phân công</Card>
         : <div className="space-y-3">
-            {myTasks.map(({ o, b }) => {
-              const produced = b.workerEntries.reduce((s, e) => s + e.rows.length, 0)
-              const pct = b.targetQty > 0 ? Math.min(100, Math.round((produced / b.targetQty) * 100)) : 0
+            {jobs.map(({ order, parts, avgPct }) => {
+              const expanded = expandedId === order.id
+              const name = order.productLine || order.productCode || order.orderNo
+              const code = order.productCode || order.orderNo
               return (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => navigate(`/worker/task/${o.id}/${b.id}`)}
-                  className="w-full text-left cursor-pointer border-0 bg-transparent p-0"
-                >
-                  <Card cls="p-4 hover:border-ring">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-semibold text-sm">{b.partName}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{b.partCode || o.productCode || o.orderNo}</div>
-                      </div>
-                      <div className="text-green-600 font-bold text-sm">{pct}%</div>
+                <Card key={order.id} cls="overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : order.id)}
+                    className="w-full text-left px-4 py-4 flex items-center justify-between gap-3 bg-transparent border-0 cursor-pointer hover:bg-surface"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-sm">{name}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 font-mono">{code}</div>
                     </div>
-                    <div className="h-1.5 bg-border rounded-full mt-3 overflow-hidden">
-                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-green-600 font-bold text-sm">{avgPct}%</span>
+                      <i className={`fas ${expanded ? "fa-chevron-down" : "fa-chevron-right"} text-[10px] text-muted`} />
                     </div>
-                  </Card>
-                </button>
+                  </button>
+                  <div className="px-4 pb-3">
+                    <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${avgPct}%` }} />
+                    </div>
+                  </div>
+                  {expanded && (
+                    <div className="border-t border-border px-3 pb-3 pt-2 space-y-2 bg-surface/40">
+                      <div className="text-[11px] font-semibold text-muted px-1 mb-1">Linh kiện được phân công · số lượng</div>
+                      {parts.map(({ bom, done, target, pct, fail }) => (
+                        <button
+                          key={bom.id}
+                          type="button"
+                          onClick={() => navigate(`/worker/task/${order.id}/${bom.id}`)}
+                          className="w-full text-left rounded-xl border border-border bg-card p-3 cursor-pointer hover:border-ring"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-sm">{bom.partName}</div>
+                              <div className="text-[11px] text-muted-foreground font-mono mt-0.5">{bom.partCode || bom.bomCode}</div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <div className="font-display font-700 text-base text-primary tabular-nums">
+                                {done.toLocaleString()}
+                                <span className="text-muted-foreground font-medium text-sm"> / {target.toLocaleString()}</span>
+                              </div>
+                              <div className="text-[11px] text-muted">{pct}%</div>
+                            </div>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-border overflow-hidden">
+                            <div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : "bg-[#2D6EBD]"}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          {fail > 0 ? <div className="mt-1.5 text-[11px] text-red-600">Hỏng: {fail}</div> : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Card>
               )
             })}
           </div>
@@ -1618,11 +1669,15 @@ function QCView({ user, orders, setOrders, screen }: { user: User; orders: Produ
 
     if (qcForm.decision === "reject") {
       if (!qcForm.complaint.trim()) {
-        alert("Vui lòng nhập nội dung khiếu nại.")
+        toast.error("Vui lòng nhập nội dung khiếu nại.")
         return
       }
     } else if (qcPass !== teamPass || qcFail !== teamFail) {
-      const ok = window.confirm("Số lượng QC khác báo cáo tổ trưởng. Vẫn xác nhận?")
+      const ok = await toast.confirm({
+        title: "Xác nhận QC",
+        message: "Số lượng QC khác báo cáo tổ trưởng. Vẫn xác nhận?",
+        confirmLabel: "Vẫn xác nhận",
+      })
       if (!ok) return
     }
 

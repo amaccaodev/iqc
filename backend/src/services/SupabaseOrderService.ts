@@ -14,7 +14,11 @@ import type {
   TeamSummary,
   WorkerMachineAssignment,
 } from "../../../shared/src/types/index.js";
-import { TEAMS, PROCESS_STAGE_LABEL, PROCESS_STAGE_TEAM } from "../../../shared/src/constants/teams.js";
+import {
+  bomSpecsFromChecklist,
+  resolvePartChecklist,
+} from "../../../shared/src/utils/specValidation.js";
+import { TEAMS } from "../../../shared/src/constants/teams.js";
 import {
   encodeTechNote,
   genBOMCode,
@@ -75,8 +79,6 @@ export class SupabaseOrderService {
     for (const line of catalogBom) {
       const sp = catalogStore.getSemi(line.semiProductId);
       if (!sp) continue;
-      const teamId = PROCESS_STAGE_TEAM[sp.processStage];
-      const team = TEAMS.find((t) => t.id === teamId);
       const qtyPer = Number(line.qtyPerUnit) || 1;
       const produceQty = Math.max(0, Math.ceil(order.targetQty * qtyPer));
       rebuilt.push({
@@ -86,17 +88,23 @@ export class SupabaseOrderService {
         partName: sp.name,
         rawMaterial: sp.name,
         machine: "",
-        process: PROCESS_STAGE_LABEL[sp.processStage],
+        process: "",
         processStage: sp.processStage,
         targetQty: produceQty,
         passQty: 0,
         failQty: 0,
-        assignedTeamId: team?.id ?? "",
-        assignedTeamName: team ? `${team.name} – ${team.leadShort}` : "",
+        assignedTeamId: "",
+        assignedTeamName: "",
         assignedWorkers: [],
-        status: team ? "assigned" : "unassigned",
-        specCols: ["", "", "", "", "", "NQ", "", "", "", "", ""],
-        techNote: `Công đoạn: ${PROCESS_STAGE_LABEL[sp.processStage]}`,
+        status: "unassigned",
+        ...(() => {
+          const { materialSpecs, specCols } = bomSpecsFromChecklist(resolvePartChecklist(sp));
+          return {
+            specCols,
+            materialSpecs: materialSpecs.length ? materialSpecs : undefined,
+          };
+        })(),
+        techNote: "",
         workerEntries: [],
         semiProductId: sp.id,
         attachments: catalogStore.listSemiAttachments(sp.id, true),
@@ -238,37 +246,87 @@ export class SupabaseOrderService {
     for (const line of payload.lines) {
       const sp = catalogStore.getSemi(line.semiProductId);
       if (!sp) continue;
-      const teamId = PROCESS_STAGE_TEAM[sp.processStage];
-      const team = TEAMS.find((t) => t.id === teamId);
       const stockUse = line.useFromStock ? Math.max(0, Number(line.stockUseQty) || 0) : 0;
       const produceQty = Math.max(0, Number(line.produceQty) || 0);
       if (stockUse > 0) catalogStore.consumeStock(sp.id, stockUse);
 
+      const steps =
+        sp.processSteps && sp.processSteps.length > 0
+          ? [...sp.processSteps].sort((a, b) => a.seq - b.seq)
+          : null;
+
+      if (steps) {
+        for (const step of steps) {
+          const stage = step.processStage ?? sp.processStage;
+          const noteParts = [
+            payload.note?.trim() ?? "",
+            step.techNote ?? "",
+            stockUse > 0 && step.seq === steps[0].seq ? `Dùng kho: ${stockUse}` : "",
+          ].filter(Boolean);
+          const { materialSpecs, specCols } = bomSpecsFromChecklist(
+            resolvePartChecklist(sp, step),
+          );
+          // Không tự gán tổ khi tạo lệnh — Quản đốc/Tổ trưởng phân tổ sau
+          boms.push({
+            id: uid("b"),
+            bomCode: "",
+            partCode: sp.code,
+            partName: sp.name,
+            partGroup: sp.name,
+            processSeq: step.seq,
+            rawMaterial: sp.name,
+            machine: step.machine ?? "",
+            process: step.process,
+            processStage: stage,
+            quota: step.quota,
+            targetQty: produceQty,
+            stockUseQty: step.seq === steps[0].seq ? stockUse : 0,
+            useFromStock: step.seq === steps[0].seq ? line.useFromStock : false,
+            passQty: 0,
+            failQty: 0,
+            assignedTeamId: "",
+            assignedTeamName: "",
+            assignedWorkers: [],
+            status: "unassigned",
+            specCols,
+            materialSpecs: materialSpecs.length ? materialSpecs : undefined,
+            techNote: noteParts.join("\n"),
+            workerEntries: [],
+            semiProductId: sp.id,
+            attachments: catalogStore.listSemiAttachments(sp.id, true),
+          });
+        }
+        continue;
+      }
+
       const noteParts = [
         payload.note?.trim() ?? "",
         stockUse > 0 ? `Dùng kho: ${stockUse}` : "",
-        `Công đoạn: ${PROCESS_STAGE_LABEL[sp.processStage]}`,
       ].filter(Boolean);
+      const { materialSpecs, specCols } = bomSpecsFromChecklist(resolvePartChecklist(sp));
 
       boms.push({
         id: uid("b"),
         bomCode: "",
         partCode: sp.code,
         partName: sp.name,
+        partGroup: sp.name,
+        processSeq: 1,
         rawMaterial: sp.name,
         machine: "",
-        process: PROCESS_STAGE_LABEL[sp.processStage],
+        process: "",
         processStage: sp.processStage,
         targetQty: produceQty,
         stockUseQty: stockUse,
         useFromStock: line.useFromStock,
         passQty: 0,
         failQty: 0,
-        assignedTeamId: team?.id ?? "",
-        assignedTeamName: team ? `${team.name} – ${team.leadShort}` : "",
+        assignedTeamId: "",
+        assignedTeamName: "",
         assignedWorkers: [],
-        status: team ? "assigned" : "unassigned",
-        specCols: ["", "", "", "", "", "NQ", "", "", "", "", ""],
+        status: "unassigned",
+        specCols,
+        materialSpecs: materialSpecs.length ? materialSpecs : undefined,
         techNote: noteParts.join("\n"),
         workerEntries: [],
         semiProductId: sp.id,
@@ -278,13 +336,19 @@ export class SupabaseOrderService {
 
     if (!boms.length) throw new Error("Cần ít nhất một dòng BTP");
 
-    // Sắp xếp theo quy trình: dập nóng → tự động → lắp ráp
+    // Sắp xếp: theo linh kiện rồi processSeq, fallback công đoạn 3 tổ
     const stageOrder = { hot_forge: 0, auto: 1, assembly: 2 } as const;
-    boms.sort(
-      (a, b) =>
+    boms.sort((a, b) => {
+      const ga = (a.partGroup || a.partName).localeCompare(b.partGroup || b.partName, "vi");
+      if (ga !== 0) return ga;
+      const sa = a.processSeq ?? 0;
+      const sb = b.processSeq ?? 0;
+      if (sa !== sb) return sa - sb;
+      return (
         (stageOrder[a.processStage ?? "hot_forge"] ?? 9) -
-        (stageOrder[b.processStage ?? "hot_forge"] ?? 9),
-    );
+        (stageOrder[b.processStage ?? "hot_forge"] ?? 9)
+      );
+    });
 
     const size = payload.size?.trim() || "";
     const sizeNote = size ? `Kích cỡ: ${size}` : "";

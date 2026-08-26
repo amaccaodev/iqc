@@ -1,10 +1,13 @@
 import { Router } from "express";
 import { assessBomReadiness } from "../../../shared/src/utils/bomReadiness.js";
+import { assertCanSubmitWorkerRow } from "../../../shared/src/utils/shiftCloseGuard.js";
+import { validateEntryRows } from "../../../shared/src/utils/specValidation.js";
 import { catalogStore } from "../services/CatalogMemoryStore.js";
 import { shiftSalaryStore } from "../services/ShiftSalaryStore.js";
 import { supabaseOrderService } from "../services/SupabaseOrderService.js";
 import { workflowService } from "../services/WorkflowService.js";
 import { notifyRoles } from "./notifyHelpers.js";
+import { resolveActor } from "./routeHelpers.js";
 
 export const ordersRoutes = Router();
 
@@ -141,7 +144,49 @@ ordersRoutes.post("/orders/:orderId/boms/:bomId/team-report", async (req, res) =
 
 ordersRoutes.post("/orders/:orderId/boms/:bomId/worker-row", async (req, res) => {
   try {
-    const data = await supabaseOrderService.submitWorkerRow(req.params.orderId, req.params.bomId, req.body);
+    const body = req.body as {
+      workerId?: string;
+      workerName?: string;
+      dims?: string[];
+    };
+    const workerId = body.workerId ?? "";
+    assertCanSubmitWorkerRow(
+      shiftSalaryStore.listCloses({ workerId, orderId: req.params.orderId, bomId: req.params.bomId }),
+      shiftSalaryStore.listUnlocks({ workerId, orderId: req.params.orderId, bomId: req.params.bomId }),
+      { workerId, orderId: req.params.orderId, bomId: req.params.bomId },
+    );
+    const data = await supabaseOrderService.submitWorkerRow(req.params.orderId, req.params.bomId, {
+      workerId,
+      workerName: body.workerName ?? "",
+      dims: body.dims ?? [],
+    });
+
+    // Chỉ báo tổ trưởng khi số đo ngoài chuẩn — không spam mỗi lần nộp
+    try {
+      const bom = data.order.boms.find((b) => b.id === req.params.bomId);
+      if (bom) {
+        const check = validateEntryRows(
+          bom.specCols,
+          [{ dims: data.row.dims }],
+          bom.materialSpecs,
+        );
+        const bad = (check.results[0] ?? []).filter((v) => !v.valid);
+        if (bad.length > 0) {
+          const detail = bad
+            .map((v) => `${v.label}: ${v.value}${v.warning ? ` (${v.warning})` : ""}`)
+            .join("; ");
+          await notifyRoles(
+            ["teamlead"],
+            "Số đo ngoài chuẩn",
+            `${body.workerName || "CN"} — ${bom.partName} (SP #${data.row.tt}): ${detail}`,
+            { refId: data.order.id, type: "order", refType: "measurement_error" },
+          );
+        }
+      }
+    } catch {
+      /* optional alert */
+    }
+
     res.json({ success: true, data });
   } catch (err) {
     res.status(400).json({ success: false, error: (err as Error).message });
@@ -157,6 +202,14 @@ ordersRoutes.post("/orders/:orderId/boms/:bomId/worker-shift-close", async (req,
       reportedBy: string;
       workerId?: string;
     };
+    const actor = resolveActor(req);
+    if (actor && actor.role !== "worker") {
+      throw new Error("Chỉ công nhân được chốt ca.");
+    }
+    const effectiveWorkerId = actor?.id || workerId || "";
+    const effectiveName = actor?.name || reportedBy || "";
+    if (!effectiveWorkerId) throw new Error("Thiếu công nhân chốt ca.");
+
     const order = await supabaseOrderService.getById(req.params.orderId);
     if (!order) throw new Error("Không tìm thấy lệnh");
     const bom = order.boms.find((b) => b.id === req.params.bomId);
@@ -166,8 +219,8 @@ ordersRoutes.post("/orders/:orderId/boms/:bomId/worker-shift-close", async (req,
     const data = shiftSalaryStore.createClose({
       orderId: order.id,
       bomId: bom.id,
-      workerId: workerId || "",
-      workerName: reportedBy || "",
+      workerId: effectiveWorkerId,
+      workerName: effectiveName,
       productId,
       productName: product?.name || order.productLine,
       partName: bom.partName,
@@ -180,8 +233,8 @@ ordersRoutes.post("/orders/:orderId/boms/:bomId/worker-shift-close", async (req,
         orderId: req.params.orderId,
         bomId: req.params.bomId,
         action: "worker_shift_close",
-        actorId: workerId ?? "",
-        actorName: reportedBy ?? "",
+        actorId: effectiveWorkerId,
+        actorName: effectiveName,
         note: `Đạt ${passQty}, Hỏng ${failQty} — chờ tổ trưởng`,
       });
     } catch {
@@ -190,8 +243,8 @@ ordersRoutes.post("/orders/:orderId/boms/:bomId/worker-shift-close", async (req,
     await notifyRoles(
       ["teamlead"],
       "Chốt ca chờ kiểm tra",
-      `${reportedBy} chốt ${data.passQty} đạt / ${data.failQty} hỏng — ${bom.partName}`,
-      data.id,
+      `${effectiveName} chốt ${data.passQty} đạt / ${data.failQty} hỏng — ${bom.partName}`,
+      { refId: data.id, type: "shift", refType: "shift_close" },
     );
     res.json({ success: true, data });
   } catch (err) {

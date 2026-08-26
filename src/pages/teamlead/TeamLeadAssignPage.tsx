@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BOMItem, Machine, ProductionOrder, WorkerMachineAssignment } from "@shared/types";
-import { resolveBomTeamId, resolveUserTeamId, teamIdsMatch } from "@shared/constants/teams";
+import { resolveBomTeamId, resolveUserTeamId, teamIdsMatch, filterMachinesForTeam } from "@shared/constants/teams";
+import {
+  bomProcessLockReason,
+  bomPartGroupKey,
+  isBomProcessUnlocked,
+} from "@shared/utils/bomProcess";
 import { Btn, Card, Modal } from "../../components/ui";
 import { useRoleUser } from "../../components/layout/RoleLayout";
 import { useOrders } from "../../hooks/useOrders";
@@ -62,8 +67,18 @@ export default function TeamLeadAssignPage() {
           o.boms
             .filter((b) => teamIdsMatch(resolveBomTeamId(b), myTeamId))
             .map((b) => ({ o, b })),
-        ),
+        )
+        .sort((a, b) => {
+          const ga = bomPartGroupKey(a.b).localeCompare(bomPartGroupKey(b.b), "vi");
+          if (ga !== 0) return ga;
+          return (a.b.processSeq ?? 0) - (b.b.processSeq ?? 0);
+        }),
     [orders, myTeamId],
+  );
+
+  const teamMachines = useMemo(
+    () => filterMachinesForTeam(machines, myTeamId),
+    [machines, myTeamId],
   );
 
   const machineStats = useMemo(
@@ -80,6 +95,10 @@ export default function TeamLeadAssignPage() {
   }, [refreshUsers]);
 
   const openAssign = (o: ProductionOrder, b: BOMItem) => {
+    if (!isBomProcessUnlocked(o, b)) {
+      setErr(bomProcessLockReason(o, b) || "Quy trình chưa mở");
+      return;
+    }
     const next: AssignDraft = {};
     for (const w of teamWorkers) {
       const existing = b.workerAssignments?.find(
@@ -100,6 +119,10 @@ export default function TeamLeadAssignPage() {
   const saveAssignment = async () => {
     if (!assignModal) return;
     const { o, b } = assignModal;
+    if (!isBomProcessUnlocked(o, b)) {
+      setErr(bomProcessLockReason(o, b) || "Quy trình chưa mở");
+      return;
+    }
     const assignments: WorkerMachineAssignment[] = [];
     for (const w of teamWorkers) {
       const row = draft[w.id];
@@ -114,6 +137,10 @@ export default function TeamLeadAssignPage() {
         machineId: row.machineId || undefined,
         machineName: row.machineName.trim(),
       });
+    }
+    if (!assignments.length) {
+      setErr("Chọn ít nhất một công nhân và máy");
+      return;
     }
     setSaving(true);
     setErr("");
@@ -133,9 +160,11 @@ export default function TeamLeadAssignPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="font-display font-800 text-xl mb-1">Gán máy cho nhân viên</h2>
+        <h2 className="font-display font-800 text-xl mb-1">Phân công quy trình</h2>
         <p className="text-sm text-muted">
-          Chọn linh kiện của tổ → gán từng công nhân vào máy. Xem nhanh bao nhiêu người đang làm trên mỗi máy.
+          Mỗi linh kiện (sheet Mẫu van) tách thành các quy trình tuần tự. Gán theo{" "}
+          <strong className="font-semibold text-foreground">tên quy trình → máy → người</strong>. Hết
+          quy trình trước mới mở quy trình sau.
         </p>
       </div>
 
@@ -161,27 +190,58 @@ export default function TeamLeadAssignPage() {
         )}
       </Card>
 
+      {err && !assignModal && (
+        <div className="text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 rounded-lg px-3 py-2">
+          {err}
+        </div>
+      )}
+
       {myBOMs.length === 0 ? (
         <Card cls="p-10 text-center text-muted-foreground">
           <i className="fas fa-inbox text-3xl block mb-2 opacity-30" />
-          Chưa có BOM nào được phân cho tổ
+          Chưa có quy trình nào được phân cho tổ
         </Card>
       ) : (
         myBOMs.map(({ o, b }) => {
           const n = b.workerAssignments?.length || b.assignedWorkers.length;
+          const unlocked = isBomProcessUnlocked(o, b);
+          const lock = bomProcessLockReason(o, b);
           return (
-            <Card key={b.id} cls="p-4">
-              <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
-              <div className="font-semibold text-sm">{b.partName}</div>
+            <Card key={b.id} cls={`p-4 ${unlocked ? "" : "opacity-75"}`}>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
+                {b.processSeq != null && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-secondary text-primary">
+                    QT {b.processSeq}
+                  </span>
+                )}
+                {!unlocked && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">
+                    Chờ QT trước
+                  </span>
+                )}
+              </div>
+              <div className="text-xs text-muted mb-0.5">
+                Linh kiện: <span className="font-medium text-foreground">{b.partGroup || b.partName}</span>
+              </div>
+              <div className="font-semibold text-sm text-primary">
+                Quy trình: {b.process || "—"}
+              </div>
               <div className="text-xs text-muted-foreground mb-2">
                 {o.orderNo} · {b.targetQty.toLocaleString()} cái
-                {b.machine ? ` · Máy gợi ý: ${b.machine}` : ""}
+                {b.machine ? ` · Máy ĐMKT: ${b.machine}` : ""}
               </div>
+              {lock && (
+                <div className="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                  <i className="fas fa-lock mr-1" />
+                  {lock}
+                </div>
+              )}
               {n > 0 ? (
                 <div className="text-xs text-muted mb-3 space-y-0.5">
                   <div>
                     <i className="fas fa-users mr-1" />
-                    {n} công nhân đang làm
+                    {n} người · máy đã gán
                   </div>
                   {(b.workerAssignments?.length
                     ? b.workerAssignments
@@ -198,11 +258,11 @@ export default function TeamLeadAssignPage() {
               ) : (
                 <div className="text-xs text-orange-600 mb-3">
                   <i className="fas fa-circle-exclamation mr-1" />
-                  Chưa phân công nhân / máy
+                  Chưa gán người / máy cho quy trình này
                 </div>
               )}
-              <Btn size="sm" onClick={() => openAssign(o, b)}>
-                <i className="fas fa-user-gear" /> Phân công theo máy
+              <Btn size="sm" onClick={() => openAssign(o, b)} disabled={!unlocked}>
+                <i className="fas fa-user-gear" /> Phân công (quy trình · máy · người)
               </Btn>
             </Card>
           );
@@ -210,24 +270,35 @@ export default function TeamLeadAssignPage() {
       )}
 
       {assignModal && (
-        <Modal title={`Phân công máy: ${assignModal.b.partName}`} onClose={() => setAssignModal(null)}>
+        <Modal
+          title={`Phân công: ${assignModal.b.process || assignModal.b.partName}`}
+          onClose={() => setAssignModal(null)}
+        >
           <div className="space-y-4">
-            <div className="bg-background rounded-xl p-3">
-              <code className="text-xs font-mono text-primary font-bold">{assignModal.b.bomCode}</code>
-              <div className="font-semibold text-sm mt-0.5">{assignModal.b.partName}</div>
+            <div className="bg-background rounded-xl p-3 space-y-1">
+              <div className="text-xs text-muted">
+                Linh kiện:{" "}
+                <span className="font-medium text-foreground">
+                  {assignModal.b.partGroup || assignModal.b.partName}
+                </span>
+              </div>
+              <div className="font-semibold text-sm text-primary">
+                Quy trình: {assignModal.b.process || "—"}
+                {assignModal.b.processSeq != null ? ` (QT ${assignModal.b.processSeq})` : ""}
+              </div>
+              <code className="text-xs font-mono text-muted">{assignModal.b.bomCode}</code>
               <div className="text-xs text-muted-foreground">{assignModal.o.orderNo}</div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-muted mb-2">
-                Chọn công nhân và máy phụ trách
+                Chọn người đảm nhiệm và máy
               </label>
               {teamWorkers.length === 0 ? (
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p className="italic">Không có công nhân trong tổ.</p>
                   <p>
-                    Tổ hiện tại: <code className="font-mono">{myTeamId || "—"}</code>. Thử đăng xuất /
-                    đăng nhập lại, hoặc thêm CN vào tổ trong Admin.
+                    Tổ hiện tại: <code className="font-mono">{myTeamId || "—"}</code>
                   </p>
                 </div>
               ) : (
@@ -267,12 +338,13 @@ export default function TeamLeadAssignPage() {
                         </label>
                         {row.checked && (
                           <div className="mt-2 pl-7">
+                            <label className="block text-[11px] text-muted mb-1">Máy</label>
                             <select
                               className="w-full border border-border rounded-lg px-2.5 py-2 text-sm bg-card"
                               value={row.machineId || row.machineName}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                const m = machines.find((x) => x.id === val || x.name === val);
+                                const m = teamMachines.find((x) => x.id === val || x.name === val);
                                 setDraft((prev) => ({
                                   ...prev,
                                   [w.id]: {
@@ -283,17 +355,18 @@ export default function TeamLeadAssignPage() {
                                 }));
                               }}
                             >
-                              <option value="">— Chọn máy —</option>
-                              {machines.map((m) => (
+                              <option value="">— Chọn máy (theo khu vực tổ) —</option>
+                              {teamMachines.map((m) => (
                                 <option key={m.id} value={m.id}>
                                   {m.name}
                                   {m.code ? ` (${m.code})` : ""}
+                                  {m.location ? ` · ${m.location}` : ""}
                                 </option>
                               ))}
                               {assignModal.b.machine &&
-                                !machines.some((m) => m.name === assignModal.b.machine) && (
+                                !teamMachines.some((m) => m.name === assignModal.b.machine) && (
                                   <option value={assignModal.b.machine}>
-                                    {assignModal.b.machine} (theo BOM)
+                                    {assignModal.b.machine} (theo ĐMKT)
                                   </option>
                                 )}
                             </select>

@@ -11,6 +11,7 @@ import { workflowApi } from "../../services/api/WorkflowApiService";
 import { useRoleUser } from "../../components/layout/RoleLayout";
 import { ResponsiveDataList } from "../../components/ui";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
+import { toast } from "../../hooks/useToast";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -50,7 +51,7 @@ export default function OvertimePage() {
   }, [canCreate, searchParams, setSearchParams]);
 
   const create = async () => {
-    if (!form.reason.trim() || !form.proposedDate) { alert("Vui lòng điền lý do và ngày đề xuất."); return; }
+    if (!form.reason.trim() || !form.proposedDate) { toast.error("Vui lòng điền lý do và ngày đề xuất."); return; }
     setSaving(true);
     try {
       const workerNames = form.workerNames.split(",").map(s => s.trim()).filter(Boolean);
@@ -63,7 +64,7 @@ export default function OvertimePage() {
       setShowCreate(false);
       setForm({ reason: "", proposedDate: "", proposedHours: "2", workerNames: "" });
       refresh();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 
@@ -74,7 +75,7 @@ export default function OvertimePage() {
       await workflowApi.reviewOvertime(reviewModal.id, reviewForm.approved, user.id, reviewForm.note);
       setReviewModal(null);
       refresh();
-    } catch (e) { alert((e as Error).message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
 

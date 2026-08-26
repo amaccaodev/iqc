@@ -1,12 +1,17 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import type { Attachment, Machine } from "@shared/types";
 import { BOM_STATUS_LABEL, STATUS_LABEL } from "@shared/constants/labels";
+import { PROCESS_STAGE_LABEL, resolveBomTeamId, teamDisplayName } from "@shared/constants/teams";
 import {
   bomDoneQty,
   bomMachineWorkRows,
   remainingUntilDeadline,
 } from "@shared/utils/productionProgress";
 import { Card } from "../../components/ui";
+import FileSlideshow from "../../components/files/FileSlideshow";
 import { useOrders } from "../../hooks/useOrders";
+import { catalogApi } from "../../services/api/CatalogApiService";
 
 export default function PartDetailPage({
   backBase,
@@ -16,6 +21,46 @@ export default function PartDetailPage({
 }) {
   const { orderId, bomId } = useParams<{ orderId: string; bomId: string }>();
   const { orders, loading } = useOrders();
+  const [catalogDrawings, setCatalogDrawings] = useState<Attachment[]>([]);
+  const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
+
+  const order = orders.find((o) => o.id === orderId);
+  const bom = order?.boms.find((b) => b.id === bomId);
+
+  useEffect(() => {
+    void catalogApi
+      .listMachines()
+      .then((list) => setMachineCatalog(Array.isArray(list) ? list : []))
+      .catch(() => setMachineCatalog([]));
+  }, []);
+
+  useEffect(() => {
+    if (!bom?.semiProductId) {
+      setCatalogDrawings([]);
+      return;
+    }
+    if ((bom.attachments?.length ?? 0) > 0) {
+      setCatalogDrawings([]);
+      return;
+    }
+    let cancelled = false;
+    void catalogApi
+      .listSemiAttachments(bom.semiProductId)
+      .then((list) => {
+        if (!cancelled) setCatalogDrawings(list);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogDrawings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bom?.semiProductId, bom?.attachments?.length]);
+
+  const machines = useMemo(
+    () => (bom ? bomMachineWorkRows(bom, machineCatalog) : []),
+    [bom, machineCatalog],
+  );
 
   if (loading) {
     return (
@@ -26,9 +71,6 @@ export default function PartDetailPage({
     );
   }
 
-  const order = orders.find((o) => o.id === orderId);
-  const bom = order?.boms.find((b) => b.id === bomId);
-
   if (!order || !bom) {
     return <Navigate to={backBase} replace />;
   }
@@ -37,7 +79,22 @@ export default function PartDetailPage({
   const target = bom.targetQty || 0;
   const pct = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0;
   const remain = remainingUntilDeadline(order.deadline);
-  const machines = bomMachineWorkRows(bom);
+  const bomTeamId = resolveBomTeamId(bom);
+  const teamAssigned = Boolean(bom.assignedTeamId || bom.assignedTeamName?.trim() || bomTeamId);
+  const teamLabel =
+    bom.assignedTeamName?.trim() || teamDisplayName(bomTeamId) || "Chưa phân tổ";
+  const stageLabel = bom.processStage
+    ? PROCESS_STAGE_LABEL[bom.processStage] ?? bom.processStage
+    : "";
+  const drawings =
+    bom.attachments && bom.attachments.length > 0
+      ? bom.attachments
+      : catalogDrawings.length > 0
+        ? catalogDrawings
+        : order.attachments?.filter((a) => a.type === "image" || a.type === "pdf" || a.type === "cad") ??
+          [];
+  const workerCount =
+    bom.workerAssignments?.length || bom.assignedWorkers?.length || 0;
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto">
@@ -106,12 +163,24 @@ export default function PartDetailPage({
           </div>
           <div className="flex justify-between gap-2">
             <span className="text-muted">Tổ phụ trách</span>
-            <span className="font-medium text-right">{bom.assignedTeamName || "—"}</span>
+            <span
+              className={`font-medium text-right ${teamAssigned ? "" : "text-muted-foreground"}`}
+            >
+              {teamLabel}
+            </span>
           </div>
-          <div className="flex justify-between gap-2">
-            <span className="text-muted">Công đoạn</span>
-            <span className="font-medium text-right">{bom.process || "—"}</span>
-          </div>
+          {bom.process ? (
+            <div className="flex justify-between gap-2">
+              <span className="text-muted">Quy trình</span>
+              <span className="font-medium text-right">{bom.process}</span>
+            </div>
+          ) : null}
+          {stageLabel ? (
+            <div className="flex justify-between gap-2">
+              <span className="text-muted">Công đoạn (ĐMKT)</span>
+              <span className="font-medium text-right text-muted-foreground">{stageLabel}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between gap-2">
             <span className="text-muted">Deadline lệnh</span>
             <span className="font-medium text-right">{order.deadline || "—"}</span>
@@ -128,12 +197,25 @@ export default function PartDetailPage({
       </Card>
 
       <div>
+        <h3 className="font-display font-700 text-sm mb-2">Bản vẽ / tài liệu linh kiện</h3>
+        <FileSlideshow files={drawings} title="" />
+        {drawings.length === 0 ? (
+          <p className="text-[11px] text-muted mt-1.5">
+            Upload bản vẽ ở Admin → Sản phẩm / BTP (đính kèm từng linh kiện).
+          </p>
+        ) : null}
+      </div>
+
+      <div>
         <h3 className="font-display font-700 text-sm mb-2">
-          Máy đang làm ({machines.length})
+          Máy &amp; công nhân ({machines.length} máy · {workerCount} CN)
         </h3>
         {machines.length === 0 ? (
-          <Card cls="p-4 text-sm text-muted text-center">
-            Chưa có máy / công nhân được phân trên linh kiện này.
+          <Card cls="p-4 text-sm text-muted text-center space-y-1">
+            <p>Chưa có máy / công nhân được phân trên linh kiện này.</p>
+            <p className="text-xs text-muted-foreground">
+              Tổ trưởng phân công: quy trình → máy (theo khu vực tổ) → người.
+            </p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -144,6 +226,22 @@ export default function PartDetailPage({
                     <div className="font-semibold text-sm flex items-center gap-2">
                       <i className="fas fa-industry text-muted text-xs" />
                       {m.machineName}
+                    </div>
+                    <div className="text-xs text-muted mt-1 space-y-0.5">
+                      <div>
+                        <i className="fas fa-location-dot text-[10px] mr-1" />
+                        Vị trí: {m.location || "Chưa gắn location"}
+                      </div>
+                      <div>
+                        <i className="fas fa-users text-[10px] mr-1" />
+                        Tổ khu vực máy: {m.teamName || "Chưa gắn tổ"}
+                      </div>
+                      {m.teamMismatch ? (
+                        <div className="text-amber-700 dark:text-amber-300 font-medium">
+                          <i className="fas fa-triangle-exclamation mr-1" />
+                          Máy không thuộc tổ phụ trách BOM ({teamLabel})
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -164,7 +262,7 @@ export default function PartDetailPage({
                     </div>
                   </div>
                   <div className="rounded-lg bg-surface px-2.5 py-2">
-                    <div className="text-muted-foreground">Số CN</div>
+                    <div className="text-muted-foreground">Số CN trên máy</div>
                     <div className="font-semibold">{m.workers.length || "—"}</div>
                   </div>
                 </div>

@@ -15,7 +15,7 @@ import type {
   TeamSummary,
   WorkerEntry,
 } from "../../../shared/src/types/index.js";
-import { TEAMS, resolveBomTeamId } from "../../../shared/src/constants/teams.js";
+import { TEAMS, canonicalTeamId } from "../../../shared/src/constants/teams.js";
 import { supabase } from "../lib/supabase.js";
 import { applyPlanToBom, encodeTechNote, today, todayDateTime } from "../../../shared/src/utils/orderHelpers.js";
 
@@ -195,23 +195,16 @@ function mapBom(
         }
       : undefined,
   });
-  const teamId = resolveBomTeamId(mapped);
-  const team = TEAMS.find((t) => t.id === teamId);
+  // Chỉ chuẩn hóa tổ đã gán — không suy tổ từ processStage (phân tổ do QĐ/TT)
+  const teamId = canonicalTeamId(mapped.assignedTeamId);
+  const team = teamId ? TEAMS.find((t) => t.id === teamId) : undefined;
   return {
     ...mapped,
-    assignedTeamId: teamId || mapped.assignedTeamId,
-    assignedTeamName:
-      mapped.assignedTeamName ||
-      (team ? `${team.name} – ${team.leadShort}` : mapped.assignedTeamName),
-    processStage:
-      mapped.processStage ||
-      (teamId === "t_hot"
-        ? "hot_forge"
-        : teamId === "t_auto"
-          ? "auto"
-          : teamId === "t_asm"
-            ? "assembly"
-            : undefined),
+    assignedTeamId: teamId || "",
+    assignedTeamName: teamId
+      ? mapped.assignedTeamName || (team ? `${team.name} – ${team.leadShort}` : "")
+      : "",
+    processStage: mapped.processStage,
   };
 }
 
@@ -427,9 +420,9 @@ export class SupabaseOrderRepository {
   }
 
   private async insertBOM(orderId: string, bom: BOMItem): Promise<void> {
-    const teamId = resolveBomTeamId(bom);
-    const team = TEAMS.find((t) => t.id === teamId);
-    // Đảm bảo group tồn tại (t_hot/…) trước khi gắn FK
+    const teamId = canonicalTeamId(bom.assignedTeamId);
+    const team = teamId ? TEAMS.find((t) => t.id === teamId) : undefined;
+    // Đảm bảo group tồn tại (t_hot/…) trước khi gắn FK — chỉ khi đã phân tổ
     if (teamId) {
       await supabase.from("groups").upsert(
         {
@@ -454,9 +447,9 @@ export class SupabaseOrderRepository {
       target_qty: bom.targetQty,
       pass_qty: bom.passQty,
       fail_qty: bom.failQty,
-      assigned_group_name:
-        bom.assignedTeamName ||
-        (team ? `${team.name} – ${team.leadShort}` : ""),
+      assigned_group_name: teamId
+        ? bom.assignedTeamName || (team ? `${team.name} – ${team.leadShort}` : "")
+        : "",
       assigned_workers: bom.assignedWorkers,
       status: bom.status,
       spec_cols: bom.specCols,

@@ -69,6 +69,10 @@ export default function RoleLayout({ role }: RoleLayoutProps) {
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(`${path}/`);
 
+  /** Detail đo kiểm CN: ẩn bottom nav để tập trung thao tác */
+  const isWorkerTaskDetail = role === "worker" && /\/worker\/task\//.test(location.pathname);
+  const hideMobileNav = isWorkerTaskDetail;
+
   const mobileNavButton = (
     key: string,
     path: string,
@@ -114,7 +118,7 @@ export default function RoleLayout({ role }: RoleLayoutProps) {
             <i className={`fas ${ROLE_ICON[user.role]} text-sm text-nav-active-fg`} />
           </div>
           <div>
-            <div className="font-display font-700 text-sm leading-tight">NOVO-VIỆT TIỆP</div>
+            <div className="font-display font-700 text-sm leading-tight">COPEX</div>
             <div className="text-xs text-header-muted flex items-center gap-1.5">
               IQC
               {isDemoMode() ? (
@@ -147,6 +151,9 @@ export default function RoleLayout({ role }: RoleLayoutProps) {
                 {n.id === "production" && shiftCloseAlert ? (
                   <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Có chốt ca chờ duyệt" />
                 ) : null}
+                {n.id === "shifts" && shiftCloseAlert ? (
+                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" title="Có chốt ca chờ duyệt" />
+                ) : null}
                 {n.id === "notifications" && unreadCount > 0 ? (
                   <CountBadge count={unreadCount} />
                 ) : null}
@@ -177,12 +184,14 @@ export default function RoleLayout({ role }: RoleLayoutProps) {
         style={{ paddingBottom: keyboardOpen ? "var(--keyboard-inset, 0px)" : undefined }}
       >
         <div
-          className={`${contentMaxW} mx-auto px-4 sm:px-6 lg:px-8 py-5 ${keyboardOpen ? "pb-2" : "pb-24 sm:pb-0"}`}
+          className={`${contentMaxW} mx-auto px-4 sm:px-6 lg:px-8 py-5 ${
+            keyboardOpen || hideMobileNav ? "pb-2" : "pb-24 sm:pb-0"
+          }`}
         >
           <Outlet />
         </div>
       </main>
-      {!keyboardOpen ? (
+      {!keyboardOpen && !hideMobileNav ? (
         <nav className="sm:hidden fixed bottom-0 inset-x-0 bg-bottom-nav border-t border-border flex z-30 h-[72px]">
           {mobileTabs.map((n) =>
             mobileNavButton(
@@ -191,7 +200,7 @@ export default function RoleLayout({ role }: RoleLayoutProps) {
               n.label,
               n.fa,
               n.id === "approvals" ? pendingCount : undefined,
-              n.id === "production" && shiftCloseAlert,
+              (n.id === "production" || n.id === "shifts") && shiftCloseAlert,
             ),
           )}
           {mobileNavButton("notifications", notificationsPath, "Thông báo", "fa-bell", unreadCount)}
@@ -200,7 +209,9 @@ export default function RoleLayout({ role }: RoleLayoutProps) {
             : null}
         </nav>
       ) : null}
-      {role === "worker" ? <WorkerRaiseHandFab hidden={keyboardOpen} /> : null}
+      {role === "worker" && isWorkerTaskDetail ? (
+        <WorkerRaiseHandFab hidden={keyboardOpen} />
+      ) : null}
     </div>
   );
 }

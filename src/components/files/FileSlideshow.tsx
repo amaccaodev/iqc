@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Attachment } from "@shared/types";
 import { attachmentDataUrl } from "@shared/utils/attachments";
+import ZoomableImage from "./ZoomableImage";
 
 interface FileSlideshowProps {
   files: Attachment[];
@@ -37,6 +38,15 @@ export default function FileSlideshow({ files, title = "Tài liệu đính kèm"
     const child = el.children[index] as HTMLElement | undefined;
     child?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [index]);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
 
   if (files.length === 0) {
     return (
@@ -101,7 +111,7 @@ export default function FileSlideshow({ files, title = "Tài liệu đính kèm"
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-left">
                     <div className="text-white text-xs font-medium truncate">{file.name}</div>
                     <div className="text-white/70 text-[10px]">
-                      {file.type === "pdf" ? "PDF" : "Hình ảnh"} · bấm để xem
+                      {file.type === "pdf" ? "PDF" : "Hình ảnh"} · bấm để xem / zoom
                     </div>
                   </div>
                 </button>
@@ -154,45 +164,64 @@ export default function FileSlideshow({ files, title = "Tài liệu đính kèm"
       )}
 
       {open && current && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex flex-col" onClick={() => setOpen(false)}>
-          <div className="flex items-center justify-between text-white px-4 py-3">
-            <div className="min-w-0">
+        <div
+          className="fixed inset-0 z-[80] bg-black flex flex-col"
+          role="dialog"
+          aria-modal="true"
+          aria-label={current.name}
+        >
+          <div className="flex items-center justify-between text-white px-3 py-2.5 shrink-0 bg-black/80">
+            <div className="min-w-0 flex-1 pr-2">
               <div className="text-sm font-semibold truncate">{current.name}</div>
               <div className="text-xs text-white/60">
-                {index + 1}/{viewable.length} · {current.size} · {current.uploadedBy}
+                {index + 1}/{viewable.length}
+                {current.type === "image" ? " · pinch / chạm đôi để zoom" : ""}
               </div>
             </div>
             <button
               type="button"
-              className="w-9 h-9 rounded-full bg-white/10 border-0 text-white cursor-pointer"
+              className="w-11 h-11 rounded-full bg-white/15 border-0 text-white cursor-pointer shrink-0"
+              aria-label="Đóng"
               onClick={() => setOpen(false)}
             >
-              <i className="fas fa-xmark" />
+              <i className="fas fa-xmark text-lg" />
             </button>
           </div>
-          <div className="flex-1 flex items-center justify-center px-4 pb-6 relative" onClick={(e) => e.stopPropagation()}>
-            {viewable.length > 1 && (
-              <button
-                type="button"
-                onClick={() => go(-1)}
-                className="absolute left-3 w-10 h-10 rounded-full bg-white/15 text-white border-0 cursor-pointer"
-              >
-                <i className="fas fa-chevron-left" />
-              </button>
-            )}
-            {current.type === "image" && currentSrc ? (
-              <img src={currentSrc} alt={current.name} className="max-h-full max-w-full object-contain" />
-            ) : current.type === "pdf" && currentSrc ? (
-              <iframe src={currentSrc} title={current.name} className="w-full max-w-4xl h-[80vh] bg-card rounded" />
+
+          <div className="flex-1 min-h-0 relative">
+            {viewable.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => go(-1)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 text-white border-0 cursor-pointer"
+                  aria-label="Trước"
+                >
+                  <i className="fas fa-chevron-left" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => go(1)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 text-white border-0 cursor-pointer"
+                  aria-label="Sau"
+                >
+                  <i className="fas fa-chevron-right" />
+                </button>
+              </>
             ) : null}
-            {viewable.length > 1 && (
-              <button
-                type="button"
-                onClick={() => go(1)}
-                className="absolute right-3 w-10 h-10 rounded-full bg-white/15 text-white border-0 cursor-pointer"
-              >
-                <i className="fas fa-chevron-right" />
-              </button>
+
+            {current.type === "image" && currentSrc ? (
+              <ZoomableImage src={currentSrc} alt={current.name} />
+            ) : current.type === "pdf" && currentSrc ? (
+              <iframe
+                src={currentSrc}
+                title={current.name}
+                className="w-full h-full bg-card border-0"
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-white/70 text-sm">
+                Không xem được file này
+              </div>
             )}
           </div>
         </div>

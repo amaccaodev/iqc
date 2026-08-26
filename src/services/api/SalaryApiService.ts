@@ -1,4 +1,4 @@
-import type { EmployeeProductRate, ShiftClose } from "@shared/types";
+import type { EmployeeProductRate, ShiftClose, ShiftUnlockRequest } from "@shared/types";
 import { BaseApiService } from "../../core/BaseApiService";
 
 class SalaryApiService extends BaseApiService {
@@ -24,10 +24,12 @@ class SalaryApiService extends BaseApiService {
       { rows },
     );
   }
-  listShiftCloses(params?: { status?: string; workerId?: string }) {
+  listShiftCloses(params?: { status?: string; workerId?: string; orderId?: string; bomId?: string }) {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
     if (params?.workerId) q.set("workerId", params.workerId);
+    if (params?.orderId) q.set("orderId", params.orderId);
+    if (params?.bomId) q.set("bomId", params.bomId);
     const qs = q.toString();
     return this.get<ShiftClose[]>(`/shift-closes${qs ? `?${qs}` : ""}`);
   }
@@ -41,6 +43,31 @@ class SalaryApiService extends BaseApiService {
     },
   ) {
     return this.post<ShiftClose>(`/shift-closes/${id}/review`, body);
+  }
+  listShiftUnlocks(params?: { status?: string; workerId?: string; orderId?: string; bomId?: string }) {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.workerId) q.set("workerId", params.workerId);
+    if (params?.orderId) q.set("orderId", params.orderId);
+    if (params?.bomId) q.set("bomId", params.bomId);
+    const qs = q.toString();
+    return this.get<ShiftUnlockRequest[]>(`/shift-unlocks${qs ? `?${qs}` : ""}`);
+  }
+  requestShiftUnlock(body: {
+    orderId: string;
+    bomId: string;
+    workerId: string;
+    workerName: string;
+    partName: string;
+    reason?: string;
+  }) {
+    return this.post<ShiftUnlockRequest>("/shift-unlocks", body);
+  }
+  reviewShiftUnlock(
+    id: string,
+    body: { approved: boolean; reviewerName: string; rejectReason?: string },
+  ) {
+    return this.post<ShiftUnlockRequest>(`/shift-unlocks/${id}/review`, body);
   }
 }
 

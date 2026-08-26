@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("IQC Production Management", () => {
   test("login page renders", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: "NOVO-VIỆT TIỆP" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "COPEX" })).toBeVisible();
     await expect(page.getByTestId("login-submit")).toBeVisible();
   });
 

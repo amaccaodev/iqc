@@ -32,19 +32,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        if (!authApi.getStoredUser() || !localStorage.getItem("iqc_token")) {
-          const refreshed = await authApi.refresh();
-          if (!cancelled && refreshed.user) setUser(refreshed.user);
-        } else {
-          try {
-            const refreshed = await authApi.refresh();
-            if (!cancelled && refreshed.user) setUser(refreshed.user);
-          } catch {
-            /* keep current session until logout */
-          }
+        const token = localStorage.getItem("iqc_token");
+        const stored = authApi.getStoredUser();
+
+        // Đã có access token — dùng luôn. Không gọi /auth/refresh lúc boot:
+        // refresh phụ thuộc cookie + SessionStore in-memory; HMR / restart BE
+        // hay gây 401 ồn ào dù user vẫn đang login.
+        if (token && stored) {
+          if (!cancelled) setUser(stored);
+          return;
         }
-      } catch {
-        /* no cookie session */
+
+        // Local lệch (có user không có token hoặc ngược lại) — dọn sạch
+        if (token || stored) {
+          localStorage.removeItem("iqc_token");
+          localStorage.removeItem("iqc_user");
+          if (!cancelled) setUser(null);
+          return;
+        }
+
+        // Guest: không gọi refresh (không cookie → 401 chắc chắn)
       } finally {
         if (!cancelled) setBootstrapping(false);
       }

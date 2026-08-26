@@ -3,12 +3,17 @@ import WorkerEntryForm from "../../components/worker/WorkerEntryForm";
 import { useRoleUser } from "../../components/layout/RoleLayout";
 import { useOrders } from "../../hooks/useOrders";
 
-export default function WorkerTaskEntryPage() {
+type TaskMode = "info" | "measure";
+
+function WorkerTaskPage({ mode }: { mode: TaskMode }) {
   const { orderId, bomId } = useParams<{ orderId: string; bomId: string }>();
   const user = useRoleUser();
   const { orders, loading } = useOrders();
 
-  if (loading) {
+  const order = orders.find((o) => o.id === orderId);
+  const bom = order?.boms.find((b) => b.id === bomId);
+
+  if (loading && orders.length === 0) {
     return (
       <div className="text-center py-16 text-muted-foreground text-sm">
         <i className="fas fa-spinner fa-spin text-2xl block mb-2" />
@@ -17,14 +22,21 @@ export default function WorkerTaskEntryPage() {
     );
   }
 
-  const order = orders.find((o) => o.id === orderId);
-  const bom = order?.boms.find((b) => b.id === bomId);
-
-  if (!order || !bom) {
-    return <Navigate to="/worker/dashboard" replace />;
+  if (!loading && (!order || !bom)) {
+    return <Navigate to="/worker/entry" replace />;
   }
 
-  const allowed = bom.assignedWorkers.includes(user.name);
+  if (!order || !bom) {
+    return (
+      <div className="text-center py-16 text-muted-foreground text-sm">
+        <i className="fas fa-spinner fa-spin text-2xl block mb-2" />
+        Đang tải...
+      </div>
+    );
+  }
+
+  const allowed =
+    bom.assignedWorkers.length === 0 || bom.assignedWorkers.includes(user.name);
   if (!allowed) {
     return (
       <div className="max-w-lg mx-auto py-16 text-center">
@@ -33,10 +45,19 @@ export default function WorkerTaskEntryPage() {
         </div>
         <h2 className="font-display font-800 text-xl text-foreground mb-2">Chưa được phân công</h2>
         <p className="text-muted text-sm mb-6">Bạn không có quyền nhập dữ liệu cho BOM này.</p>
-        <Navigate to="/worker/dashboard" replace />
+        <Navigate to="/worker/entry" replace />
       </div>
     );
   }
 
-  return <WorkerEntryForm user={user} order={order} bom={bom} />;
+  return <WorkerEntryForm user={user} order={order} bom={bom} mode={mode} />;
+}
+
+/** Trang thông tin linh kiện — bấm Đo kiểm mới sang trang nhập */
+export default function WorkerTaskEntryPage() {
+  return <WorkerTaskPage mode="info" />;
+}
+
+export function WorkerTaskMeasurePage() {
+  return <WorkerTaskPage mode="measure" />;
 }

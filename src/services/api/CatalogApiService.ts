@@ -87,6 +87,34 @@ class CatalogApiService extends BaseApiService {
     );
   }
 
+  importProductBom(
+    rows: Array<{
+      productCode: string;
+      productName?: string;
+      partCode: string;
+      partName?: string;
+      processSeq: number;
+      processName: string;
+      processStage?: string;
+      teamCode?: string;
+      machine?: string;
+      qtyPerUnit?: number;
+      quota?: string;
+      techNote?: string;
+      people?: number;
+    }>,
+  ) {
+    return this.post<{
+      products: number;
+      parts: number;
+      steps: number;
+      productUpserts: number;
+      semiUpserts: number;
+      errors: string[];
+      total: number;
+    }>("/products/import-bom", { rows });
+  }
+
   listMachines() {
     return this.get<Machine[]>("/machines");
   }
@@ -113,6 +141,7 @@ class CatalogApiService extends BaseApiService {
     requestedBy: string;
     requestedName: string;
     reason: string;
+    kind?: "change_machine" | "add_machine" | "report_broken";
     target: "teamlead" | "mechanic";
     fromMachine?: string;
     toMachine?: string;

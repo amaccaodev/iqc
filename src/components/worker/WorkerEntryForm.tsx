@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import type { BOMItem, DimensionRow, ProductionOrder, UserPublic } from "@shared/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import type { BOMItem, DimensionRow, MachineChangeKind, ProductionOrder, ShiftClose, ShiftUnlockRequest, UserPublic } from "@shared/types";
 import type { MaterialSpec, SpecValidationResult } from "@shared/types/spec";
 import {
   emptyDims,
@@ -10,24 +10,34 @@ import {
   resolveMaterialSpecs,
   validateEntryRows,
 } from "@shared/utils/specValidation";
+import { bomProcessLockReason, isBomProcessUnlocked } from "@shared/utils/bomProcess";
+import { closesTodayChronological, shiftLockState } from "@shared/utils/shiftCloseGuard";
 import { Btn, Card, Modal } from "../ui";
 import { shiftLabel } from "@shared/utils/orderHelpers";
 import FileSlideshow from "../files/FileSlideshow";
 import { orderApi } from "../../services/api/OrderApiService";
+import { salaryApi } from "../../services/api/SalaryApiService";
 import { scrollFieldIntoView, useKeyboardViewport } from "../../hooks/useKeyboardViewport";
 import { catalogApi } from "../../services/api/CatalogApiService";
+import { MACHINE_PROPOSAL_KIND_LABEL } from "./ProposalActionButtons";
+import { toast } from "../../hooks/useToast";
 
-type EntryTab = "entry" | "info";
+type EntryMode = "info" | "measure";
 
 interface WorkerEntryFormProps {
   user: UserPublic;
   order: ProductionOrder;
   bom: BOMItem;
+  /** info = trang linh kiện; measure = trang nhập số đo (route riêng) */
+  mode?: EntryMode;
 }
 
-export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormProps) {
+export default function WorkerEntryForm({ user, order, bom, mode = "info" }: WorkerEntryFormProps) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { keyboardOpen } = useKeyboardViewport();
+  const isMeasure = mode === "measure";
+  const taskBase = `/worker/task/${order.id}/${bom.id}`;
 
   const materialSpecs = useMemo(
     () => resolveMaterialSpecs(bom.specCols, bom.materialSpecs),
@@ -38,17 +48,59 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
     [materialSpecs],
   );
   const [dims, setDims] = useState<string[]>(() => emptyDims(resolveMaterialSpecs(bom.specCols, bom.materialSpecs)));
-  const [tab, setTab] = useState<EntryTab>("info");
   const [submitting, setSubmitting] = useState(false);
   const [lastSavedTt, setLastSavedTt] = useState<number | null>(null);
   const [showCloseShift, setShowCloseShift] = useState(false);
-  const [showApproval, setShowApproval] = useState(false);
+  const [showUnlock, setShowUnlock] = useState(false);
+  const [unlockReason, setUnlockReason] = useState("");
+  const [todayCloses, setTodayCloses] = useState<ShiftClose[]>([]);
+  const [todayUnlocks, setTodayUnlocks] = useState<ShiftUnlockRequest[]>([]);
+  const [shiftReady, setShiftReady] = useState(false);
+  const [proposalKind, setProposalKind] = useState<MachineChangeKind | null>(null);
   const [passQty, setPassQty] = useState("");
   const [failQty, setFailQty] = useState("");
   const [closeNote, setCloseNote] = useState("");
   const [approvalReason, setApprovalReason] = useState("");
   const [approvalTarget, setApprovalTarget] = useState<"teamlead" | "mechanic">("teamlead");
   const [toMachine, setToMachine] = useState("");
+
+  const processLocked = !isBomProcessUnlocked(order, bom);
+  const processLockReason = bomProcessLockReason(order, bom);
+  const shiftScope = { workerId: user.id, orderId: order.id, bomId: bom.id };
+  const lock = shiftLockState(todayCloses, todayUnlocks, shiftScope);
+  const historyToday = closesTodayChronological(todayCloses, shiftScope);
+
+  const reloadShiftState = useCallback(() => {
+    void Promise.all([
+      salaryApi.listShiftCloses({ workerId: user.id, orderId: order.id, bomId: bom.id }),
+      salaryApi.listShiftUnlocks({ workerId: user.id, orderId: order.id, bomId: bom.id }),
+    ])
+      .then(([closes, unlocks]) => {
+        setTodayCloses(Array.isArray(closes) ? closes : []);
+        setTodayUnlocks(Array.isArray(unlocks) ? unlocks : []);
+      })
+      .catch(() => {
+        setTodayCloses([]);
+        setTodayUnlocks([]);
+      })
+      .finally(() => setShiftReady(true));
+  }, [user.id, order.id, bom.id]);
+
+  useEffect(() => {
+    reloadShiftState();
+  }, [reloadShiftState]);
+
+  useEffect(() => {
+    const p = searchParams.get("propose");
+    if (p === "change_machine" || p === "add_machine" || p === "report_broken") {
+      if (p === "report_broken") {
+        navigate("/worker/incidents?create=1", { replace: true });
+        return;
+      }
+      setProposalKind(p);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, navigate]);
 
   const usesPointMode = activeSpecs.some((s) => s.pointNo != null);
   const allRows = useMemo(() => bom.workerEntries.flatMap((e) => e.rows), [bom.workerEntries]);
@@ -84,8 +136,13 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
   );
 
   const submitCurrent = async () => {
+    if (!lock.canMeasure) {
+      toast.success(lock.hint || "Đã chốt ca — cần mở khóa trước khi đo kiểm tiếp.");
+      navigate(taskBase);
+      return;
+    }
     if (!dims.some((d) => d.trim())) {
-      alert("Vui lòng nhập ít nhất một thông số.");
+      toast.error("Vui lòng nhập ít nhất một thông số.");
       return;
     }
     setSubmitting(true);
@@ -95,23 +152,35 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
         workerName: user.name,
         dims,
       });
+      // Ở lại trang nhập — chỉ Back / chốt ca mới thoát
       setLastSavedTt(result.row.tt);
       setDims(emptyDims(materialSpecs));
-    } catch {
-      alert("Không thể lưu. Vui lòng thử lại.");
+    } catch (e) {
+      toast.error((e as Error).message || "Không thể lưu. Vui lòng thử lại.");
     } finally {
       setSubmitting(false);
     }
   };
 
   const openCloseShift = () => {
+    if (!lock.canClose) return;
     setPassQty(String(myRows.length || bom.passQty || 0));
     setFailQty(String(bom.failQty || 0));
     setCloseNote("");
     setShowCloseShift(true);
   };
 
+  const openUnlock = () => {
+    if (!lock.canUnlock) return;
+    setUnlockReason("Xin mở khóa để chốt ca tiếp trong ngày");
+    setShowUnlock(true);
+  };
+
   const submitCloseShift = async () => {
+    if (!lock.canClose) {
+      toast.error(lock.hint || "Không thể chốt ca lúc này.");
+      return;
+    }
     setSubmitting(true);
     try {
       await orderApi.workerShiftClose(order.id, bom.id, {
@@ -122,17 +191,51 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
         workerId: user.id,
       });
       setShowCloseShift(false);
-      alert("Đã gửi tổ trưởng kiểm tra. Sau đó QC rồi Quản đốc chốt mới ghi lương.");
-      navigate("/worker/dashboard");
+      // Ở lại trang thông tin — lịch sử Lần chốt 1, 2… vẫn hiện
+      reloadShiftState();
+      navigate(taskBase, { replace: true });
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitUnlock = async () => {
+    if (!lock.canUnlock) {
+      toast.success(lock.hint || "Đã có đơn ở tổ trưởng — chờ duyệt.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await salaryApi.requestShiftUnlock({
+        orderId: order.id,
+        bomId: bom.id,
+        workerId: user.id,
+        workerName: user.name,
+        partName: bom.partName,
+        reason: unlockReason,
+      });
+      setShowUnlock(false);
+      reloadShiftState();
+    } catch (e) {
+      toast.error((e as Error).message);
     } finally {
       setSubmitting(false);
     }
   };
 
   const submitApproval = async () => {
-    if (!approvalReason.trim()) return alert("Nhập lý do xin phê duyệt");
+    if (!proposalKind) return;
+    if (!approvalReason.trim()) {
+      toast.error("Nhập lý do đề xuất");
+      return;
+    }
+    if (proposalKind === "change_machine" && !toMachine.trim()) {
+      toast.error("Nhập máy muốn đổi sang");
+      return;
+    }
+    const kind = proposalKind;
     setSubmitting(true);
     try {
       await catalogApi.createChangeRequest({
@@ -141,15 +244,17 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
         requestedBy: user.id,
         requestedName: user.name,
         reason: approvalReason.trim(),
-        target: approvalTarget,
+        kind,
+        target: kind === "report_broken" ? "mechanic" : approvalTarget,
         fromMachine: bom.machine,
         toMachine,
       });
-      setShowApproval(false);
+      setProposalKind(null);
       setApprovalReason("");
-      alert("Đã gửi xin phê duyệt");
+      setToMachine("");
+      toast.success(`Đã gửi đề xuất: ${MACHINE_PROPOSAL_KIND_LABEL[kind]}`);
     } catch (e) {
-      alert((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -161,60 +266,171 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
       style={keyboardOpen ? { paddingBottom: "var(--keyboard-inset, 0px)" } : undefined}
     >
       <div className="flex items-center gap-3 mb-3">
-        <BackButton onClick={() => navigate("/worker/dashboard")} />
+        <BackButton
+          onClick={() => {
+            if (isMeasure) navigate(taskBase);
+            else navigate("/worker/entry");
+          }}
+        />
         <div className="flex-1 min-w-0">
           <div className="text-[11px] text-muted truncate">
             {order.productLine || order.productCode || "Sản phẩm"}
           </div>
           <div className="font-display font-700 text-base truncate">Linh kiện: {bom.partName}</div>
+          <div className="text-xs text-primary font-semibold truncate">
+            Quy trình: {bom.process || "—"}
+            {bom.processSeq != null ? ` (QT ${bom.processSeq})` : ""}
+          </div>
           <code className="text-[11px] text-muted font-mono">{bom.partCode || order.productCode || bom.bomCode}</code>
         </div>
       </div>
 
-      <nav className="flex rounded-xl bg-card border border-border p-1 mb-4 shadow-sm sticky top-14 z-20">
-        <TabButton active={tab === "info"} onClick={() => setTab("info")} icon="fa-circle-info" label="Xem thông tin" />
-        <TabButton
-          active={tab === "entry"}
-          onClick={() => setTab("entry")}
-          icon="fa-ruler"
-          label="Đo kiểm"
-          badge={rowWarnings > 0 ? rowWarnings : undefined}
-        />
-      </nav>
+      {processLocked && (
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+          <i className="fas fa-lock mr-1" />
+          {processLockReason}
+        </div>
+      )}
 
-      {tab === "info" ? (
-        <InfoPanel
-          order={order}
-          bom={bom}
-          myRows={myRows}
-          onStartEntry={() => setTab("entry")}
-          onCloseShift={openCloseShift}
-          onRequestApproval={() => setShowApproval(true)}
-        />
+      {isMeasure ? (
+        !shiftReady ? (
+          <div className="text-center py-10 text-muted text-sm">
+            <i className="fas fa-spinner fa-spin mr-2" />
+            Đang kiểm tra ca...
+          </div>
+        ) : processLocked || !lock.canMeasure ? (
+          <div className="rounded-xl border border-border bg-card p-6 text-center text-sm text-muted space-y-3">
+            <p>
+              {processLocked
+                ? "Quy trình chưa mở — quay lại trang thông tin."
+                : lock.hint || "Đã chốt ca — cần mở khóa trước khi đo kiểm tiếp."}
+            </p>
+            <button
+              type="button"
+              className="text-sm font-semibold text-primary border-0 bg-transparent cursor-pointer underline"
+              onClick={() => navigate(taskBase)}
+            >
+              ← Về trang thông tin
+            </button>
+          </div>
+        ) : (
+          <EntryPanel
+            productName={order.productLine || order.productCode || "Sản phẩm"}
+            partName={bom.partName}
+            spNo={nextSpNo}
+            targetQty={bom.targetQty}
+            myCount={myRows.length}
+            totalCount={allRows.length}
+            lastSavedTt={lastSavedTt}
+            rowWarnings={rowWarnings}
+            activeSpecs={activeSpecs}
+            usesPointMode={usesPointMode}
+            dims={dims}
+            specFiles={specFiles}
+            getFieldValidation={getFieldValidation}
+            updateDim={updateDim}
+            submitting={submitting}
+            onSubmit={() => void submitCurrent()}
+          />
+        )
       ) : (
-        <EntryPanel
-          productName={order.productLine || order.productCode || "Sản phẩm"}
-          partName={bom.partName}
-          spNo={nextSpNo}
-          targetQty={bom.targetQty}
-          myCount={myRows.length}
-          totalCount={allRows.length}
-          lastSavedTt={lastSavedTt}
-          rowWarnings={rowWarnings}
-          activeSpecs={activeSpecs}
-          usesPointMode={usesPointMode}
-          dims={dims}
-          specFiles={specFiles}
-          getFieldValidation={getFieldValidation}
-          updateDim={updateDim}
-          submitting={submitting}
-          onSubmit={() => void submitCurrent()}
-        />
+        <>
+          <InfoPanel order={order} bom={bom} myRows={myRows} specFiles={specFiles} />
+
+          {historyToday.length > 0 ? (
+            <Card cls="p-3 mt-4">
+              <div className="text-xs font-semibold text-muted mb-2">
+                Lịch sử chốt ca hôm nay ({historyToday.length} lần)
+              </div>
+              <ul className="space-y-2.5">
+                {historyToday.map((c, i) => (
+                  <li
+                    key={c.id}
+                    className="rounded-lg border border-border bg-surface/60 px-3 py-2 text-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold text-foreground">
+                        Lần chốt {i + 1}
+                        <span className="font-normal text-muted text-xs ml-2">
+                          {new Date(c.createdAt).toLocaleString("vi-VN")}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-semibold text-muted shrink-0">
+                        {c.status === "pending_teamlead"
+                          ? "Chờ tổ trưởng"
+                          : c.status === "pending_qc"
+                            ? "Chờ QC"
+                            : c.status === "pending_supervisor"
+                              ? "Chờ quản đốc"
+                              : c.status === "approved"
+                                ? "Đã chốt lương"
+                                : "Từ chối"}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs">
+                      <span className="text-green-700 font-semibold">{c.passQty} đạt</span>
+                      <span className="text-red-600 font-semibold ml-2">{c.failQty} hỏng</span>
+                    </div>
+                    {c.note ? (
+                      <div className="text-xs text-muted mt-0.5">Lý do / ghi chú: {c.note}</div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground mt-0.5">Không có ghi chú</div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+
+          <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-background/95 px-4 py-3">
+            {lock.hint ? (
+              <p className="text-xs text-center text-muted mb-2">{lock.hint}</p>
+            ) : null}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (processLocked || !lock.canMeasure) return;
+                  navigate(`${taskBase}/measure`);
+                }}
+                disabled={!shiftReady || processLocked || !lock.canMeasure}
+                data-testid="tab-Đo kiểm"
+                className="min-h-12 flex items-center justify-center gap-2 rounded-xl text-sm font-bold border-2 border-[#1B3A5C] bg-primary text-white shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <i className="fas fa-ruler" /> Đo kiểm
+              </button>
+              {lock.button === "close" ? (
+                <button
+                  type="button"
+                  onClick={openCloseShift}
+                  disabled={!lock.canClose || submitting}
+                  data-testid="tab-Chốt ca"
+                  className="min-h-12 flex items-center justify-center gap-2 rounded-xl text-sm font-bold border-2 border-[#1B3A5C] bg-white text-[#1B3A5C] shadow-md hover:bg-secondary transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fas fa-flag-checkered" /> Chốt ca
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openUnlock}
+                  disabled={!lock.canUnlock || submitting}
+                  data-testid="tab-Mở khóa"
+                  className="min-h-12 flex items-center justify-center gap-2 rounded-xl text-sm font-bold border-2 border-[#1B3A5C] bg-white text-[#1B3A5C] shadow-md hover:bg-secondary transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <i className="fas fa-lock-open" /> Mở khóa
+                </button>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {showCloseShift && (
-        <Modal title="Chốt ca" onClose={() => setShowCloseShift(false)}>
+        <Modal title="Xác nhận chốt ca" onClose={() => setShowCloseShift(false)}>
           <div className="space-y-3">
+            <p className="text-sm text-muted">
+              Phiếu sẽ gửi tổ trưởng. Sau khi chốt, cần mở khóa (duyệt) mới chốt ca tiếp trong ngày.
+            </p>
             <label className="text-sm block">
               <span className="text-muted">Số lượng đạt</span>
               <input className="w-full border border-border rounded-lg px-3 py-2 text-sm" type="number" value={passQty} onChange={(e) => setPassQty(e.target.value)} onFocus={(e) => scrollFieldIntoView(e.currentTarget)} />
@@ -232,34 +448,72 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
                 onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
               />
             </label>
-            <Btn cls="w-full justify-center" onClick={() => void submitCloseShift()}>
-              Xác nhận chốt ca
+            <Btn cls="w-full justify-center" onClick={() => void submitCloseShift()} disabled={submitting}>
+              {submitting ? "Đang gửi..." : "Xác nhận chốt ca"}
             </Btn>
           </div>
         </Modal>
       )}
 
-      {showApproval && (
-        <Modal title="Xin phê duyệt" onClose={() => setShowApproval(false)}>
+      {showUnlock && (
+        <Modal title="Mở khóa chốt ca" onClose={() => setShowUnlock(false)}>
+          <div className="space-y-3">
+            <p className="text-sm text-muted">
+              Gửi yêu cầu đến tổ trưởng. Nếu đơn đã ở tổ trưởng thì phải chờ duyệt — không gửi thêm.
+            </p>
+            <label className="text-sm block">
+              <span className="text-muted">Lý do</span>
+              <textarea
+                className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 min-h-[64px]"
+                value={unlockReason}
+                onChange={(e) => setUnlockReason(e.target.value)}
+                onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+              />
+            </label>
+            <Btn cls="w-full justify-center" onClick={() => void submitUnlock()} disabled={submitting}>
+              {submitting ? "Đang gửi..." : "Gửi tổ trưởng"}
+            </Btn>
+          </div>
+        </Modal>
+      )}
+
+      {proposalKind && (
+        <Modal
+          title={`Đề xuất: ${MACHINE_PROPOSAL_KIND_LABEL[proposalKind]}`}
+          onClose={() => setProposalKind(null)}
+        >
           <div className="space-y-3">
             <label className="text-sm block">
-              <span className="text-muted">Lý do (đổi máy / khác)</span>
+              <span className="text-muted">Lý do</span>
               <textarea
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 min-h-[72px]"
                 value={approvalReason}
                 onChange={(e) => setApprovalReason(e.target.value)}
                 onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                placeholder="VD: Máy Cam 0.1 đo lệch, xin đổi máy..."
+                placeholder={
+                  proposalKind === "add_machine"
+                    ? "VD: Cần thêm máy D80T-02 cho cùng quy trình..."
+                    : "VD: Máy Cam 0.1 đo lệch, xin thay máy..."
+                }
               />
             </label>
             <label className="text-sm block">
               <span className="text-muted">Máy hiện tại</span>
               <input className="w-full border border-border rounded-lg px-3 py-2 text-sm" value={bom.machine || ""} readOnly />
             </label>
-            <label className="text-sm block">
-              <span className="text-muted">Máy muốn đổi (tuỳ chọn)</span>
-              <input className="w-full border border-border rounded-lg px-3 py-2 text-sm" value={toMachine} onChange={(e) => setToMachine(e.target.value)} onFocus={(e) => scrollFieldIntoView(e.currentTarget)} />
-            </label>
+            {proposalKind !== "report_broken" && (
+              <label className="text-sm block">
+                <span className="text-muted">
+                  {proposalKind === "add_machine" ? "Máy thêm" : "Máy thay thế"}
+                </span>
+                <input
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm"
+                  value={toMachine}
+                  onChange={(e) => setToMachine(e.target.value)}
+                  onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
+                />
+              </label>
+            )}
             <div className="text-sm font-semibold">Gửi đến</div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
@@ -279,8 +533,8 @@ export default function WorkerEntryForm({ user, order, bom }: WorkerEntryFormPro
               />
               Cơ điện
             </label>
-            <Btn cls="w-full justify-center" onClick={() => void submitApproval()}>
-              <i className="fas fa-hand" /> Gửi xin phê duyệt
+            <Btn cls="w-full justify-center" onClick={() => void submitApproval()} disabled={submitting}>
+              <i className="fas fa-paper-plane" /> Gửi đề xuất
             </Btn>
           </div>
         </Modal>
@@ -464,16 +718,12 @@ function InfoPanel({
   order,
   bom,
   myRows,
-  onStartEntry,
-  onCloseShift,
-  onRequestApproval,
+  specFiles,
 }: {
   order: ProductionOrder;
   bom: BOMItem;
   myRows: DimensionRow[];
-  onStartEntry: () => void;
-  onCloseShift: () => void;
-  onRequestApproval: () => void;
+  specFiles: ProductionOrder["attachments"];
 }) {
   const produced = bom.workerEntries.reduce((s, e) => s + e.rows.length, 0);
   const inspectionSpecs = getActiveInspectionSpecs(
@@ -483,10 +733,17 @@ function InfoPanel({
     i: s.index,
     label: s.pointNo != null ? `(${s.pointNo}) ${s.label}` : s.label,
   }));
-  const siblingParts = order.boms.filter((b) => b.id !== bom.id);
+  const siblingSteps = order.boms
+    .filter(
+      (b) =>
+        b.id !== bom.id &&
+        (b.partGroup || b.partName) === (bom.partGroup || bom.partName),
+    )
+    .sort((a, b) => (a.processSeq ?? 0) - (b.processSeq ?? 0));
   const rowsMeta: { label: string; value: string }[] = [
     { label: "Sản phẩm", value: order.productLine || order.productCode || "—" },
-    { label: "Linh kiện", value: bom.partName },
+    { label: "Linh kiện", value: bom.partGroup || bom.partName },
+    { label: "Quy trình", value: bom.process || "—" },
     { label: "Mã LK", value: bom.partCode || "—" },
     { label: "SL Cần", value: String(bom.targetQty || order.targetQty || 0) },
     { label: "Máy", value: bom.machine || "—" },
@@ -496,6 +753,10 @@ function InfoPanel({
 
   return (
     <div className="space-y-4">
+      <Card cls="p-3">
+        <FileSlideshow files={specFiles} title="bản vẽ" />
+      </Card>
+
       <Card cls="p-4">
         <div className="space-y-2 text-sm">
           {rowsMeta.map((row) => (
@@ -528,16 +789,14 @@ function InfoPanel({
         )}
       </Card>
 
-      {siblingParts.length > 0 && (
+      {siblingSteps.length > 0 && (
         <Card cls="p-4">
-          <div className="font-semibold text-sm mb-2">Linh kiện khác trên lệnh</div>
+          <div className="font-semibold text-sm mb-2">Quy trình cùng linh kiện (tuần tự)</div>
           <ul className="text-sm space-y-1 text-muted">
-            {siblingParts.map((b) => (
+            {siblingSteps.map((b) => (
               <li key={b.id}>
-                · {b.partName}
-                <span className="text-muted-foreground text-xs ml-1">
-                  ({(b.materialSpecs?.length || b.specCols.filter(Boolean).length) || 0} thông số)
-                </span>
+                · QT {b.processSeq ?? "—"}: {b.process || b.partName}
+                <span className="text-muted-foreground text-xs ml-1">({b.status})</span>
               </li>
             ))}
           </ul>
@@ -579,27 +838,6 @@ function InfoPanel({
           </table>
         )}
       </Card>
-
-      <Btn onClick={onStartEntry} cls="w-full justify-center">
-        <i className="fas fa-check" /> Đo Kiểm
-      </Btn>
-
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          onClick={onRequestApproval}
-          className="border-2 border-[#1B3A5C] text-primary font-semibold py-2.5 rounded-xl cursor-pointer bg-card"
-        >
-          <i className="fas fa-hand mr-1" /> Xin phê duyệt
-        </button>
-        <button
-          type="button"
-          onClick={onCloseShift}
-          className="border-2 border-dashed border-[#7C3AED] text-[#7C3AED] font-semibold py-2.5 rounded-xl cursor-pointer bg-card"
-        >
-          Chốt ca
-        </button>
-      </div>
     </div>
   );
 }
@@ -609,42 +847,10 @@ function BackButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 text-muted hover:text-primary text-sm cursor-pointer bg-transparent border-0 font-medium flex-shrink-0"
+      aria-label="Quay lại"
+      className="flex items-center justify-center w-9 h-9 rounded-lg text-muted hover:text-primary hover:bg-surface cursor-pointer bg-transparent border-0 flex-shrink-0"
     >
-      <i className="fas fa-arrow-left text-xs" /> Quay lại
-    </button>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  badge,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: string;
-  label: string;
-  badge?: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid={`tab-${label}`}
-      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all cursor-pointer border-0 ${
-        active ? "bg-primary text-white shadow-sm" : "bg-transparent text-muted hover:bg-surface"
-      }`}
-    >
-      <i className={`fas ${icon} text-xs`} />
-      {label}
-      {badge !== undefined && badge > 0 && (
-        <span className={`text-[10px] font-bold rounded-full px-1.5 py-0.5 ${active ? "bg-amber-400 text-white" : "bg-amber-100 text-amber-700"}`}>
-          {badge}
-        </span>
-      )}
+      <i className="fas fa-arrow-left text-sm" />
     </button>
   );
 }
