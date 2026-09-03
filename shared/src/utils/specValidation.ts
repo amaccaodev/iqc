@@ -1,4 +1,5 @@
 import type { MaterialSpec, PartChecklistItem, SpecValidationResult } from "../types/spec.js";
+import type { MeasurementSpecMap, MeasurementValueType } from "../types/index.js";
 
 /** Parse nhãn cột kích thước → thông số có min/max */
 export function parseSpecLabel(label: string, index: number): MaterialSpec {
@@ -77,6 +78,36 @@ export function buildMaterialSpecs(specCols: string[]): MaterialSpec[] {
   return specCols
     .map((label, index) => parseSpecLabel(label, index))
     .filter((s) => s.label);
+}
+
+export function measurementTypeToSpecType(
+  type: MeasurementValueType,
+): MaterialSpec["type"] {
+  if (type === "integer" || type === "float") return "numeric";
+  if (type === "boolean") return "qualitative";
+  return "text";
+}
+
+/** Catalog jsonb map → materialSpecs for worker entry / order jobs */
+export function measurementSpecsToMaterialSpecs(specs: MeasurementSpecMap): MaterialSpec[] {
+  return Object.entries(specs).map(([key, type], i) => ({
+    index: i,
+    pointNo: i + 1,
+    label: key,
+    type: measurementTypeToSpecType(type),
+    hint: type,
+  }));
+}
+
+export function materialSpecsToMeasurementMap(items: MaterialSpec[]): MeasurementSpecMap {
+  const out: MeasurementSpecMap = {};
+  for (const s of items) {
+    const key = s.label.trim() || `F${s.index}`;
+    if (s.type === "numeric") out[key] = "float";
+    else if (s.type === "qualitative") out[key] = "boolean";
+    else out[key] = "text";
+  }
+  return out;
 }
 
 /**

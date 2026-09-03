@@ -6,6 +6,7 @@ import type {
 } from "../../../shared/src/types/index.js";
 import {
   assertCanCreateShiftClose,
+  assertCanEditShiftClose,
   assertCanRequestUnlock,
 } from "../../../shared/src/utils/shiftCloseGuard.js";
 
@@ -16,6 +17,7 @@ function id(prefix: string) {
 const rates: EmployeeProductRate[] = [
   { id: "epr-u6-p1", userId: "u6", productId: "p1", rateVnd: 2500 },
   { id: "epr-u7-p1", userId: "u7", productId: "p1", rateVnd: 2200 },
+  { id: "epr-u6-lx20", userId: "u6", productId: "p-lx20", rateVnd: 2500 },
 ];
 
 const closes: ShiftClose[] = [
@@ -68,19 +70,38 @@ const closes: ShiftClose[] = [
   {
     id: "sc-demo-pending",
     orderId: "o1",
-    bomId: "b1",
-    workerId: "u6",
-    workerName: "Cường 2T3",
+    bomId: "b-p1-sp-novo-vg-15-02-1",
+    workerId: "u7",
+    workerName: "Nga 3/43",
     productId: "p1",
-    productName: "Van 1 chiều lò xo NOVO 20",
-    partName: "Van 1 chiều lò xo NOVO 20",
+    productName: "Van góc 1C sau ĐH NOVO 15 tay ABS",
+    partName: "Thân van góc 1C sau ĐH novo 15",
     passQty: 40,
     failQty: 0,
-    note: "Ca sáng — chờ tổ trưởng (demo chấm đỏ Quản đốc)",
+    note: "Ca sáng — chờ tổ trưởng (demo sửa phiếu)",
     status: "pending_teamlead",
-    rateVnd: 2500,
-    amountVnd: 100000,
+    rateVnd: 2200,
+    amountVnd: 88000,
     createdAt: new Date().toISOString(),
+  },
+  {
+    id: "sc-demo-approved-today",
+    orderId: "o-sheet",
+    bomId: "b-longden-ht",
+    workerId: "u6",
+    workerName: "Cường 2T3",
+    productId: "p-lx20",
+    productName: "Van 1 chiều lò xo NOVO 20",
+    partName: "Long đen hãm gioăng",
+    passQty: 120,
+    failQty: 0,
+    note: "Ca sáng — tổ trưởng đã duyệt (demo mở khóa)",
+    status: "pending_qc",
+    rateVnd: 2500,
+    amountVnd: 0,
+    createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+    teamleadBy: "Phạm Văn Chí",
+    teamleadAt: new Date(Date.now() - 1_800_000).toISOString(),
   },
 ];
 
@@ -140,6 +161,17 @@ export const shiftSalaryStore = {
       createdAt: new Date().toISOString(),
     };
     closes.unshift(row);
+    return row;
+  },
+  updatePendingClose(
+    closeId: string,
+    workerId: string,
+    patch: { passQty: number; failQty: number; note: string },
+  ) {
+    const row = assertCanEditShiftClose(closes, closeId, workerId);
+    row.passQty = Number(patch.passQty) || 0;
+    row.failQty = Number(patch.failQty) || 0;
+    row.note = patch.note ?? "";
     return row;
   },
   listUnlocks(filter?: { status?: string; workerId?: string; orderId?: string; bomId?: string }) {

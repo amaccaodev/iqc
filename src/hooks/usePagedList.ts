@@ -22,6 +22,7 @@ export interface UsePagedListResult<T> {
   q: string;
   setQ: (q: string) => void;
   setPage: (page: number) => void;
+  setPageSize: (size: number) => void;
   loading: boolean;
   error: string | null;
   refresh: () => void;
@@ -35,7 +36,6 @@ export function usePagedList<T>(options: UsePagedListOptions<T>): UsePagedListRe
   const {
     fetchPage,
     filters,
-    pageSize = DEFAULT_PAGE_SIZE,
     debounceMs = SEARCH_DEBOUNCE_MS,
     enabled = true,
   } = options;
@@ -43,6 +43,7 @@ export function usePagedList<T>(options: UsePagedListOptions<T>): UsePagedListRe
   const [q, setQ] = useState("");
   const debouncedQ = useDebouncedValue(q, debounceMs);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState(options.pageSize ?? DEFAULT_PAGE_SIZE);
   const [items, setItems] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -53,7 +54,7 @@ export function usePagedList<T>(options: UsePagedListOptions<T>): UsePagedListRe
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, filtersKey]);
+  }, [debouncedQ, filtersKey, pageSize]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -90,6 +91,10 @@ export function usePagedList<T>(options: UsePagedListOptions<T>): UsePagedListRe
   }, [debouncedQ, page, pageSize, filtersKey, enabled, tick, fetchPage]);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  const setPageSize = useCallback((size: number) => {
+    setPageSizeState(size);
+    setPage(1);
+  }, []);
 
   return {
     items,
@@ -99,6 +104,7 @@ export function usePagedList<T>(options: UsePagedListOptions<T>): UsePagedListRe
     q,
     setQ,
     setPage,
+    setPageSize,
     loading,
     error,
     refresh,

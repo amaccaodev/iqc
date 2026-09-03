@@ -33,6 +33,12 @@ class SalaryApiService extends BaseApiService {
     const qs = q.toString();
     return this.get<ShiftClose[]>(`/shift-closes${qs ? `?${qs}` : ""}`);
   }
+  updateShiftClose(
+    id: string,
+    body: { passQty: number; failQty: number; note: string; workerId?: string },
+  ) {
+    return this.patch<ShiftClose>(`/shift-closes/${id}`, body);
+  }
   reviewShiftClose(
     id: string,
     body: {

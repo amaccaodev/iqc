@@ -1,8 +1,11 @@
 import type { BOMItem, ProductionOrder } from "../types/index.js";
 import { bomDoneQty } from "./productionProgress.js";
 
-/** Gom key linh kiện — ưu tiên partGroup, fallback partName/partCode */
-export function bomPartGroupKey(bom: Pick<BOMItem, "partGroup" | "partName" | "partCode" | "id">): string {
+/** Gom quy trình theo catalog BOM; data cũ fallback theo linh kiện */
+export function bomPartGroupKey(
+  bom: Pick<BOMItem, "catalogBomId" | "partGroup" | "partName" | "partCode" | "id">,
+): string {
+  if (bom.catalogBomId) return `bom:${bom.catalogBomId}`;
   return (bom.partGroup || bom.partName || bom.partCode || bom.id).trim();
 }
 
@@ -15,8 +18,9 @@ export function isBomProcessDone(bom: BOMItem): boolean {
 }
 
 /**
- * Trong cùng linh kiện: hết quy trình seq nhỏ hơn mới mở seq hiện tại.
- * BOM không có processSeq → luôn mở (legacy).
+ * Trong cùng catalog BOM: hết quy trình seq nhỏ hơn mới mở seq hiện tại.
+ * Quy trình của BOM khác (cùng linh kiện) không khóa nhau.
+ * Job không có processSeq → luôn mở (legacy).
  */
 export function isBomProcessUnlocked(order: ProductionOrder, bom: BOMItem): boolean {
   const seq = bom.processSeq;

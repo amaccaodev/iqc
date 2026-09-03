@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BOM_STATUS_LABEL } from "@shared/constants/labels";
 import { bomDoneQty, orderPartProgress } from "@shared/utils/productionProgress";
@@ -126,7 +126,7 @@ export default function WorkerJobsList({
                         <div className="h-1.5 rounded-full bg-border overflow-hidden">
                           <div
                             className={`h-full rounded-full ${
-                              pct >= 100 ? "bg-emerald-500" : "bg-[#2D6EBD]"
+                              pct >= 100 ? "bg-emerald-500" : "bg-primary"
                             }`}
                             style={{ width: `${pct}%` }}
                           />

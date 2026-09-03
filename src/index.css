@@ -3,7 +3,42 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-:root {
+:root,
+html[data-theme="gold"] {
+  /* Mặc định: vàng đen */
+  --background: #0C0C0C;
+  --foreground: #F6E7B8;
+  --card: #161616;
+  --card-foreground: #F6E7B8;
+  --popover: #1A1A1A;
+  --popover-foreground: #F6E7B8;
+  --primary: #E8B923;
+  --primary-foreground: #111111;
+  --secondary: #2A230E;
+  --secondary-foreground: #F5D76E;
+  --muted: #A89868;
+  --muted-foreground: #8A7A4A;
+  --accent: #DC2626;
+  --accent-foreground: #FFFFFF;
+  --border: #3A3318;
+  --input: #111111;
+  --ring: #E8B923;
+  --surface: #1C1A12;
+  --radius: 0.5rem;
+  --navy: #111111;
+  --blue: #E8B923;
+  --green: #22C55E;
+  --yellow: #E8B923;
+  --red: #EF4444;
+  --header: #000000;
+  --header-foreground: #F5D76E;
+  --header-muted: #C4A84A;
+  --nav-active: #E8B923;
+  --nav-active-fg: #111111;
+  --bottom-nav: #000000;
+}
+
+html[data-theme="light"] {
   --background: #EFF2F7;
   --foreground: #0F172A;
   --card: #FFFFFF;
@@ -22,7 +57,6 @@
   --input: #FFFFFF;
   --ring: #2D6EBD;
   --surface: #F8FAFC;
-  --radius: 0.5rem;
   --navy: #1B3A5C;
   --blue: #2D6EBD;
   --green: #16A34A;
@@ -36,7 +70,8 @@
   --bottom-nav: #FFFFFF;
 }
 
-.dark {
+.dark,
+html[data-theme="dark"] {
   --background: #0B1220;
   --foreground: #E2E8F0;
   --card: #111827;

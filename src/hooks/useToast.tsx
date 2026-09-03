@@ -1,4 +1,4 @@
-import {
+﻿import {
   createContext,
   useCallback,
   useContext,
@@ -41,7 +41,7 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 const KIND_STYLE: Record<ToastKind, { bar: string; icon: string; iconClass: string }> = {
   success: { bar: "border-l-emerald-500", icon: "fa-circle-check", iconClass: "text-emerald-600" },
   error: { bar: "border-l-red-500", icon: "fa-circle-xmark", iconClass: "text-red-600" },
-  info: { bar: "border-l-[#2D6EBD]", icon: "fa-circle-info", iconClass: "text-[#2D6EBD]" },
+  info: { bar: "border-l-primary", icon: "fa-circle-info", iconClass: "text-primary" },
   warning: { bar: "border-l-amber-500", icon: "fa-triangle-exclamation", iconClass: "text-amber-600" },
 };
 

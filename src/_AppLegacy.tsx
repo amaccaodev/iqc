@@ -1,4 +1,4 @@
-import { useState, useRef } from "react"
+﻿import { useState, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { orderApi } from "./services/api/OrderApiService"
 import QrCodeImage from "./components/qr/QrCodeImage"
@@ -582,7 +582,7 @@ function AttachmentList({ attachments, onAdd }: { attachments: Attachment[]; onA
         <>
           <input ref={fileRef} type="file" accept="image/*,.pdf" multiple className="hidden" onChange={handleFile} />
           <button onClick={() => fileRef.current?.click()}
-            className="mt-2 flex items-center gap-2 text-sm text-[#2D6EBD] hover:text-primary cursor-pointer bg-transparent border-0 font-medium">
+            className="mt-2 flex items-center gap-2 text-sm text-primary hover:text-primary cursor-pointer bg-transparent border-0 font-medium">
             <i className="fas fa-paperclip" /> Đính kèm ảnh / PDF
           </button>
         </>
@@ -592,13 +592,30 @@ function AttachmentList({ attachments, onAdd }: { attachments: Attachment[]; onA
 }
 
 // ─── Shared: Order list ────────────────────────────────────────────────────────
-function OrderList({ orders, onSelect, columns = 1 }: { orders: ProductionOrder[]; onSelect: (o: ProductionOrder) => void; columns?: 1 | 2 }) {
+function OrderList({
+  orders,
+  onSelect,
+  columns = 1,
+  paging,
+}: {
+  orders: ProductionOrder[]
+  onSelect: (o: ProductionOrder) => void
+  columns?: 1 | 2
+  paging?: {
+    page: number
+    pageSize: number
+    total: number
+    onPage: (p: number) => void
+    onPageSize?: (n: number) => void
+  }
+}) {
   const [page, setPage] = useState(1)
-  const pageSize = 8
-  if (!orders.length) return <Card cls="p-10 text-center text-muted-foreground text-sm"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có lệnh sản xuất nào</Card>
-  const slice = orders.slice((page - 1) * pageSize, page * pageSize)
+  const [pageSize, setPageSize] = useState(10)
+  if (!orders.length && !paging?.total) return <Card cls="p-10 text-center text-muted-foreground text-sm"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có lệnh sản xuất nào</Card>
+  const slice = paging ? orders : orders.slice((page - 1) * pageSize, page * pageSize)
   const listClass = columns === 2 ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0" : "space-y-2"
   return (
+    <div>
     <div className={listClass}>
       {slice.map(o => (
         <button key={o.id} onClick={() => onSelect(o)} className="w-full text-left cursor-pointer bg-transparent border-0 p-0 group">
@@ -627,7 +644,14 @@ function OrderList({ orders, onSelect, columns = 1 }: { orders: ProductionOrder[
           </Card>
         </button>
       ))}
-      <PaginationBar page={page} pageSize={pageSize} total={orders.length} onPage={setPage} />
+    </div>
+      <PaginationBar
+        page={paging?.page ?? page}
+        pageSize={paging?.pageSize ?? pageSize}
+        total={paging?.total ?? orders.length}
+        onPage={paging?.onPage ?? setPage}
+        onPageSize={paging?.onPageSize ?? setPageSize}
+      />
     </div>
   )
 }
@@ -651,7 +675,7 @@ function BOMDetail({
       <button onClick={onBack} className="flex items-center gap-1.5 text-muted hover:text-primary text-sm mb-4 cursor-pointer bg-transparent border-0 font-medium">
         <i className="fas fa-arrow-left text-xs" /> Quay lại
       </button>
-      <Card cls="p-4 mb-4 border-l-4 border-[#1B3A5C]">
+      <Card cls="p-4 mb-4 border-l-4 border-primary">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <div className="font-display font-700 text-base">{bom.partName}</div>
@@ -688,7 +712,7 @@ function BOMDetail({
               href={workerTaskUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-[#2D6EBD] hover:text-primary"
+              className="inline-flex items-center gap-1.5 mt-3 text-xs font-medium text-primary hover:text-primary"
             >
               <i className="fas fa-arrow-up-right-from-square text-[10px]" /> Mở trang nhập
             </a>
@@ -751,7 +775,7 @@ function BOMDetail({
 }
 
 // ─── Director view ─────────────────────────────────────────────────────────────
-function DirectorView({ user, orders, setOrders, screen, onCreateOrder }: { user: User; orders: ProductionOrder[]; setOrders: (o: ProductionOrder[]) => void; screen: string; onCreateOrder?: () => void }) {
+function DirectorView({ user, orders, setOrders, screen, onCreateOrder, orderPaging }: { user: User; orders: ProductionOrder[]; setOrders: (o: ProductionOrder[]) => void; screen: string; onCreateOrder?: () => void; orderPaging?: { page: number; pageSize: number; total: number; onPage: (p: number) => void; onPageSize?: (n: number) => void } }) {
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null)
   const [selectedBOM, setSelectedBOM] = useState<BOMItem | null>(null)
   const [showCreate, setShowCreate] = useState(false)
@@ -770,7 +794,7 @@ function DirectorView({ user, orders, setOrders, screen, onCreateOrder }: { user
   const [bomForm, setBomForm] = useState({ partCode: "", partName: "", rawMaterial: "", machine: "", process: "", targetQty: "", techNote: "", specCols: ["","","","","","","","","","",""] as string[], teamId: "" })
   const [draftOrder, setDraftOrder] = useState<ProductionOrder | null>(null)
 
-  const pending = orders.filter(o => o.pendingApproval)
+  const pending = orders.filter(o => o.pendingApproval && o.boms.some(b => b.assignedTeamId))
 
   const startCreate = () => {
     const orderNo = genOrderNo(orders)
@@ -1037,7 +1061,7 @@ function DirectorView({ user, orders, setOrders, screen, onCreateOrder }: { user
             <h2 className="font-display font-700 text-xl lg:text-2xl">Lệnh sản xuất</h2>
             <Btn onClick={onCreateOrder ?? startCreate}><i className="fas fa-plus" /> Tạo lệnh</Btn>
           </div>
-          <OrderList orders={orders} onSelect={setSelectedOrder} columns={2} />
+          <OrderList orders={orders} onSelect={setSelectedOrder} columns={2} paging={orderPaging} />
         </>
       )}
       {screen === "approvals" && (
@@ -1208,7 +1232,7 @@ function DirectorView({ user, orders, setOrders, screen, onCreateOrder }: { user
 }
 
 // ─── Supervisor view ───────────────────────────────────────────────────────────
-function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder[]; setOrders: (o: ProductionOrder[]) => void; screen: string }) {
+function SupervisorView({ orders, setOrders, screen, orderPaging }: { orders: ProductionOrder[]; setOrders: (o: ProductionOrder[]) => void; screen: string; orderPaging?: { page: number; pageSize: number; total: number; onPage: (p: number) => void; onPageSize?: (n: number) => void } }) {
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null)
   const [assignModal, setAssignModal] = useState<BOMItem | null>(null)
   const [assignTeamId, setAssignTeamId] = useState("")
@@ -1284,8 +1308,8 @@ function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder
               <label className="block text-xs font-semibold text-muted mb-2">Chọn Tổ phụ trách</label>
               <div className="space-y-2">
                 {TEAMS.map(t => (
-                  <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${assignTeamId === t.id ? "border-[#1B3A5C] bg-secondary" : "border-border hover:border-border"}`}>
-                    <input type="radio" name="teamRadio" value={t.id} checked={assignTeamId === t.id} onChange={() => setAssignTeamId(t.id)} className="accent-[#1B3A5C]" />
+                  <label key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${assignTeamId === t.id ? "border-primary bg-secondary" : "border-border hover:border-border"}`}>
+                    <input type="radio" name="teamRadio" value={t.id} checked={assignTeamId === t.id} onChange={() => setAssignTeamId(t.id)} className="accent-primary" />
                     <div>
                       <div className="font-semibold text-sm">{t.name}</div>
                       <div className="text-xs text-muted">Tổ trưởng: {t.lead}</div>
@@ -1334,15 +1358,15 @@ function SupervisorView({ orders, setOrders, screen }: { orders: ProductionOrder
             </>
           )}
           <h3 className="font-display font-700 text-base mb-3">{screen === "dashboard" ? "Tất cả Lệnh SX" : "Lệnh Sản Xuất"}</h3>
-          <OrderList orders={orders} onSelect={setSelectedOrder} />
+          <OrderList orders={orders} onSelect={setSelectedOrder} paging={screen === "orders" ? orderPaging : undefined} />
         </>
       )}
       {screen === "assign" && (
         <>
           <h2 className="font-display font-800 text-xl mb-4">BOM chưa phân tổ</h2>
-          {orders.flatMap(o => o.boms.filter(b => !b.assignedTeamId).map(b => ({ o, b }))).length === 0
+          {orders.filter(o => o.status === "approved" || o.status === "in_progress").flatMap(o => o.boms.filter(b => !b.assignedTeamId).map(b => ({ o, b }))).length === 0
             ? <Card cls="p-10 text-center text-muted-foreground"><i className="fas fa-check-circle text-3xl text-green-400 opacity-60 block mb-2" />Tất cả BOM đã được phân công</Card>
-            : orders.flatMap(o => o.boms.filter(b => !b.assignedTeamId).map(b => (
+            : orders.filter(o => o.status === "approved" || o.status === "in_progress").flatMap(o => o.boms.filter(b => !b.assignedTeamId).map(b => (
               <Card key={b.id} cls="p-4 mb-3 border-l-4 border-orange-300">
                 <div className="text-xs text-muted-foreground mb-1">{o.orderNo} · {o.productLine}</div>
                 <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
@@ -1505,8 +1529,8 @@ function TeamLeadView({ user, orders, setOrders, screen, teamWorkers = [] }: {
                 ? <div className="text-xs text-muted-foreground italic">Không có công nhân trong tổ</div>
                 : <div className="space-y-2">
                     {teamWorkers.map(w => (
-                      <label key={w.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedWorkers.includes(w.id) ? "border-[#1B3A5C] bg-secondary" : "border-border"}`}>
-                        <input type="checkbox" checked={selectedWorkers.includes(w.id)} onChange={() => setSelectedWorkers(prev => prev.includes(w.id) ? prev.filter(id => id !== w.id) : [...prev, w.id])} className="accent-[#1B3A5C]" />
+                      <label key={w.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${selectedWorkers.includes(w.id) ? "border-primary bg-secondary" : "border-border"}`}>
+                        <input type="checkbox" checked={selectedWorkers.includes(w.id)} onChange={() => setSelectedWorkers(prev => prev.includes(w.id) ? prev.filter(id => id !== w.id) : [...prev, w.id])} className="accent-primary" />
                         <div>
                           <div className="font-semibold text-sm">{w.name}</div>
                           <div className="text-xs text-muted font-mono">{w.employeeId}</div>
@@ -1634,7 +1658,7 @@ function WorkerView({ user, orders }: { user: User; orders: ProductionOrder[]; s
                             </div>
                           </div>
                           <div className="h-1.5 rounded-full bg-border overflow-hidden">
-                            <div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : "bg-[#2D6EBD]"}`} style={{ width: `${pct}%` }} />
+                            <div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : "bg-primary"}`} style={{ width: `${pct}%` }} />
                           </div>
                           {fail > 0 ? <div className="mt-1.5 text-[11px] text-red-600">Hỏng: {fail}</div> : null}
                         </button>
@@ -1871,7 +1895,7 @@ function StatsView({ orders, screen }: { orders: ProductionOrder[]; screen: stri
       }} />
       <Card cls="p-4 mb-4">
         <div className="flex justify-between text-sm font-semibold mb-2"><span>Tiến độ tổng</span><span className="text-muted">{totalPass.toLocaleString()} / {totalTarget.toLocaleString()}</span></div>
-        <div className="h-3 bg-surface rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#1B3A5C] to-[#2D6EBD] rounded-full transition-all" style={{ width: `${rate}%` }} /></div>
+        <div className="h-3 bg-surface rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-primary to-ring rounded-full transition-all" style={{ width: `${rate}%` }} /></div>
         <div className="flex justify-between text-xs text-muted-foreground mt-1.5"><span>Đạt: {totalPass.toLocaleString()}</span><span>Hỏng: {totalFail}</span><span>Chưa: {(totalTarget - totalPass - totalFail).toLocaleString()}</span></div>
       </Card>
       <h3 className="font-display font-700 text-base mb-3">Chi tiết theo Lệnh SX</h3>
@@ -1894,7 +1918,7 @@ function StatsView({ orders, screen }: { orders: ProductionOrder[]; screen: stri
                   <div key={l as string}><div className={`font-bold ${c}`}>{v}</div><div className="text-muted-foreground">{l}</div></div>
                 ))}
               </div>
-              <div className="h-1.5 bg-surface rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-[#1B3A5C] to-[#2D6EBD] rounded-full" style={{ width: `${r}%` }} /></div>
+              <div className="h-1.5 bg-surface rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-primary to-ring rounded-full" style={{ width: `${r}%` }} /></div>
             </Card>
           )
         })}
@@ -1924,17 +1948,41 @@ function StatsView({ orders, screen }: { orders: ProductionOrder[]; screen: stri
 }
 
 // ─── Admin / Account Management view ─────────────────────────────────────────
-function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: User[]) => void; screen: string }) {
+function AdminView({
+  users,
+  setUsers,
+  screen,
+  listQuery,
+}: {
+  users: User[]
+  setUsers: (u: User[]) => void
+  screen: string
+  listQuery?: {
+    search: string
+    onSearch: (q: string) => void
+    filterRole: string
+    onFilterRole: (r: string) => void
+    page: number
+    pageSize: number
+    total: number
+    onPage: (p: number) => void
+    onPageSize: (n: number) => void
+  }
+}) {
   const [showForm, setShowForm] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
   const [search, setSearch] = useState("")
   const [filterRole, setFilterRole] = useState<string>("all")
   const [form, setForm] = useState<Omit<User,"id">>({ employeeId: "", name: "", password: "", role: "worker", teamId: "", department: "", phone: "", active: true })
 
-  const filtered = users.filter(u =>
-    (filterRole === "all" || u.role === filterRole) &&
-    (u.name.toLowerCase().includes(search.toLowerCase()) || u.employeeId.toLowerCase().includes(search.toLowerCase()))
-  )
+  const q = listQuery?.search ?? search
+  const roleF = listQuery?.filterRole ?? filterRole
+  const filtered = listQuery
+    ? users
+    : users.filter(u =>
+        (roleF === "all" || u.role === roleF) &&
+        (u.name.toLowerCase().includes(q.toLowerCase()) || u.employeeId.toLowerCase().includes(q.toLowerCase()))
+      )
 
   const openCreate = () => {
     const nextId = `NV${String(users.length + 1).padStart(3, "0")}`
@@ -1975,7 +2023,7 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
         <Btn onClick={openCreate}><i className="fas fa-user-plus" /> Thêm</Btn>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <StatTile label="Tổng TK" value={users.length} icon="fa-users" color="bg-[#EFF6FF] text-[#2563EB]" />
+        <StatTile label="Tổng TK" value={listQuery?.total ?? users.length} icon="fa-users" color="bg-[#EFF6FF] text-[#2563EB]" />
         <StatTile label="Đang HĐ" value={users.filter(u => u.active).length} icon="fa-circle-dot" color="bg-[#F0FDF4] text-[#16A34A]" />
         <StatTile label="Vô hiệu" value={users.filter(u => !u.active).length} icon="fa-ban" color="bg-[#FFF1F2] text-[#DC2626]" />
         <StatTile label="Công nhân" value={users.filter(u => u.role === "worker").length} icon="fa-gear" color="bg-[#FFFBEB] text-[#D97706]" />
@@ -1983,10 +2031,10 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
       <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Tìm tên, mã NV..."
+          <input value={q} onChange={e => (listQuery ? listQuery.onSearch(e.target.value) : setSearch(e.target.value))} placeholder="Tìm tên, mã NV..."
             className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
-        <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
+        <select value={roleF} onChange={e => (listQuery ? listQuery.onFilterRole(e.target.value) : setFilterRole(e.target.value))}
           className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-card">
           <option value="all">Tất cả</option>
           {(["director","supervisor","teamlead","worker","qc","stats","admin"] as Role[]).map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
@@ -2026,6 +2074,15 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
           </Card>
         ))}
         {filtered.length === 0 && <Card cls="p-8 text-center text-muted-foreground"><i className="fas fa-search text-2xl block mb-2 opacity-30" />Không tìm thấy tài khoản</Card>}
+        {listQuery ? (
+          <PaginationBar
+            page={listQuery.page}
+            pageSize={listQuery.pageSize}
+            total={listQuery.total}
+            onPage={listQuery.onPage}
+            onPageSize={listQuery.onPageSize}
+          />
+        ) : null}
       </div>
 
       {showForm && (
@@ -2037,13 +2094,12 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
                 <div className="relative">
                   <i className="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
                   <input value={form.employeeId} onChange={e => setForm({ ...form, employeeId: e.target.value })}
-                    className="w-full pl-9 pr-3 py-2.5 border border-border rounded-lg text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-ring" placeholder="NV001" />
+                    className="w-full pl-9 pr-3 py-2.5 border border-border rounded-lg text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-ring" placeholder="Mã NV" />
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">Tự động tạo, có thể sửa</div>
               </div>
-              <Input label="Họ và tên" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Nguyễn Văn A" required />
+              <Input label="Họ và tên" value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="Họ tên" required />
               <Input label="Mật khẩu" value={form.password} onChange={v => setForm({ ...form, password: v })} type="password" required />
-              <Input label="Số điện thoại" value={form.phone} onChange={v => setForm({ ...form, phone: v })} placeholder="09xxxxxxxx" />
+              <Input label="Số điện thoại" value={form.phone} onChange={v => setForm({ ...form, phone: v })} placeholder="Số điện thoại" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Select label="Vai trò" value={form.role} onChange={v => setForm({ ...form, role: v as Role })}
@@ -2051,10 +2107,10 @@ function AdminView({ users, setUsers, screen }: { users: User[]; setUsers: (u: U
               <Select label="Tổ (nếu có)" value={form.teamId} onChange={v => setForm({ ...form, teamId: v })}
                 options={[{ value: "", label: "— Không thuộc tổ —" }, ...TEAMS.map(t => ({ value: t.id, label: `${t.name} – ${t.lead}` }))]} />
             </div>
-            <Input label="Bộ phận / Phòng ban" value={form.department} onChange={v => setForm({ ...form, department: v })} placeholder="VD: Tổ 1 / Phòng QC" />
+            <Input label="Bộ phận / Phòng ban" value={form.department} onChange={v => setForm({ ...form, department: v })} placeholder="Bộ phận" />
             <div className="flex items-center gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} className="accent-[#1B3A5C] w-4 h-4" />
+                <input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} className="accent-primary w-4 h-4" />
                 <span className="text-sm font-medium">Tài khoản đang hoạt động</span>
               </label>
             </div>

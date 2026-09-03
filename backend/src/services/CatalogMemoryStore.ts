@@ -1,215 +1,128 @@
 /**
- * In-memory catalog (products, BTP, warehouse, machines, change requests)
- * Fallback khi Supabase chưa có bảng / trống.
+ * In-memory catalog — new model:
+ * Product → SemiProduct → Bom → BomProcess
+ * Shared warehouse (product | semi_product)
  */
 import type {
-  Product,
-  SemiProduct,
-  ProductBomLine,
-  WarehouseStock,
-  WarehouseMovement,
+  Attachment,
+  Bom,
+  BomProcess,
+  EntityListQuery,
   Machine,
   MachineChangeRequest,
-  ProcessStage,
-  Attachment,
+  MachineGroup,
+  PagedResult,
+  Product,
+  ProductStructureLine,
+  SemiProduct,
+  StockItemKind,
+  WarehouseMovement,
+  WarehouseStock,
 } from "../../../shared/src/types/index.js";
 import { paginateInMemory } from "../../../shared/src/utils/pagedList.js";
 import { withAttachmentPreview } from "../../../shared/src/utils/attachments.js";
+import {
+  DMKT_BOM_PROCESSES,
+  DMKT_BOMS,
+  DMKT_MACHINES,
+  DMKT_PRODUCTS,
+  DMKT_SEMI,
+  DMKT_WAREHOUSE,
+} from "../../../shared/src/data/dmktCatalog.js";
+import {
+  SAMPLE_BOM_PROCESSES,
+  SAMPLE_BOMS,
+  SAMPLE_MACHINES,
+  SAMPLE_PRODUCTS,
+  SAMPLE_SEMI,
+  SAMPLE_WAREHOUSE,
+  mockDrawingsById,
+} from "../../../shared/src/data/sampleInspection.js";
+
+export const MAIN_WAREHOUSE_ID = "wh-main";
 
 function id(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-const products: Product[] = [
-  {
-    id: "p1",
-    code: "NOVO-20-001",
-    name: "Van 1 chiều lò xo NOVO 20",
-    description: "Thành phẩm demo",
-    active: true,
-  },
-  {
-    id: "p2",
-    code: "NOVO-VC-20",
-    name: "Van cửa NOVO 20",
-    description: "Theo ĐMKT documents/2-VAN CỬA NOVO 20.xlsx",
-    active: true,
-  },
+function aliasMachine(m: Machine): Machine {
+  return { ...m, code: m.accountingCode, teamId: m.productionTeamId };
+}
+
+const products: Product[] = structuredClone([...SAMPLE_PRODUCTS, ...DMKT_PRODUCTS]);
+const semiProducts: SemiProduct[] = structuredClone([...SAMPLE_SEMI, ...DMKT_SEMI]);
+const boms: Bom[] = structuredClone([...SAMPLE_BOMS, ...DMKT_BOMS]);
+const bomProcesses: BomProcess[] = structuredClone([...SAMPLE_BOM_PROCESSES, ...DMKT_BOM_PROCESSES]);
+
+const machineGroups: MachineGroup[] = [
+  { id: "mg_hot", code: "HOT", name: "Group dập nóng", productionTeamId: "t_hot", isActive: true },
+  { id: "mg_auto", code: "AUTO", name: "Group tự động", productionTeamId: "t_auto", isActive: true },
+  { id: "mg_asm", code: "ASM", name: "Group lắp ráp", productionTeamId: "t_asm", isActive: true },
 ];
 
-const semiProducts: SemiProduct[] = [
-  {
-    id: "sp1",
-    code: "BTP-BODY-20",
-    name: "Thân van NOVO20",
-    processStage: "hot_forge",
-    description: "",
-    active: true,
-    checklist: [
-      { name: "Ø ngoài thân", target: 20, unit: "mm", min: 19.9, max: 20.1 },
-      { name: "Ø lỗ", target: 9, unit: "mm", min: 8.95, max: 9.05 },
-      { name: "Chiều dày thành", target: 1.5, unit: "mm" },
-      { name: "Ren M6", type: "qualitative", hint: "Thử ren chuẩn" },
-      { name: "NQ", type: "qualitative", hint: "Ngoại quan" },
-    ],
-  },
-  {
-    id: "sp2",
-    code: "BTP-SPRING-20",
-    name: "Lò xo NOVO20",
-    processStage: "auto",
-    description: "",
-    active: true,
-    checklist: [
-      { name: "Ø ngoài lò xo", target: 9.5, unit: "mm" },
-      { name: "Ø dây", target: 1.2, unit: "mm" },
-      { name: "Chiều dài tự do", target: 42, unit: "mm" },
-      { name: "Số vòng", target: 8, unit: "vòng" },
-      { name: "NQ", type: "qualitative" },
-    ],
-  },
-  {
-    id: "sp3",
-    code: "BTP-ASM-20",
-    name: "Bộ lắp ráp NOVO20",
-    processStage: "assembly",
-    description: "",
-    active: true,
-    checklist: [
-      { name: "Lực đóng", target: 12, unit: "N" },
-      { name: "Kín nước", type: "qualitative", hint: "Không rò" },
-      { name: "NQ", type: "qualitative" },
-    ],
-  },
-  {
-    id: "sp-vc-body",
-    code: "VC20-THAN",
-    name: "Thân van cửa NOVO 20",
-    processStage: "hot_forge",
-    description: "",
-    active: true,
-    checklist: [
-      { name: "Ø thân", target: 20, unit: "mm" },
-      { name: "Chiều cao", target: 28, unit: "mm" },
-      { name: "NQ", type: "qualitative" },
-    ],
-  },
-  {
-    id: "sp-vc-cap",
-    code: "VC20-NAP",
-    name: "Nắp van cửa NOVO 20",
-    processStage: "hot_forge",
-    description: "",
-    active: true,
-    checklist: [
-      { name: "Ø nắp", target: 22, unit: "mm" },
-      { name: "Độ phẳng", type: "qualitative" },
-      { name: "NQ", type: "qualitative" },
-    ],
-  },
-  {
-    id: "sp-vc-disc",
-    code: "VC20-DIA",
-    name: "Đĩa van cửa NOVO 20",
-    processStage: "hot_forge",
-    description: "",
-    active: true,
-    checklist: [
-      { name: "Ø đĩa", target: 18, unit: "mm" },
-      { name: "Độ dày", target: 3, unit: "mm" },
-      { name: "NQ", type: "qualitative" },
-    ],
-  },
-  { id: "sp-vc-shaft", code: "VC20-TRUC", name: "Trục van cửa NOVO 20", processStage: "auto", description: "", active: true, checklist: [{ name: "Ø trục", target: 6, unit: "mm" }, { name: "Chiều dài", target: 42, unit: "mm" }] },
-  { id: "sp-vc-nut", code: "VC20-OCAL", name: "Ốc áp lực van cửa NOVO 20", processStage: "auto", description: "", active: true, checklist: [{ name: "Ren", type: "qualitative", hint: "T8" }, { name: "NQ", type: "qualitative" }] },
-  { id: "sp-vc-washer", code: "VC20-OCDT8", name: "Ốc đệm T8", processStage: "auto", description: "", active: true, checklist: [{ name: "Ø trong", target: 8, unit: "mm" }, { name: "NQ", type: "qualitative" }] },
-];
-
-const productBoms: ProductBomLine[] = [
-  { id: "pb1", productId: "p1", semiProductId: "sp1", qtyPerUnit: 1 },
-  { id: "pb2", productId: "p1", semiProductId: "sp2", qtyPerUnit: 1 },
-  { id: "pb3", productId: "p1", semiProductId: "sp3", qtyPerUnit: 1 },
-  { id: "pb-vc1", productId: "p2", semiProductId: "sp-vc-body", qtyPerUnit: 1 },
-  { id: "pb-vc2", productId: "p2", semiProductId: "sp-vc-cap", qtyPerUnit: 1 },
-  { id: "pb-vc3", productId: "p2", semiProductId: "sp-vc-disc", qtyPerUnit: 1 },
-  { id: "pb-vc4", productId: "p2", semiProductId: "sp-vc-shaft", qtyPerUnit: 1 },
-  { id: "pb-vc5", productId: "p2", semiProductId: "sp-vc-nut", qtyPerUnit: 1 },
-  { id: "pb-vc6", productId: "p2", semiProductId: "sp-vc-washer", qtyPerUnit: 1 },
-];
-
-const warehouse: WarehouseStock[] = [
-  { semiProductId: "sp1", qty: 120 },
-  { semiProductId: "sp2", qty: 80 },
-  { semiProductId: "sp3", qty: 50 },
-  { semiProductId: "sp-vc-body", qty: 40 },
-  { semiProductId: "sp-vc-cap", qty: 35 },
-  { semiProductId: "sp-vc-disc", qty: 30 },
-  { semiProductId: "sp-vc-shaft", qty: 55 },
-  { semiProductId: "sp-vc-nut", qty: 80 },
-  { semiProductId: "sp-vc-washer", qty: 70 },
-];
-
+const warehouse: WarehouseStock[] = structuredClone([...SAMPLE_WAREHOUSE, ...DMKT_WAREHOUSE]);
 const stockMovements: WarehouseMovement[] = [];
-
-const machines: Machine[] = [
-  {
-    id: "m1",
-    code: "CAM-01",
-    name: "Cam 0.1",
-    location: "Khu Dập nóng — Dãy A1",
-    teamId: "t_hot",
-    params: [{ label: "ĐK ngoài", unit: "mm", min: 19.9, max: 20.1 }],
-    active: true,
-  },
-  {
-    id: "m2",
-    code: "CNC-01",
-    name: "Tiện CNC 1",
-    location: "Khu Dập nóng — Dãy A2",
-    teamId: "t_hot",
-    params: [{ label: "Chiều dài", unit: "mm", min: 49.5, max: 50.5 }],
-    active: true,
-  },
-  {
-    id: "m3",
-    code: "AUTO-01",
-    name: "D80T-01",
-    location: "Khu Tự động — Line B",
-    teamId: "t_auto",
-    params: [],
-    active: true,
-  },
-  {
-    id: "m4",
-    code: "ASM-01",
-    name: "Bàn lắp 1",
-    location: "Khu Lắp ráp — Bàn C1",
-    teamId: "t_asm",
-    params: [],
-    active: true,
-  },
-  {
-    id: "m5",
-    code: "ASM-02",
-    name: "Bàn lắp",
-    location: "Khu Lắp ráp — Bàn C2",
-    teamId: "t_asm",
-    params: [],
-    active: true,
-  },
-];
-
+const machines: Machine[] = structuredClone([...SAMPLE_MACHINES, ...DMKT_MACHINES]);
+const productAttachments = mockDrawingsById(
+  products.map((p) => p.id),
+  "prod",
+);
+const semiAttachments = mockDrawingsById(
+  semiProducts.map((s) => s.id),
+  "semi",
+);
+for (const p of products) {
+  if (p.attachments?.length) productAttachments.set(p.id, p.attachments);
+  else p.attachments = productAttachments.get(p.id);
+}
+for (const s of semiProducts) {
+  if (s.attachments?.length) semiAttachments.set(s.id, s.attachments);
+  else s.attachments = semiAttachments.get(s.id);
+}
 const changeRequests: MachineChangeRequest[] = [];
-
-const productAttachments = new Map<string, Attachment[]>();
-const semiAttachments = new Map<string, Attachment[]>();
 
 function stripHeavy(atts: Attachment[] | undefined): Attachment[] | undefined {
   if (!atts?.length) return atts;
   return atts.map(({ contentBase64: _, url: __, ...meta }) => meta);
 }
 
+function hydrateStock(row: WarehouseStock): WarehouseStock {
+  if (row.itemKind === "product") {
+    return { ...row, product: products.find((p) => p.id === row.itemId) };
+  }
+  return { ...row, semiProduct: semiProducts.find((s) => s.id === row.itemId) };
+}
+
+function processesOf(bomId: string): BomProcess[] {
+  return bomProcesses.filter((p) => p.bomId === bomId).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function bomsOfSemi(semiProductId: string): Bom[] {
+  return boms
+    .filter((b) => b.semiProductId === semiProductId)
+    .map((b) => ({ ...b, processes: processesOf(b.id) }));
+}
+
+function ensureStock(itemKind: StockItemKind, itemId: string): WarehouseStock {
+  let row = warehouse.find((w) => w.itemKind === itemKind && w.itemId === itemId);
+  if (!row) {
+    row = {
+      id: id("ws"),
+      warehouseId: MAIN_WAREHOUSE_ID,
+      itemKind,
+      itemId,
+      qty: 0,
+    };
+    warehouse.push(row);
+  }
+  return row;
+}
+
 export const catalogStore = {
+  listMachineGroups() {
+    return [...machineGroups];
+  },
+
   listProducts() {
     return products.filter((p) => p.active);
   },
@@ -228,12 +141,13 @@ export const catalogStore = {
         p.description.toLowerCase().includes(q),
     });
   },
-  getProduct(id: string) {
-    return products.find((p) => p.id === id) ?? null;
+  getProduct(pid: string) {
+    return products.find((p) => p.id === pid) ?? null;
   },
   createProduct(input: Omit<Product, "id">) {
     const p: Product = { ...input, id: id("p") };
     products.push(p);
+    ensureStock("product", p.id);
     return p;
   },
   updateProduct(pid: string, patch: Partial<Product>) {
@@ -255,9 +169,15 @@ export const catalogStore = {
   listAllSemiProducts() {
     return [...semiProducts];
   },
-  searchSemiProducts(opts: { q?: string; page?: number; pageSize?: number; stage?: ProcessStage | "all" }) {
+  searchSemiProducts(opts: EntityListQuery) {
     let base = semiProducts.filter((s) => s.active);
-    if (opts.stage && opts.stage !== "all") base = base.filter((s) => s.processStage === opts.stage);
+    if (opts.q && /^\s*p\d/i.test(opts.q) === false && opts.stage && opts.stage !== "all") {
+      const team =
+        opts.stage === "hot_forge" ? "t_hot" : opts.stage === "auto" ? "t_auto" : "t_asm";
+      base = base.filter((s) =>
+        bomsOfSemi(s.id).some((b) => b.processes?.some((p) => p.productionTeamId === team)),
+      );
+    }
     return paginateInMemory(base, {
       q: opts.q,
       page: opts.page,
@@ -265,15 +185,20 @@ export const catalogStore = {
       match: (s, q) => s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q),
     });
   },
-  getSemi(id: string) {
-    return semiProducts.find((s) => s.id === id) ?? null;
+  getSemi(sid: string) {
+    return semiProducts.find((s) => s.id === sid) ?? null;
   },
   createSemi(input: Omit<SemiProduct, "id">) {
-    const s: SemiProduct = { ...input, id: id("sp") };
+    if (!products.find((p) => p.id === input.productId)) throw new Error("Không tìm thấy thành phẩm");
+    const s: SemiProduct = {
+      ...input,
+      id: id("sp"),
+      measurementSpecs: input.measurementSpecs ?? {},
+    };
     semiProducts.push(s);
-    if (!warehouse.find((w) => w.semiProductId === s.id)) {
-      warehouse.push({ semiProductId: s.id, qty: 0 });
-    }
+    ensureStock("semi_product", s.id);
+    const bom: Bom = { id: id("bom"), name: `BOM ${s.name}`, semiProductId: s.id };
+    boms.push(bom);
     return s;
   },
   updateSemi(sid: string, patch: Partial<SemiProduct>) {
@@ -283,26 +208,90 @@ export const catalogStore = {
     return semiProducts[i];
   },
 
-  listBom(productId: string): ProductBomLine[] {
-    return productBoms
-      .filter((b) => b.productId === productId)
-      .map((b) => ({
-        ...b,
-        semiProduct: semiProducts.find((s) => s.id === b.semiProductId),
-        stockQty: warehouse.find((w) => w.semiProductId === b.semiProductId)?.qty ?? 0,
+  listBoms(semiProductId: string): Bom[] {
+    return bomsOfSemi(semiProductId);
+  },
+  /** Import: 1 BOM / BTP, nhiều quy trình trên BOM đó */
+  upsertBom(semiProductId: string, name: string, processes: Array<Partial<BomProcess>>) {
+    return this.replaceBoms(semiProductId, [{ name, processes }]);
+  },
+  replaceBoms(
+    semiProductId: string,
+    drafts: Array<{ id?: string; name: string; processes: Array<Partial<BomProcess>> }>,
+  ) {
+    if (!semiProducts.find((s) => s.id === semiProductId)) throw new Error("Không tìm thấy BTP");
+    const existing = boms.filter((b) => b.semiProductId === semiProductId);
+    const keepIds = new Set<string>();
+
+    for (const draft of drafts) {
+      const name = (draft.name || "").trim() || "BOM";
+      let bom =
+        draft.id && existing.find((b) => b.id === draft.id)
+          ? existing.find((b) => b.id === draft.id)
+          : undefined;
+      if (!bom && drafts.length === 1 && existing.length === 1 && !draft.id) {
+        bom = existing[0];
+      }
+      if (!bom) {
+        bom = { id: id("bom"), name, semiProductId };
+        boms.push(bom);
+      } else {
+        bom.name = name;
+      }
+      keepIds.add(bom.id);
+      for (let i = bomProcesses.length - 1; i >= 0; i--) {
+        if (bomProcesses[i].bomId === bom.id) bomProcesses.splice(i, 1);
+      }
+      (draft.processes ?? []).forEach((p, idx) => {
+        const pname = (p.name || "").trim();
+        if (!pname) return;
+        bomProcesses.push({
+          id: p.id || id("bp"),
+          bomId: bom!.id,
+          name: pname,
+          productionTeamId: p.productionTeamId,
+          machineGroupId: p.machineGroupId,
+          quotaPerShift: Number(p.quotaPerShift) || 0,
+          unitOfMeasureId: p.unitOfMeasureId,
+          sortOrder: p.sortOrder ?? idx + 1,
+        });
+      });
+    }
+
+    for (const old of existing) {
+      if (keepIds.has(old.id)) continue;
+      for (let i = bomProcesses.length - 1; i >= 0; i--) {
+        if (bomProcesses[i].bomId === old.id) bomProcesses.splice(i, 1);
+      }
+      const bi = boms.findIndex((b) => b.id === old.id);
+      if (bi >= 0) boms.splice(bi, 1);
+    }
+    return bomsOfSemi(semiProductId);
+  },
+
+  /** Structure used by create-order + admin: semis of a product */
+  listBom(productId: string): ProductStructureLine[] {
+    return semiProducts
+      .filter((s) => s.active && s.productId === productId)
+      .map((s) => ({
+        semiProductId: s.id,
+        qtyPerUnit: 1,
+        stockQty: ensureStock("semi_product", s.id).qty,
+        semiProduct: s,
+        boms: bomsOfSemi(s.id),
       }));
   },
-  setBom(productId: string, lines: Array<{ semiProductId: string; qtyPerUnit: number }>) {
-    for (let i = productBoms.length - 1; i >= 0; i--) {
-      if (productBoms[i].productId === productId) productBoms.splice(i, 1);
+  setBom(productId: string, lines: Array<{ semiProductId: string; qtyPerUnit?: number }>) {
+    const keep = new Set(lines.map((l) => l.semiProductId));
+    for (const s of semiProducts) {
+      if (s.productId === productId) s.active = keep.has(s.id);
     }
     for (const line of lines) {
-      productBoms.push({
-        id: id("pb"),
-        productId,
-        semiProductId: line.semiProductId,
-        qtyPerUnit: line.qtyPerUnit,
-      });
+      const s = semiProducts.find((x) => x.id === line.semiProductId);
+      if (s) {
+        s.productId = productId;
+        s.active = true;
+      }
     }
     return this.listBom(productId);
   },
@@ -316,10 +305,6 @@ export const catalogStore = {
     return semiProducts.find((s) => s.code.toLowerCase() === c) ?? null;
   },
 
-  /**
-   * Import BOM từ CSV Mẫu van: mỗi dòng = 1 quy trình của 1 linh kiện thuộc 1 SP.
-   * Upsert SP + BTP (kèm processSteps) + định mức product BOM.
-   */
   importProductBom(
     rows: Array<{
       productCode: string;
@@ -328,13 +313,14 @@ export const catalogStore = {
       partName?: string;
       processSeq: number;
       processName: string;
-      processStage?: ProcessStage;
+      processStage?: string;
       teamCode?: string;
       machine?: string;
       qtyPerUnit?: number;
       quota?: string;
       techNote?: string;
       people?: number;
+      productDescription?: string;
     }>,
   ) {
     if (!rows.length) throw new Error("File không có dòng dữ liệu");
@@ -343,27 +329,25 @@ export const catalogStore = {
     let semiUpserts = 0;
     let stepCount = 0;
 
-    type AccPart = {
+    type Acc = {
       productCode: string;
       productName: string;
+      productDescription: string;
       partCode: string;
       partName: string;
-      qtyPerUnit: number;
-      steps: import("../../../shared/src/types/index.js").SemiProcessStep[];
-      stage: ProcessStage;
+      processes: Array<{ seq: number; name: string; teamId?: string; quota: number }>;
     };
-    const byProduct = new Map<string, Map<string, AccPart>>();
+    const byProduct = new Map<string, Map<string, Acc>>();
 
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       const productCode = String(r.productCode ?? "").trim();
       const partCode = String(r.partCode ?? "").trim();
       const processName = String(r.processName ?? "").trim();
-      if (!productCode || !partCode || !processName) {
-        errors.push(`Dòng ${i + 2}: thiếu Mã SP / Mã LK / Tên quy trình`);
+      if (!productCode) {
+        errors.push(`Dòng ${i + 2}: thiếu mã thành phẩm`);
         continue;
       }
-      const stage = (r.processStage ?? "hot_forge") as ProcessStage;
       let parts = byProduct.get(productCode);
       if (!parts) {
         parts = new Map();
@@ -374,29 +358,31 @@ export const catalogStore = {
         part = {
           productCode,
           productName: String(r.productName ?? productCode).trim() || productCode,
+          productDescription: String(r.productDescription ?? "").trim(),
           partCode,
           partName: String(r.partName ?? partCode).trim() || partCode,
-          qtyPerUnit: Math.max(1, Number(r.qtyPerUnit) || 1),
-          steps: [],
-          stage,
+          processes: [],
         };
-        parts.set(partCode, part);
-      } else {
-        if (r.productName?.trim()) part.productName = r.productName.trim();
-        if (r.partName?.trim()) part.partName = r.partName.trim();
-        if (r.qtyPerUnit != null && Number(r.qtyPerUnit) > 0) {
-          part.qtyPerUnit = Number(r.qtyPerUnit);
-        }
+        parts.set(partCode || `__product__${productCode}`, part);
       }
-      part.steps.push({
-        seq: Math.max(1, Number(r.processSeq) || part.steps.length + 1),
-        process: processName,
-        machine: r.machine?.trim() || undefined,
-        processStage: stage,
-        teamCode: r.teamCode?.trim() || undefined,
-        people: r.people != null ? Number(r.people) : undefined,
-        techNote: r.techNote?.trim() || undefined,
-        quota: r.quota?.trim() || undefined,
+      if (r.productName?.trim()) part.productName = r.productName.trim();
+      if (r.productDescription?.trim()) part.productDescription = r.productDescription.trim();
+      if (!partCode || !processName) continue;
+      const blob = `${r.processStage ?? ""} ${r.teamCode ?? ""}`
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      const teamId =
+        blob.includes("tu dong") || blob.includes("auto")
+          ? "t_auto"
+          : blob.includes("lap rap") || blob.includes("assembly") || blob.includes("asm")
+            ? "t_asm"
+            : "t_hot";
+      part.processes.push({
+        seq: Math.max(1, Number(r.processSeq) || part.processes.length + 1),
+        name: processName,
+        teamId,
+        quota: Number.parseFloat(String(r.quota ?? "0")) || 0,
       });
       stepCount += 1;
     }
@@ -408,52 +394,56 @@ export const catalogStore = {
         product = this.createProduct({
           code: productCode,
           name: first.productName,
-          description: "Import BOM từ CSV",
+          description: first.productDescription || "Nhập từ file danh mục",
           active: true,
         });
         productUpserts += 1;
-      } else if (first.productName && first.productName !== product.name) {
-        this.updateProduct(product.id, { name: first.productName, active: true });
+      } else {
+        this.updateProduct(product.id, {
+          name: first.productName,
+          description: first.productDescription || product.description,
+          active: true,
+        });
         productUpserts += 1;
       }
-
-      const bomLines: Array<{ semiProductId: string; qtyPerUnit: number }> = [];
       for (const part of parts.values()) {
-        const steps = [...part.steps].sort((a, b) => a.seq - b.seq);
-        const stage =
-          steps.find((s) => s.processStage)?.processStage ?? part.stage ?? "hot_forge";
+        if (!part.partCode || part.partCode.startsWith("__product__")) continue;
         let semi = this.findSemiByCode(part.partCode);
         if (!semi) {
           semi = this.createSemi({
             code: part.partCode,
             name: part.partName,
-            processStage: stage,
-            description: `Import — ${steps.length} quy trình`,
+            productId: product.id,
+            measurementSpecs: {},
             active: true,
-            processSteps: steps,
           });
           semiUpserts += 1;
         } else {
-          this.updateSemi(semi.id, {
-            name: part.partName || semi.name,
-            processStage: stage,
-            active: true,
-            description: `Import — ${steps.length} quy trình`,
-            processSteps: steps,
-            // Giữ checklist đã nhập — import BOM không xóa thông số đo
-            checklist: semi.checklist,
-          });
+          this.updateSemi(semi.id, { name: part.partName, productId: product.id, active: true });
           semiUpserts += 1;
           semi = this.getSemi(semi.id)!;
         }
-        bomLines.push({ semiProductId: semi.id, qtyPerUnit: part.qtyPerUnit });
+        const procs = [...part.processes].sort((a, b) => a.seq - b.seq);
+        if (!procs.length) continue;
+        this.upsertBom(
+          semi.id,
+          `BOM ${part.partName}`,
+          procs.map((p) => ({
+            name: p.name,
+            productionTeamId: p.teamId,
+            quotaPerShift: p.quota,
+            sortOrder: p.seq,
+          })),
+        );
       }
-      this.setBom(product.id, bomLines);
     }
 
     return {
       products: byProduct.size,
-      parts: [...byProduct.values()].reduce((s, m) => s + m.size, 0),
+      parts: [...byProduct.values()].reduce(
+        (s, m) => s + [...m.values()].filter((p) => p.partCode && !p.partCode.startsWith("__product__")).length,
+        0,
+      ),
       steps: stepCount,
       productUpserts,
       semiUpserts,
@@ -463,40 +453,40 @@ export const catalogStore = {
   },
 
   listStock() {
-    return warehouse.map((w) => ({
-      ...w,
-      semiProduct: semiProducts.find((s) => s.id === w.semiProductId),
-    }));
+    return warehouse.map(hydrateStock);
   },
-  searchStock(opts: { q?: string; page?: number; pageSize?: number; stage?: ProcessStage | "all" }) {
+  searchStock(opts: EntityListQuery) {
     let rows = this.listStock();
-    if (opts.stage && opts.stage !== "all") {
-      rows = rows.filter((r) => r.semiProduct?.processStage === opts.stage);
-    }
+    const kind = opts.itemKind && opts.itemKind !== "all"
+      ? opts.itemKind
+      : opts.stage && opts.stage !== "all"
+        ? (opts.stage === "assembly" ? "product" : "semi_product")
+        : undefined;
+    if (kind) rows = rows.filter((r) => r.itemKind === kind);
     return paginateInMemory(rows, {
       q: opts.q,
       page: opts.page,
       pageSize: opts.pageSize,
       match: (r, q) => {
-        const s = r.semiProduct;
-        if (!s) return false;
-        return s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q);
+        const label =
+          r.itemKind === "product"
+            ? `${r.product?.code ?? ""} ${r.product?.name ?? ""}`
+            : `${r.semiProduct?.code ?? ""} ${r.semiProduct?.name ?? ""}`;
+        return label.toLowerCase().includes(q);
       },
     });
   },
-  setStock(semiProductId: string, qty: number, note?: string, createdBy?: string) {
-    let row = warehouse.find((w) => w.semiProductId === semiProductId);
-    if (!row) {
-      row = { semiProductId, qty: 0 };
-      warehouse.push(row);
-    }
+  setStock(itemId: string, qty: number, note?: string, createdBy?: string, itemKind: StockItemKind = "semi_product") {
+    const row = ensureStock(itemKind, itemId);
     const before = row.qty;
     row.qty = qty;
     row.updatedAt = new Date().toISOString();
     if (before !== qty) {
       stockMovements.unshift({
         id: id("wm"),
-        semiProductId,
+        warehouseId: MAIN_WAREHOUSE_ID,
+        itemKind,
+        itemId,
         delta: qty - before,
         qtyAfter: qty,
         note: note ?? "Kiểm kê tồn kho",
@@ -504,18 +494,19 @@ export const catalogStore = {
         createdAt: new Date().toISOString(),
       });
     }
-    return row;
+    return hydrateStock(row);
   },
   consumeStock(semiProductId: string, qty: number) {
-    const row = warehouse.find((w) => w.semiProductId === semiProductId);
-    if (!row) return;
+    const row = ensureStock("semi_product", semiProductId);
     const before = row.qty;
     row.qty = Math.max(0, row.qty - qty);
     row.updatedAt = new Date().toISOString();
     if (before !== row.qty) {
       stockMovements.unshift({
         id: id("wm"),
-        semiProductId,
+        warehouseId: MAIN_WAREHOUSE_ID,
+        itemKind: "semi_product",
+        itemId: semiProductId,
         delta: row.qty - before,
         qtyAfter: row.qty,
         note: "Xuất kho (lệnh SX)",
@@ -523,17 +514,15 @@ export const catalogStore = {
       });
     }
   },
-  adjustStock(semiProductId: string, delta: number, note = "", createdBy = "") {
-    let row = warehouse.find((w) => w.semiProductId === semiProductId);
-    if (!row) {
-      row = { semiProductId, qty: 0 };
-      warehouse.push(row);
-    }
+  adjustStock(itemId: string, delta: number, note = "", createdBy = "", itemKind: StockItemKind = "semi_product") {
+    const row = ensureStock(itemKind, itemId);
     row.qty = Math.max(0, row.qty + delta);
     row.updatedAt = new Date().toISOString();
     const movement: WarehouseMovement = {
       id: id("wm"),
-      semiProductId,
+      warehouseId: MAIN_WAREHOUSE_ID,
+      itemKind,
+      itemId,
       delta,
       qtyAfter: row.qty,
       note: note || (delta >= 0 ? "Nhập kho" : "Xuất kho"),
@@ -541,40 +530,65 @@ export const catalogStore = {
       createdAt: new Date().toISOString(),
     };
     stockMovements.unshift(movement);
-    return { stock: row, movement };
+    return { stock: hydrateStock(row), movement };
   },
   listMovements(limit = 50) {
     return stockMovements.slice(0, limit).map((m) => ({
       ...m,
-      semiProduct: semiProducts.find((s) => s.id === m.semiProductId),
+      ...(m.itemKind === "product"
+        ? { product: products.find((p) => p.id === m.itemId) }
+        : { semiProduct: semiProducts.find((s) => s.id === m.itemId) }),
     }));
   },
 
   listMachines() {
-    return machines.filter((m) => m.active);
+    return machines.filter((m) => m.active).map(aliasMachine);
   },
   listAllMachines() {
-    return [...machines];
+    return machines.map(aliasMachine);
+  },
+  searchMachines(opts: { q?: string; page?: number; pageSize?: number; activeOnly?: boolean }) {
+    const base = opts.activeOnly === false ? machines : machines.filter((m) => m.active);
+    return paginateInMemory(base.map(aliasMachine), {
+      q: opts.q,
+      page: opts.page,
+      pageSize: opts.pageSize,
+      match: (m, q) =>
+        m.name.toLowerCase().includes(q) ||
+        (m.accountingCode ?? "").toLowerCase().includes(q) ||
+        (m.code ?? "").toLowerCase().includes(q),
+    });
   },
   getMachine(mid: string) {
-    return machines.find((m) => m.id === mid) ?? null;
+    const m = machines.find((x) => x.id === mid);
+    return m ? aliasMachine(m) : null;
   },
   createMachine(input: Omit<Machine, "id">) {
-    const m: Machine = { ...input, id: id("m") };
+    const accountingCode = (input.accountingCode || input.code || "").trim();
+    const productionTeamId = input.productionTeamId || input.teamId;
+    const m: Machine = {
+      ...input,
+      id: id("m"),
+      accountingCode,
+      productionTeamId,
+      specs: input.specs ?? {},
+    };
     machines.push(m);
-    return m;
+    return aliasMachine(m);
   },
   updateMachine(mid: string, patch: Partial<Machine>) {
     const i = machines.findIndex((m) => m.id === mid);
     if (i < 0) throw new Error("Không tìm thấy máy");
-    machines[i] = { ...machines[i], ...patch, id: mid };
-    return machines[i];
+    const accountingCode = patch.accountingCode ?? patch.code ?? machines[i].accountingCode;
+    const productionTeamId = patch.productionTeamId ?? patch.teamId ?? machines[i].productionTeamId;
+    machines[i] = { ...machines[i], ...patch, accountingCode, productionTeamId, id: mid };
+    return aliasMachine(machines[i]);
   },
   deleteMachine(mid: string) {
     const i = machines.findIndex((m) => m.id === mid);
     if (i < 0) throw new Error("Không tìm thấy máy");
     machines[i].active = false;
-    return machines[i];
+    return aliasMachine(machines[i]);
   },
 
   listChangeRequests(filter?: { status?: string; target?: string }) {
@@ -582,6 +596,22 @@ export const catalogStore = {
       if (filter?.status && r.status !== filter.status) return false;
       if (filter?.target && r.target !== filter.target) return false;
       return true;
+    });
+  },
+  searchChangeRequests(query: EntityListQuery): PagedResult<MachineChangeRequest> {
+    const rows = this.listChangeRequests({
+      status: query.status,
+      target: query.target,
+    });
+    return paginateInMemory(rows, {
+      q: query.q,
+      page: query.page,
+      pageSize: query.pageSize,
+      match: (r, q) =>
+        r.requestedName.toLowerCase().includes(q) ||
+        r.reason.toLowerCase().includes(q) ||
+        (r.fromMachine ?? "").toLowerCase().includes(q) ||
+        (r.toMachine ?? "").toLowerCase().includes(q),
     });
   },
   createChangeRequest(
@@ -670,5 +700,3 @@ export const catalogStore = {
     return true;
   },
 };
-
-export type { ProcessStage };

@@ -12,6 +12,15 @@ const DEFAULT_POS: FabPosition = { edge: "right", yRatio: 0.62 };
 const FAB_SIZE = 56;
 const EDGE_PAD = 12;
 const BOTTOM_NAV = 80;
+const DOCK_VAR = "--worker-dock-h";
+
+function bottomReserve(): number {
+  if (typeof window === "undefined") return BOTTOM_NAV;
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(DOCK_VAR).trim();
+  const dock = Number.parseInt(raw, 10);
+  if (Number.isFinite(dock) && dock > 0) return dock + 8;
+  return BOTTOM_NAV;
+}
 const TOP_SAFE = 12;
 const DRAG_THRESHOLD = 8;
 
@@ -33,14 +42,16 @@ function loadPos(storageKey: string): FabPosition {
 }
 
 function toPixels(pos: FabPosition, vw: number, vh: number) {
-  const usableH = Math.max(1, vh - TOP_SAFE - BOTTOM_NAV - FAB_SIZE);
+  const bottom = bottomReserve();
+  const usableH = Math.max(1, vh - TOP_SAFE - bottom - FAB_SIZE);
   const x = pos.edge === "left" ? EDGE_PAD : vw - FAB_SIZE - EDGE_PAD;
   const y = TOP_SAFE + pos.yRatio * usableH;
   return { x, y };
 }
 
 function fromPixels(x: number, y: number, vw: number, vh: number): FabPosition {
-  const usableH = Math.max(1, vh - TOP_SAFE - BOTTOM_NAV - FAB_SIZE);
+  const bottom = bottomReserve();
+  const usableH = Math.max(1, vh - TOP_SAFE - bottom - FAB_SIZE);
   const mid = vw / 2;
   const edge: FabEdge = x + FAB_SIZE / 2 < mid ? "left" : "right";
   const yRatio = clamp((y - TOP_SAFE) / usableH, 0, 1);
@@ -131,7 +142,7 @@ export default function DraggableFab({
     if (!d.moved && Math.hypot(dx, dy) > DRAG_THRESHOLD) d.moved = true;
     if (!d.moved) return;
     const nextX = clamp(d.originX + dx, EDGE_PAD, vw - FAB_SIZE - EDGE_PAD);
-    const nextY = clamp(d.originY + dy, TOP_SAFE, vh - BOTTOM_NAV - FAB_SIZE);
+    const nextY = clamp(d.originY + dy, TOP_SAFE, vh - bottomReserve() - FAB_SIZE);
     setLivePos({ x: nextX, y: nextY });
   };
 
@@ -154,7 +165,7 @@ export default function DraggableFab({
 
     const cur = liveRef.current ?? {
       x: clamp(d.originX + (e.clientX - d.startX), EDGE_PAD, vw - FAB_SIZE - EDGE_PAD),
-      y: clamp(d.originY + (e.clientY - d.startY), TOP_SAFE, vh - BOTTOM_NAV - FAB_SIZE),
+      y: clamp(d.originY + (e.clientY - d.startY), TOP_SAFE, vh - bottomReserve() - FAB_SIZE),
     };
     const snapped = fromPixels(cur.x, cur.y, vw, vh);
     setPos(snapped);

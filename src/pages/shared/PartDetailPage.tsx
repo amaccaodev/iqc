@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import type { Attachment, Machine } from "@shared/types";
 import { BOM_STATUS_LABEL, STATUS_LABEL } from "@shared/constants/labels";
@@ -151,7 +151,7 @@ export default function PartDetailPage({
 
         <div className="h-2 rounded-full bg-border overflow-hidden">
           <div
-            className={`h-full transition-all ${pct >= 100 ? "bg-emerald-500" : "bg-[#2D6EBD]"}`}
+            className={`h-full transition-all ${pct >= 100 ? "bg-emerald-500" : "bg-primary"}`}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -213,9 +213,6 @@ export default function PartDetailPage({
         {machines.length === 0 ? (
           <Card cls="p-4 text-sm text-muted text-center space-y-1">
             <p>Chưa có máy / công nhân được phân trên linh kiện này.</p>
-            <p className="text-xs text-muted-foreground">
-              Tổ trưởng phân công: quy trình → máy (theo khu vực tổ) → người.
-            </p>
           </Card>
         ) : (
           <div className="space-y-2">
@@ -228,10 +225,6 @@ export default function PartDetailPage({
                       {m.machineName}
                     </div>
                     <div className="text-xs text-muted mt-1 space-y-0.5">
-                      <div>
-                        <i className="fas fa-location-dot text-[10px] mr-1" />
-                        Vị trí: {m.location || "Chưa gắn location"}
-                      </div>
                       <div>
                         <i className="fas fa-users text-[10px] mr-1" />
                         Tổ khu vực máy: {m.teamName || "Chưa gắn tổ"}

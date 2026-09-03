@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { BOMItem, DimensionRow, MachineChangeKind, ProductionOrder, ShiftClose, ShiftUnlockRequest, UserPublic } from "@shared/types";
 import type { MaterialSpec, SpecValidationResult } from "@shared/types/spec";
@@ -12,7 +12,7 @@ import {
 } from "@shared/utils/specValidation";
 import { bomProcessLockReason, isBomProcessUnlocked } from "@shared/utils/bomProcess";
 import { closesTodayChronological, shiftLockState } from "@shared/utils/shiftCloseGuard";
-import { Btn, Card, Modal } from "../ui";
+import { Card, Modal } from "../ui";
 import { shiftLabel } from "@shared/utils/orderHelpers";
 import FileSlideshow from "../files/FileSlideshow";
 import { orderApi } from "../../services/api/OrderApiService";
@@ -20,6 +20,8 @@ import { salaryApi } from "../../services/api/SalaryApiService";
 import { scrollFieldIntoView, useKeyboardViewport } from "../../hooks/useKeyboardViewport";
 import { catalogApi } from "../../services/api/CatalogApiService";
 import { MACHINE_PROPOSAL_KIND_LABEL } from "./ProposalActionButtons";
+import WorkerPinnedActions from "./WorkerPinnedActions";
+import { WORKER_BTN_PRIMARY } from "./workerUi";
 import { toast } from "../../hooks/useToast";
 
 type EntryMode = "info" | "measure";
@@ -63,6 +65,7 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
   const [approvalReason, setApprovalReason] = useState("");
   const [approvalTarget, setApprovalTarget] = useState<"teamlead" | "mechanic">("teamlead");
   const [toMachine, setToMachine] = useState("");
+  const [catalogDrawings, setCatalogDrawings] = useState<ProductionOrder["attachments"]>([]);
 
   const processLocked = !isBomProcessUnlocked(order, bom);
   const processLockReason = bomProcessLockReason(order, bom);
@@ -102,7 +105,6 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
     }
   }, [searchParams, setSearchParams, navigate]);
 
-  const usesPointMode = activeSpecs.some((s) => s.pointNo != null);
   const allRows = useMemo(() => bom.workerEntries.flatMap((e) => e.rows), [bom.workerEntries]);
   const myRows = useMemo(
     () => bom.workerEntries.find((e) => e.workerId === user.id)?.rows ?? [],
@@ -118,12 +120,35 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
   const rowWarnings = currentValidations.filter((v) => !v.valid).length;
 
   const specFiles = useMemo(
-    () =>
-      (bom.attachments?.length ? bom.attachments : order.attachments).filter(
+    () => {
+      const fromBom = bom.attachments ?? [];
+      const fromOrder = order.attachments ?? [];
+      const raw = fromBom.length ? fromBom : catalogDrawings.length ? catalogDrawings : fromOrder;
+      return raw.filter(
         (a) => a.type === "pdf" || a.type === "excel" || a.type === "cad" || a.type === "image",
-      ),
-    [bom.attachments, order.attachments],
+      );
+    },
+    [bom.attachments, order.attachments, catalogDrawings],
   );
+
+  useEffect(() => {
+    if ((bom.attachments?.length ?? 0) > 0 || !bom.semiProductId) {
+      setCatalogDrawings([]);
+      return;
+    }
+    let cancelled = false;
+    void catalogApi
+      .listSemiAttachments(bom.semiProductId)
+      .then((list) => {
+        if (!cancelled) setCatalogDrawings(list);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogDrawings([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bom.semiProductId, bom.attachments?.length]);
 
   const updateDim = (ci: number, val: string) => {
     setDims((prev) => prev.map((d, j) => (j === ci ? val : d)));
@@ -163,6 +188,13 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
   };
 
   const openCloseShift = () => {
+    if (lock.canEditClose && lock.pendingClose) {
+      setPassQty(String(lock.pendingClose.passQty));
+      setFailQty(String(lock.pendingClose.failQty));
+      setCloseNote(lock.pendingClose.note ?? "");
+      setShowCloseShift(true);
+      return;
+    }
     if (!lock.canClose) return;
     setPassQty(String(myRows.length || bom.passQty || 0));
     setFailQty(String(bom.failQty || 0));
@@ -177,21 +209,31 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
   };
 
   const submitCloseShift = async () => {
-    if (!lock.canClose) {
+    const editing = Boolean(lock.canEditClose && lock.pendingClose);
+    if (!editing && !lock.canClose) {
       toast.error(lock.hint || "Không thể chốt ca lúc này.");
       return;
     }
     setSubmitting(true);
     try {
-      await orderApi.workerShiftClose(order.id, bom.id, {
-        passQty: Number(passQty) || 0,
-        failQty: Number(failQty) || 0,
-        note: closeNote,
-        reportedBy: user.name,
-        workerId: user.id,
-      });
+      if (editing && lock.pendingClose) {
+        await salaryApi.updateShiftClose(lock.pendingClose.id, {
+          passQty: Number(passQty) || 0,
+          failQty: Number(failQty) || 0,
+          note: closeNote,
+          workerId: user.id,
+        });
+        toast.success("Đã lưu phiếu chốt ca");
+      } else {
+        await orderApi.workerShiftClose(order.id, bom.id, {
+          passQty: Number(passQty) || 0,
+          failQty: Number(failQty) || 0,
+          note: closeNote,
+          reportedBy: user.name,
+          workerId: user.id,
+        });
+      }
       setShowCloseShift(false);
-      // Ở lại trang thông tin — lịch sử Lần chốt 1, 2… vẫn hiện
       reloadShiftState();
       navigate(taskBase, { replace: true });
     } catch (e) {
@@ -260,9 +302,34 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
     }
   };
 
+  const pinned = (
+    <WorkerPinnedActions
+      action={lock.button}
+      onMeasure={() => {
+        if (processLocked || !lock.canMeasure) return;
+        if (!isMeasure) navigate(`${taskBase}/measure`);
+      }}
+      onCloseShift={openCloseShift}
+      onUnlock={openUnlock}
+      measureDisabled={!shiftReady || processLocked || !lock.canMeasure}
+      closeDisabled={
+        submitting ||
+        (lock.button === "close"
+          ? !lock.canClose
+          : lock.button === "edit"
+            ? !lock.canEditClose
+            : !lock.canUnlock)
+      }
+      hint={lock.hint}
+      measureActive={isMeasure}
+    />
+  );
+
   return (
     <div
-      className="max-w-lg mx-auto"
+      className={`max-w-lg mx-auto ${
+        keyboardOpen ? "" : "pb-[calc(var(--worker-dock-h,0px)+0.5rem)]"
+      }`}
       style={keyboardOpen ? { paddingBottom: "var(--keyboard-inset, 0px)" } : undefined}
     >
       <div className="flex items-center gap-3 mb-3">
@@ -324,7 +391,6 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
             lastSavedTt={lastSavedTt}
             rowWarnings={rowWarnings}
             activeSpecs={activeSpecs}
-            usesPointMode={usesPointMode}
             dims={dims}
             specFiles={specFiles}
             getFieldValidation={getFieldValidation}
@@ -376,60 +442,35 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
                     ) : (
                       <div className="text-xs text-muted-foreground mt-0.5">Không có ghi chú</div>
                     )}
+                    {c.status === "pending_teamlead" ? (
+                      <button
+                        type="button"
+                        className="mt-2 text-xs font-semibold text-primary border-0 bg-transparent cursor-pointer underline"
+                        onClick={openCloseShift}
+                      >
+                        Sửa phiếu
+                      </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </Card>
           ) : null}
-
-          <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-border bg-background/95 px-4 py-3">
-            {lock.hint ? (
-              <p className="text-xs text-center text-muted mb-2">{lock.hint}</p>
-            ) : null}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (processLocked || !lock.canMeasure) return;
-                  navigate(`${taskBase}/measure`);
-                }}
-                disabled={!shiftReady || processLocked || !lock.canMeasure}
-                data-testid="tab-Đo kiểm"
-                className="min-h-12 flex items-center justify-center gap-2 rounded-xl text-sm font-bold border-2 border-[#1B3A5C] bg-primary text-white shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <i className="fas fa-ruler" /> Đo kiểm
-              </button>
-              {lock.button === "close" ? (
-                <button
-                  type="button"
-                  onClick={openCloseShift}
-                  disabled={!lock.canClose || submitting}
-                  data-testid="tab-Chốt ca"
-                  className="min-h-12 flex items-center justify-center gap-2 rounded-xl text-sm font-bold border-2 border-[#1B3A5C] bg-white text-[#1B3A5C] shadow-md hover:bg-secondary transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <i className="fas fa-flag-checkered" /> Chốt ca
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={openUnlock}
-                  disabled={!lock.canUnlock || submitting}
-                  data-testid="tab-Mở khóa"
-                  className="min-h-12 flex items-center justify-center gap-2 rounded-xl text-sm font-bold border-2 border-[#1B3A5C] bg-white text-[#1B3A5C] shadow-md hover:bg-secondary transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <i className="fas fa-lock-open" /> Mở khóa
-                </button>
-              )}
-            </div>
-          </div>
         </>
       )}
 
+      {pinned}
+
       {showCloseShift && (
-        <Modal title="Xác nhận chốt ca" onClose={() => setShowCloseShift(false)}>
+        <Modal
+          title={lock.canEditClose ? "Sửa phiếu chốt ca" : "Xác nhận chốt ca"}
+          onClose={() => setShowCloseShift(false)}
+        >
           <div className="space-y-3">
             <p className="text-sm text-muted">
-              Phiếu sẽ gửi tổ trưởng. Sau khi chốt, cần mở khóa (duyệt) mới chốt ca tiếp trong ngày.
+              {lock.canEditClose
+                ? "Tổ trưởng chưa duyệt — sửa số đạt/hỏng rồi lưu lại. Sau khi duyệt, xin mở khóa để chốt ca tiếp."
+                : "Phiếu sẽ gửi tổ trưởng. Sau khi tổ trưởng duyệt, xin mở khóa để đo kiểm / chốt ca tiếp trong ngày."}
             </p>
             <label className="text-sm block">
               <span className="text-muted">Số lượng đạt</span>
@@ -448,9 +489,14 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
                 onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
               />
             </label>
-            <Btn cls="w-full justify-center" onClick={() => void submitCloseShift()} disabled={submitting}>
-              {submitting ? "Đang gửi..." : "Xác nhận chốt ca"}
-            </Btn>
+            <button
+              type="button"
+              className={`${WORKER_BTN_PRIMARY} w-full`}
+              onClick={() => void submitCloseShift()}
+              disabled={submitting}
+            >
+              {submitting ? "Đang gửi..." : lock.canEditClose ? "Lưu phiếu" : "Xác nhận chốt ca"}
+            </button>
           </div>
         </Modal>
       )}
@@ -470,9 +516,14 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
                 onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
               />
             </label>
-            <Btn cls="w-full justify-center" onClick={() => void submitUnlock()} disabled={submitting}>
+            <button
+              type="button"
+              className={`${WORKER_BTN_PRIMARY} w-full`}
+              onClick={() => void submitUnlock()}
+              disabled={submitting}
+            >
               {submitting ? "Đang gửi..." : "Gửi tổ trưởng"}
-            </Btn>
+            </button>
           </div>
         </Modal>
       )}
@@ -490,11 +541,7 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
                 value={approvalReason}
                 onChange={(e) => setApprovalReason(e.target.value)}
                 onFocus={(e) => scrollFieldIntoView(e.currentTarget)}
-                placeholder={
-                  proposalKind === "add_machine"
-                    ? "VD: Cần thêm máy D80T-02 cho cùng quy trình..."
-                    : "VD: Máy Cam 0.1 đo lệch, xin thay máy..."
-                }
+                placeholder="Lý do"
               />
             </label>
             <label className="text-sm block">
@@ -533,9 +580,14 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
               />
               Cơ điện
             </label>
-            <Btn cls="w-full justify-center" onClick={() => void submitApproval()} disabled={submitting}>
+            <button
+              type="button"
+              className={`${WORKER_BTN_PRIMARY} w-full`}
+              onClick={() => void submitApproval()}
+              disabled={submitting}
+            >
               <i className="fas fa-paper-plane" /> Gửi đề xuất
-            </Btn>
+            </button>
           </div>
         </Modal>
       )}
@@ -553,7 +605,6 @@ function EntryPanel({
   lastSavedTt,
   rowWarnings,
   activeSpecs,
-  usesPointMode,
   dims,
   specFiles,
   getFieldValidation,
@@ -570,7 +621,6 @@ function EntryPanel({
   lastSavedTt: number | null;
   rowWarnings: number;
   activeSpecs: MaterialSpec[];
-  usesPointMode: boolean;
   dims: string[];
   specFiles: ProductionOrder["attachments"];
   getFieldValidation: (i: number) => SpecValidationResult | undefined;
@@ -593,12 +643,6 @@ function EntryPanel({
           {" · "}
           {activeSpecs.length} thông số
         </div>
-        <p className="mt-1.5 text-muted">
-          <i className="fas fa-ruler mr-1" />
-          {usesPointMode
-            ? "Nhập theo checklist (1)(2)(3)… rồi bấm Nộp số đo"
-            : "Nhập số đo rồi bấm Nộp số đo"}
-        </p>
       </div>
 
       {lastSavedTt !== null && (
@@ -639,7 +683,7 @@ function EntryPanel({
               <div key={`${point}-${ci}`}>
                 <div className="flex items-start gap-3">
                   <div className="w-11 flex-shrink-0 flex flex-col items-center pt-0.5">
-                    <span className="w-9 h-9 rounded-full border-2 border-[#1B3A5C] text-primary font-display font-700 text-sm flex items-center justify-center">
+                    <span className="w-9 h-9 rounded-full border-2 border-primary text-primary font-display font-700 text-sm flex items-center justify-center">
                       {point}
                     </span>
                   </div>
@@ -696,11 +740,11 @@ function EntryPanel({
         </div>
       </Card>
 
-      <Btn
-        variant="success"
+      <button
+        type="button"
         onClick={onSubmit}
-        cls={`w-full justify-center ${submitting || !hasInput ? "opacity-50 pointer-events-none" : ""}`}
-        size="lg"
+        disabled={submitting || !hasInput}
+        className={`${WORKER_BTN_PRIMARY} w-full`}
       >
         {submitting ? (
           <>
@@ -711,7 +755,7 @@ function EntryPanel({
             <i className="fas fa-check" /> Nộp số đo
           </>
         )}
-      </Btn>
+      </button>
     </>
   );
 }
@@ -745,12 +789,15 @@ function InfoPanel({
     .filter(
       (b) =>
         b.id !== bom.id &&
-        (b.partGroup || b.partName) === (bom.partGroup || bom.partName),
+        (bom.catalogBomId
+          ? b.catalogBomId === bom.catalogBomId
+          : (b.partGroup || b.partName) === (bom.partGroup || bom.partName)),
     )
     .sort((a, b) => (a.processSeq ?? 0) - (b.processSeq ?? 0));
   const rowsMeta: { label: string; value: string }[] = [
     { label: "Sản phẩm", value: order.productLine || order.productCode || "—" },
     { label: "Linh kiện", value: bom.partGroup || bom.partName },
+    ...(bom.catalogBomName ? [{ label: "BOM", value: bom.catalogBomName }] : []),
     { label: "Quy trình", value: bom.process || "—" },
     { label: "Mã LK", value: bom.partCode || "—" },
     { label: "SL Cần", value: String(bom.targetQty || order.targetQty || 0) },
@@ -784,7 +831,7 @@ function InfoPanel({
           <ul className="space-y-1.5 text-sm">
             {inspectionSpecs.map((s) => (
               <li key={s.index} className="flex gap-2 items-start">
-                <span className="w-6 h-6 rounded-full border border-[#1B3A5C] text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">
+                <span className="w-6 h-6 rounded-full border border-primary text-primary text-xs font-bold flex items-center justify-center flex-shrink-0">
                   {s.pointNo ?? s.index + 1}
                 </span>
                 <span>

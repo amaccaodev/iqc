@@ -14,10 +14,7 @@ import type {
   TeamSummary,
   WorkerMachineAssignment,
 } from "../../../shared/src/types/index.js";
-import {
-  bomSpecsFromChecklist,
-  resolvePartChecklist,
-} from "../../../shared/src/utils/specValidation.js";
+import { measurementSpecsToMaterialSpecs } from "../../../shared/src/utils/specValidation.js";
 import { TEAMS } from "../../../shared/src/constants/teams.js";
 import {
   encodeTechNote,
@@ -32,6 +29,91 @@ import { catalogStore } from "./CatalogMemoryStore.js";
 
 function uid(prefix: string) {
   return `${prefix}${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function teamToStage(teamId?: string): import("../../../shared/src/types/index.js").ProcessStage | undefined {
+  if (teamId === "t_hot") return "hot_forge";
+  if (teamId === "t_auto") return "auto";
+  if (teamId === "t_asm") return "assembly";
+  return undefined;
+}
+
+function specsFromSemi(sp: { measurementSpecs?: import("../../../shared/src/types/index.js").MeasurementSpecMap }) {
+  const materialSpecs = measurementSpecsToMaterialSpecs(sp.measurementSpecs ?? {});
+  const specCols = materialSpecs.map((s) => s.label);
+  while (specCols.length < 11) specCols.push("");
+  return { materialSpecs, specCols };
+}
+
+function jobsFromSemi(
+  sp: NonNullable<ReturnType<typeof catalogStore.getSemi>>,
+  produceQty: number,
+  stockUse: number,
+  useFromStock: boolean,
+  extraNote: string,
+  processIds?: string[],
+): BOMItem[] {
+  const jobs: BOMItem[] = [];
+  const { materialSpecs, specCols } = specsFromSemi(sp);
+  const catalogBoms = catalogStore.listBoms(sp.id);
+  const pick = processIds?.length ? new Set(processIds) : null;
+  const attachments = catalogStore.listSemiAttachments(sp.id, true);
+
+  const pushJob = (
+    processName: string,
+    seq: number,
+    extra: Partial<BOMItem>,
+  ) => {
+    jobs.push({
+      id: uid("b"),
+      bomCode: "",
+      partCode: sp.code,
+      partName: sp.name,
+      partGroup: sp.name,
+      processSeq: seq,
+      rawMaterial: sp.name,
+      machine: "",
+      process: processName,
+      targetQty: produceQty,
+      stockUseQty: jobs.length === 0 ? stockUse : 0,
+      useFromStock: jobs.length === 0 ? useFromStock : false,
+      passQty: 0,
+      failQty: 0,
+      assignedTeamId: "",
+      assignedTeamName: "",
+      assignedWorkers: [],
+      status: "unassigned",
+      specCols,
+      materialSpecs: materialSpecs.length ? materialSpecs : undefined,
+      techNote: extraNote,
+      workerEntries: [],
+      semiProductId: sp.id,
+      attachments,
+      ...extra,
+    });
+  };
+
+  for (const bom of catalogBoms) {
+    const steps = (bom.processes ?? []).filter((p) => !pick || pick.has(p.id));
+    steps.forEach((step, idx) => {
+      pushJob(step.name, step.sortOrder || idx + 1, {
+        catalogBomId: bom.id,
+        catalogBomName: bom.name,
+        catalogProcessId: step.id,
+        processStage: teamToStage(step.productionTeamId),
+        quota: step.quotaPerShift ? String(step.quotaPerShift) : undefined,
+      });
+    });
+  }
+
+  if (pick && !jobs.length) return [];
+  if (!jobs.length) {
+    pushJob(catalogBoms[0]?.name ?? "", 1, {
+      catalogBomId: catalogBoms[0]?.id,
+      catalogBomName: catalogBoms[0]?.name,
+    });
+  }
+  return jobs;
 }
 
 export class SupabaseOrderService {
@@ -79,36 +161,8 @@ export class SupabaseOrderService {
     for (const line of catalogBom) {
       const sp = catalogStore.getSemi(line.semiProductId);
       if (!sp) continue;
-      const qtyPer = Number(line.qtyPerUnit) || 1;
-      const produceQty = Math.max(0, Math.ceil(order.targetQty * qtyPer));
-      rebuilt.push({
-        id: uid("b"),
-        bomCode: "",
-        partCode: sp.code,
-        partName: sp.name,
-        rawMaterial: sp.name,
-        machine: "",
-        process: "",
-        processStage: sp.processStage,
-        targetQty: produceQty,
-        passQty: 0,
-        failQty: 0,
-        assignedTeamId: "",
-        assignedTeamName: "",
-        assignedWorkers: [],
-        status: "unassigned",
-        ...(() => {
-          const { materialSpecs, specCols } = bomSpecsFromChecklist(resolvePartChecklist(sp));
-          return {
-            specCols,
-            materialSpecs: materialSpecs.length ? materialSpecs : undefined,
-          };
-        })(),
-        techNote: "",
-        workerEntries: [],
-        semiProductId: sp.id,
-        attachments: catalogStore.listSemiAttachments(sp.id, true),
-      });
+      const produceQty = Math.max(0, Math.ceil(order.targetQty * (line.qtyPerUnit || 1)));
+      rebuilt.push(...jobsFromSemi(sp, produceQty, 0, false, ""));
     }
     if (!rebuilt.length) return order;
 
@@ -249,89 +303,20 @@ export class SupabaseOrderService {
       const stockUse = line.useFromStock ? Math.max(0, Number(line.stockUseQty) || 0) : 0;
       const produceQty = Math.max(0, Number(line.produceQty) || 0);
       if (stockUse > 0) catalogStore.consumeStock(sp.id, stockUse);
-
-      const steps =
-        sp.processSteps && sp.processSteps.length > 0
-          ? [...sp.processSteps].sort((a, b) => a.seq - b.seq)
-          : null;
-
-      if (steps) {
-        for (const step of steps) {
-          const stage = step.processStage ?? sp.processStage;
-          const noteParts = [
-            payload.note?.trim() ?? "",
-            step.techNote ?? "",
-            stockUse > 0 && step.seq === steps[0].seq ? `Dùng kho: ${stockUse}` : "",
-          ].filter(Boolean);
-          const { materialSpecs, specCols } = bomSpecsFromChecklist(
-            resolvePartChecklist(sp, step),
-          );
-          // Không tự gán tổ khi tạo lệnh — Quản đốc/Tổ trưởng phân tổ sau
-          boms.push({
-            id: uid("b"),
-            bomCode: "",
-            partCode: sp.code,
-            partName: sp.name,
-            partGroup: sp.name,
-            processSeq: step.seq,
-            rawMaterial: sp.name,
-            machine: step.machine ?? "",
-            process: step.process,
-            processStage: stage,
-            quota: step.quota,
-            targetQty: produceQty,
-            stockUseQty: step.seq === steps[0].seq ? stockUse : 0,
-            useFromStock: step.seq === steps[0].seq ? line.useFromStock : false,
-            passQty: 0,
-            failQty: 0,
-            assignedTeamId: "",
-            assignedTeamName: "",
-            assignedWorkers: [],
-            status: "unassigned",
-            specCols,
-            materialSpecs: materialSpecs.length ? materialSpecs : undefined,
-            techNote: noteParts.join("\n"),
-            workerEntries: [],
-            semiProductId: sp.id,
-            attachments: catalogStore.listSemiAttachments(sp.id, true),
-          });
-        }
-        continue;
-      }
-
       const noteParts = [
         payload.note?.trim() ?? "",
         stockUse > 0 ? `Dùng kho: ${stockUse}` : "",
       ].filter(Boolean);
-      const { materialSpecs, specCols } = bomSpecsFromChecklist(resolvePartChecklist(sp));
-
-      boms.push({
-        id: uid("b"),
-        bomCode: "",
-        partCode: sp.code,
-        partName: sp.name,
-        partGroup: sp.name,
-        processSeq: 1,
-        rawMaterial: sp.name,
-        machine: "",
-        process: "",
-        processStage: sp.processStage,
-        targetQty: produceQty,
-        stockUseQty: stockUse,
-        useFromStock: line.useFromStock,
-        passQty: 0,
-        failQty: 0,
-        assignedTeamId: "",
-        assignedTeamName: "",
-        assignedWorkers: [],
-        status: "unassigned",
-        specCols,
-        materialSpecs: materialSpecs.length ? materialSpecs : undefined,
-        techNote: noteParts.join("\n"),
-        workerEntries: [],
-        semiProductId: sp.id,
-        attachments: catalogStore.listSemiAttachments(sp.id, true),
-      });
+      boms.push(
+        ...jobsFromSemi(
+          sp,
+          produceQty,
+          stockUse,
+          Boolean(line.useFromStock),
+          noteParts.join("\n"),
+          line.processIds,
+        ),
+      );
     }
 
     if (!boms.length) throw new Error("Cần ít nhất một dòng BTP");
@@ -350,23 +335,20 @@ export class SupabaseOrderService {
       );
     });
 
-    const size = payload.size?.trim() || "";
-    const sizeNote = size ? `Kích cỡ: ${size}` : "";
-    const noteParts = [payload.note?.trim() ?? "", sizeNote].filter(Boolean);
+    const noteParts = [payload.note?.trim() ?? ""].filter(Boolean);
     const productAttachments = catalogStore.listProductAttachments(product.id, true);
 
     return this.createOrder({
       productId: product.id,
       productCode: product.code,
-      productLine: size ? `${product.name} · ${size}` : product.name,
-      size: size || undefined,
+      productLine: product.name,
       customer: payload.customer ?? "Nội bộ",
       targetQty: payload.finishedQty,
       createdBy: payload.createdBy,
       deadline: payload.deadline,
       priority: payload.priority ?? "normal",
-      status: "approved",
-      pendingApproval: false,
+      status: "pending_approval",
+      pendingApproval: true,
       shift: payload.shift,
       note: noteParts.join("\n") || undefined,
       boms,
@@ -538,12 +520,22 @@ export class SupabaseOrderService {
 
   async rejectOrder(orderId: string): Promise<ProductionOrder> {
     try {
-      await repo.updateOrder(orderId, { pendingApproval: false });
+      const current = await repo.findById(orderId);
+      const unassigned = !current?.boms.some((b) => b.assignedTeamId);
+      await repo.updateOrder(orderId, {
+        pendingApproval: false,
+        status: unassigned ? "draft" : current?.status,
+      });
       return (await repo.findById(orderId))!;
     } catch {
       const mem = orderMemoryStore.findById(orderId);
       if (!mem) throw new Error("Không tìm thấy lệnh SX");
-      return orderMemoryStore.upsert({ ...mem, pendingApproval: false });
+      const unassigned = !mem.boms.some((b) => b.assignedTeamId);
+      return orderMemoryStore.upsert({
+        ...mem,
+        pendingApproval: false,
+        status: unassigned ? "draft" : mem.status,
+      });
     }
   }
 

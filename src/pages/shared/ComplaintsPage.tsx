@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ComplaintsPage — Khiếu nại chất lượng
  * - QC: tạo khiếu nại, recheck
  * - Tổ trưởng: xác nhận + phương án xử lý
@@ -6,10 +6,13 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import type { QCComplaint } from "@shared/types";
+import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { useOrders } from "../../hooks/useOrders";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { toast } from "../../hooks/useToast";
+import { PaginationBar } from "../../components/ui";
+import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 
 const STATUS_COLOR: Record<string, string> = {
   open: "bg-red-100 text-red-700",
@@ -30,8 +33,21 @@ export default function ComplaintsPage() {
   const isTeamlead = user.role === "teamlead";
   const isSupervisor = user.role === "supervisor";
 
-  const [complaints, setComplaints] = useState<QCComplaint[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const fetchComplaints = useStableFetch((query) => workflowApi.listComplaints(query));
+  const {
+    items: complaints,
+    total,
+    page,
+    pageSize,
+    setPage,
+    setPageSize,
+    q,
+    setQ,
+    loading,
+    refresh,
+  } = usePagedList({ fetchPage: fetchComplaints, pageSize: LIST_UI_PAGE_SIZE });
+
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState<QCComplaint | null>(null);
   const [respondForm, setRespondForm] = useState({ actionType: "rework" as QCComplaint["actionType"], actionNote: "", reworkQty: "", scrapQty: "" });
@@ -42,11 +58,16 @@ export default function ComplaintsPage() {
   const allBoms = orders.flatMap(o => o.boms.map(b => ({ ...b, orderId: o.id, orderNo: o.orderNo })));
 
   const load = useCallback(async () => {
-    setLoading(true);
-    try { setComplaints(await workflowApi.getComplaints()); }
-    catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, []);
+    refresh();
+    try {
+      const all = await workflowApi.getComplaints();
+      const counts: Record<string, number> = {};
+      for (const c of all) counts[c.status] = (counts[c.status] ?? 0) + 1;
+      setStatusCounts(counts);
+    } catch {
+      /* ignore */
+    }
+  }, [refresh]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -119,9 +140,6 @@ export default function ComplaintsPage() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="font-display font-800 text-xl">Khiếu nại chất lượng</h2>
-          <p className="text-sm text-muted mt-0.5">
-            {isQC ? "Tạo và kiểm tra lại khiếu nại" : isTeamlead ? "Xử lý khiếu nại từ QC" : "Theo dõi và đóng khiếu nại"}
-          </p>
         </div>
         {isQC && (
           <button onClick={() => setShowCreate(true)}
@@ -135,11 +153,18 @@ export default function ComplaintsPage() {
       <div className="grid grid-cols-5 gap-2 mb-5">
         {Object.entries(STATUS_LABEL).map(([s, label]) => (
           <div key={s} className={`rounded-xl p-2 text-center ${STATUS_COLOR[s]}`}>
-            <div className="text-xl font-bold">{complaints.filter(c => c.status === s).length}</div>
+            <div className="text-xl font-bold">{statusCounts[s] ?? 0}</div>
             <div className="text-[10px] font-medium">{label}</div>
           </div>
         ))}
       </div>
+
+      <input
+        className="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4 bg-input"
+        placeholder="Tìm khiếu nại…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
 
       {loading ? (
         <div className="text-center py-10 text-muted-foreground"><i className="fas fa-spinner fa-spin text-2xl" /></div>
@@ -212,6 +237,13 @@ export default function ComplaintsPage() {
               </div>
             </div>
           ))}
+          <PaginationBar
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPage={setPage}
+            onPageSize={setPageSize}
+          />
         </div>
       )}
 
@@ -229,7 +261,7 @@ export default function ComplaintsPage() {
                 <select value={createForm.bomId} onChange={e => {
                   const bom = allBoms.find(b => b.id === e.target.value);
                   setCreateForm({ ...createForm, bomId: e.target.value, orderId: bom?.orderId ?? "" });
-                }} className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] bg-card">
+                }} className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary bg-card">
                   <option value="">— Chọn BOM —</option>
                   {allBoms.filter(b => b.status === "team_reported" || b.status === "qc_failed").map(b => (
                     <option key={b.id} value={b.id}>{b.orderNo} · {b.bomCode} — {b.partName}</option>
@@ -239,7 +271,7 @@ export default function ComplaintsPage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Loại lỗi <span className="text-red-500">*</span></label>
                 <select value={createForm.defectType} onChange={e => setCreateForm({ ...createForm, defectType: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] bg-card">
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary bg-card">
                   <option value="">— Chọn loại lỗi —</option>
                   <option>Kích thước ngoài thông số</option>
                   <option>Ngoại quan (xước, lõm, vết nứt)</option>
@@ -252,20 +284,20 @@ export default function ComplaintsPage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Mô tả chi tiết lỗi <span className="text-red-500">*</span></label>
                 <textarea value={createForm.defectDescription} onChange={e => setCreateForm({ ...createForm, defectDescription: e.target.value })} rows={2}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Mô tả cụ thể lỗi, vị trí, biểu hiện..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Số lượng lỗi</label>
                   <input type="number" min="1" value={createForm.defectQty} onChange={e => setCreateForm({ ...createForm, defectQty: e.target.value })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">TT sản phẩm lỗi</label>
                   <input value={createForm.sampleTt} onChange={e => setCreateForm({ ...createForm, sampleTt: e.target.value })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
-                    placeholder="VD: 3, 7, 12" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                    placeholder="TT lỗi" />
                 </div>
               </div>
               <div className="flex gap-3">
@@ -296,8 +328,8 @@ export default function ComplaintsPage() {
                 <label className="block text-xs font-semibold text-muted mb-1">Hành động</label>
                 <div className="space-y-2">
                   {[{v:"rework",l:"Làm lại"},{v:"scrap",l:"Loại bỏ (phế phẩm)"},{v:"accept_as_is",l:"Chấp nhận nguyên trạng"}].map(opt => (
-                    <label key={opt.v} className={`flex items-center gap-2 p-2.5 rounded-xl border-2 cursor-pointer ${respondForm.actionType === opt.v ? "border-[#1B3A5C] bg-secondary" : "border-border"}`}>
-                      <input type="radio" checked={respondForm.actionType === opt.v} onChange={() => setRespondForm({ ...respondForm, actionType: opt.v as QCComplaint["actionType"] })} className="accent-[#1B3A5C]" />
+                    <label key={opt.v} className={`flex items-center gap-2 p-2.5 rounded-xl border-2 cursor-pointer ${respondForm.actionType === opt.v ? "border-primary bg-secondary" : "border-border"}`}>
+                      <input type="radio" checked={respondForm.actionType === opt.v} onChange={() => setRespondForm({ ...respondForm, actionType: opt.v as QCComplaint["actionType"] })} className="accent-primary" />
                       <span className="text-sm font-medium">{opt.l}</span>
                     </label>
                   ))}
@@ -307,20 +339,20 @@ export default function ComplaintsPage() {
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Số lượng làm lại</label>
                   <input type="number" value={respondForm.reworkQty} onChange={e => setRespondForm({ ...respondForm, reworkQty: e.target.value })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
               )}
               {respondForm.actionType === "scrap" && (
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Số lượng loại bỏ</label>
                   <input type="number" value={respondForm.scrapQty} onChange={e => setRespondForm({ ...respondForm, scrapQty: e.target.value })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
               )}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Ghi chú xử lý <span className="text-red-500">*</span></label>
                 <textarea value={respondForm.actionNote} onChange={e => setRespondForm({ ...respondForm, actionNote: e.target.value })} rows={2}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Mô tả cách xử lý cụ thể..." />
               </div>
               <div className="flex gap-3">
@@ -359,7 +391,7 @@ export default function ComplaintsPage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Ghi chú kiểm tra</label>
                 <textarea value={recheckForm.note} onChange={e => setRecheckForm({ ...recheckForm, note: e.target.value })} rows={2}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Kết quả kiểm tra lại..." />
               </div>
               <div className="flex gap-3">

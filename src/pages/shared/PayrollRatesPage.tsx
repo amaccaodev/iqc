@@ -6,7 +6,7 @@ import { catalogApi } from "../../services/api/CatalogApiService";
 import { salaryApi } from "../../services/api/SalaryApiService";
 import { userApi } from "../../services/api/UserApiService";
 import { Btn, Card, ResponsiveDataList, SearchPicker } from "../../components/ui";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { createEntityPickerSearch } from "../../core/entityPicker";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { downloadPayrollTemplate, parsePayrollCsv } from "../../utils/payrollImport";
@@ -26,7 +26,9 @@ export default function PayrollRatesPage() {
     items: users,
     total,
     page,
+    pageSize,
     setPage,
+    setPageSize,
     q,
     setQ,
     refresh: refreshUsers,
@@ -51,6 +53,7 @@ export default function PayrollRatesPage() {
   const [editProductId, setEditProductId] = useState("");
   const [editProductLabel, setEditProductLabel] = useState("");
   const [editRate, setEditRate] = useState("");
+  const [showAddRate, setShowAddRate] = useState(false);
 
   const loadRates = useCallback(() => {
     void salaryApi.listRates().then(setRates).catch(() => setRates([]));
@@ -114,6 +117,7 @@ export default function PayrollRatesPage() {
     if (!editUserId || !editProductId) return;
     await salaryApi.upsertRate(editUserId, editProductId, Number(editRate) || 0);
     setEditRate("");
+    setShowAddRate(false);
     loadRates();
     setExpandedId(editUserId);
     refreshUsers();
@@ -152,10 +156,7 @@ export default function PayrollRatesPage() {
     <div className="max-w-full min-w-0">
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-4 lg:mb-6">
         <div>
-          <h2 className="font-display font-800 text-xl lg:text-2xl mb-1">Quản lý lương nhân viên</h2>
-          <p className="text-sm text-muted">
-            Hồ sơ NV và đơn giá theo SP — tìm kiếm + phân trang (tối ưu khi có hàng nghìn NV/SP).
-          </p>
+          <h2 className="font-display font-800 text-xl lg:text-2xl">Quản lý lương nhân viên</h2>
         </div>
         <div className="flex gap-2">
           <Btn variant={tab === "list" ? "primary" : "secondary"} onClick={() => setTab("list")}>
@@ -174,12 +175,7 @@ export default function PayrollRatesPage() {
 
       {tab === "import" && canImport && (
         <Card cls="p-4 lg:p-5 mb-4 space-y-4">
-          <div>
-            <h3 className="font-semibold text-sm mb-1">Import từ Excel / CSV</h3>
-            <p className="text-xs text-muted">
-              Xuất Excel sang CSV (UTF-8) hoặc tải file mẫu. Mỗi dòng: thông tin NV + mã SP + đơn giá.
-            </p>
-          </div>
+          <h3 className="font-semibold text-sm">Import từ Excel / CSV</h3>
           <div className="flex flex-wrap gap-2">
             <Btn variant="secondary" onClick={downloadPayrollTemplate}>
               <i className="fas fa-download" /> Tải file mẫu CSV
@@ -243,7 +239,7 @@ export default function PayrollRatesPage() {
       {tab === "list" && (
         <>
           <Card cls="p-3 lg:p-4 mb-4">
-            <div className="grid lg:grid-cols-[1fr_auto] gap-3 items-end">
+            <div className="grid lg:grid-cols-[1fr_auto_auto] gap-3 items-end">
               <label className="text-sm block min-w-0">
                 <span className="text-muted">Tìm nhân viên</span>
                 <input
@@ -256,11 +252,29 @@ export default function PayrollRatesPage() {
               <div className="text-xs text-muted lg:text-right">
                 {total} nhân viên · {rates.length} đơn giá lương · trang {page}
               </div>
+              {!showAddRate ? (
+                <Btn size="sm" onClick={() => setShowAddRate(true)}>
+                  <i className="fas fa-plus" /> Thêm
+                </Btn>
+              ) : null}
             </div>
           </Card>
 
+          {showAddRate ? (
           <Card cls="p-3 lg:p-4 mb-4 space-y-3">
-            <div className="font-semibold text-sm">Thêm / sửa đơn giá thủ công</div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="font-semibold text-sm">Thêm / sửa đơn giá thủ công</div>
+              <button
+                type="button"
+                className="text-sm text-muted border-0 bg-transparent cursor-pointer"
+                onClick={() => {
+                  setShowAddRate(false);
+                  setEditRate("");
+                }}
+              >
+                Hủy
+              </button>
+            </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <SearchPicker
                 value={editUserId}
@@ -302,14 +316,16 @@ export default function PayrollRatesPage() {
               </Btn>
             </div>
           </Card>
+          ) : null}
 
           <ResponsiveDataList
             items={users}
             getKey={(u) => u.id}
             page={page}
-            pageSize={LIST_UI_PAGE_SIZE}
+            pageSize={pageSize}
             total={total}
             onPage={setPage}
+            onPageSize={setPageSize}
             emptyText="Không có nhân viên phù hợp"
             onRowClick={(u) => setExpandedId(expandedId === u.id ? null : u.id)}
             columns={[
@@ -412,6 +428,7 @@ export default function PayrollRatesPage() {
                           setEditUserId(u.id);
                           setEditUserLabel(`${u.employeeId} — ${u.name}`);
                           setExpandedId(u.id);
+                          setShowAddRate(true);
                           window.scrollTo({ top: 0, behavior: "smooth" });
                         }}
                       >

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Notification } from "@shared/types";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { notificationTargetPath } from "@shared/utils/notificationLinks";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { authApi } from "../../services/api/AuthApiService";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { useNotifications } from "../../hooks/useNotifications";
 import { ResponsiveDataList } from "../../components/ui";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
@@ -95,7 +95,7 @@ export default function NotificationsPage() {
   const [unreadTotal, setUnreadTotal] = useState(0);
 
   const fetchPage = useStableFetch((query) => workflowApi.listNotifications(user.id, query));
-  const { items, total, page, pageSize, setPage, q, setQ, loading, refresh } = usePagedList({
+  const { items, total, page, pageSize, setPage, setPageSize, q, setQ, loading, refresh } = usePagedList({
     fetchPage,
     pageSize: LIST_UI_PAGE_SIZE,
   });
@@ -179,7 +179,7 @@ export default function NotificationsPage() {
           <button
             type="button"
             onClick={() => void markAll()}
-            className="text-xs font-semibold text-[#2D6EBD] cursor-pointer border-0 bg-transparent shrink-0"
+            className="text-xs font-semibold text-primary cursor-pointer border-0 bg-transparent shrink-0"
           >
             Đánh dấu đã đọc
           </button>
@@ -207,6 +207,7 @@ export default function NotificationsPage() {
           pageSize={pageSize}
           total={total}
           onPage={setPage}
+          onPageSize={setPageSize}
           emptyText="Chưa có thông báo"
           columns={[
             {

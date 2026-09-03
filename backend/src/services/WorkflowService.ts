@@ -476,6 +476,38 @@ export class WorkflowService {
     }
   }
 
+  async listStatsPaged(query: EntityListQuery = {}): Promise<PagedResult<ProductionStat>> {
+    const { page, pageSize, q, orderId, bomId } = normalizePageQuery(query);
+    const match = (s: ProductionStat, term: string) =>
+      s.bomId.toLowerCase().includes(term) ||
+      s.orderId.toLowerCase().includes(term) ||
+      (s.note ?? "").toLowerCase().includes(term);
+    try {
+      let db = supabase
+        .from("production_stats")
+        .select("*", { count: "exact" })
+        .order("stat_date", { ascending: false });
+      if (orderId) db = db.eq("order_id", orderId);
+      if (bomId) db = db.eq("bom_id", bomId);
+      if (q?.trim()) {
+        const esc = q.trim().replace(/[%_]/g, "");
+        db = db.or(`bom_id.ilike.%${esc}%,order_id.ilike.%${esc}%,note.ilike.%${esc}%`);
+      }
+      const from = (page - 1) * pageSize;
+      const { data, error, count } = await db.range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      return {
+        items: (data ?? []).map(mapStat),
+        total: count ?? 0,
+        page,
+        pageSize,
+      };
+    } catch {
+      const all = await this.getStats({ orderId, bomId });
+      return paginateInMemory(all, { q, page, pageSize, match });
+    }
+  }
+
   async upsertStat(body: Omit<ProductionStat, "id" | "recordedAt">): Promise<ProductionStat> {
     const existing = await supabase
       .from("production_stats")

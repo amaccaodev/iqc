@@ -1,17 +1,15 @@
 import { useState } from "react";
 import { ROLE_LABEL } from "@shared/constants/labels";
 import { useAuth } from "../../hooks/useAuth";
-import { useRoleUser } from "../../components/layout/RoleLayout";
-import { useTheme } from "../../hooks/useTheme";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { authApi } from "../../services/api/AuthApiService";
-import { Btn, Input } from "../../components/ui";
+import { Btn, Input, ThemeSwitcher } from "../../components/ui";
 
 type ProfileTab = "info" | "password";
 
 export default function ProfilePage() {
   const user = useRoleUser();
   const { logout } = useAuth();
-  const { theme, setTheme } = useTheme();
   const [tab, setTab] = useState<ProfileTab>("info");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -89,7 +87,7 @@ export default function ProfilePage() {
       {tab === "info" ? (
         <div className="space-y-4" role="tabpanel">
           <div className="bg-card rounded-2xl p-6 shadow-sm border border-border text-center">
-            <div className="w-20 h-20 rounded-full bg-primary text-white flex items-center justify-center mx-auto mb-3 text-2xl">
+            <div className="w-20 h-20 rounded-full bg-primary text-primary-foreground flex items-center justify-center mx-auto mb-3 text-2xl">
               <i className="fas fa-user" />
             </div>
             <div className="font-display font-800 text-lg">{user.name}</div>
@@ -118,27 +116,8 @@ export default function ProfilePage() {
           </div>
 
           <div className="bg-card rounded-2xl shadow-sm border border-border p-4 space-y-3">
-            <div className="text-sm font-semibold text-foreground">Giao diện</div>
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm text-muted">
-                <i className={`fas ${theme === "dark" ? "fa-moon" : "fa-sun"} mr-2`} />
-                Chế độ {theme === "dark" ? "tối" : "sáng"}
-              </div>
-              <button
-                type="button"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                className="relative w-14 h-8 rounded-full border-0 cursor-pointer transition-colors bg-border dark:bg-primary"
-                aria-label={theme === "dark" ? "Chuyển chế độ sáng" : "Chuyển chế độ tối"}
-              >
-                <span
-                  className={`absolute top-1 left-1 w-6 h-6 rounded-full bg-card shadow transition-transform flex items-center justify-center text-[10px] ${
-                    theme === "dark" ? "translate-x-6 text-primary" : "translate-x-0 text-muted"
-                  }`}
-                >
-                  <i className={`fas ${theme === "dark" ? "fa-moon" : "fa-sun"}`} />
-                </span>
-              </button>
-            </div>
+            <div className="text-sm font-semibold text-foreground mb-2">Giao diện</div>
+            <ThemeSwitcher />
           </div>
 
           <button

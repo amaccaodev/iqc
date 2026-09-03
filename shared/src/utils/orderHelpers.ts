@@ -82,3 +82,15 @@ export function today(): string {
 export function todayDateTime(): string {
   return new Date().toLocaleString("vi-VN");
 }
+
+/** Lệnh GĐ vừa tạo, chờ Quản đốc duyệt BOM/quy trình (chưa phân tổ) */
+export function orderNeedsSupervisorCreateApproval(order: ProductionOrder): boolean {
+  if (!order.pendingApproval) return false;
+  return !order.boms.some((b) => Boolean(b.assignedTeamId));
+}
+
+/** Đổi phân công tổ — chờ GĐ/PGĐ duyệt */
+export function orderNeedsDirectorAssignApproval(order: ProductionOrder): boolean {
+  if (!order.pendingApproval) return false;
+  return order.boms.some((b) => Boolean(b.assignedTeamId));
+}

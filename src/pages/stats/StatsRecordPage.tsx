@@ -2,18 +2,32 @@
  * StatsRecordPage — Ghi sản lượng theo ca (Stats role)
  * Thống kê ghi: số lượng sx, đạt, lỗi, làm lại, downtime
  */
-import { useState, useEffect, useCallback } from "react";
-import type { ProductionStat } from "@shared/types";
+import { useState, useEffect } from "react";
+import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { useOrders } from "../../hooks/useOrders";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { toast } from "../../hooks/useToast";
+import { PaginationBar } from "../../components/ui";
+import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 
 export default function StatsRecordPage() {
   const user = useRoleUser();
   const { orders } = useOrders();
-  const [stats, setStats] = useState<ProductionStat[]>([]);
-  const [loading, setLoading] = useState(true);
+  const fetchStats = useStableFetch((query) => workflowApi.listStats(query));
+  const {
+    items: stats,
+    total,
+    page,
+    pageSize,
+    setPage,
+    setPageSize,
+    q,
+    setQ,
+    loading,
+    refresh,
+  } = usePagedList({ fetchPage: fetchStats, pageSize: LIST_UI_PAGE_SIZE });
+  const [summary, setSummary] = useState({ produced: 0, pass: 0, fail: 0, rework: 0 });
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -24,14 +38,16 @@ export default function StatsRecordPage() {
 
   const allBoms = orders.flatMap(o => o.boms.map(b => ({ ...b, orderId: o.id, orderNo: o.orderNo })));
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setStats(await workflowApi.getStats()); }
-    catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void workflowApi.getStats().then((all) => {
+      setSummary({
+        produced: all.reduce((s, r) => s + r.qtyProduced, 0),
+        pass: all.reduce((s, r) => s + r.qtyPass, 0),
+        fail: all.reduce((s, r) => s + r.qtyFail, 0),
+        rework: all.reduce((s, r) => s + r.qtyRework, 0),
+      });
+    }).catch(() => {});
+  }, [total]);
 
   const save = async () => {
     if (!form.bomId || !form.qtyProduced) { toast.error("Vui lòng chọn BOM và nhập số lượng sản xuất."); return; }
@@ -46,25 +62,19 @@ export default function StatsRecordPage() {
       });
       setShowForm(false);
       setForm({ bomId: "", orderId: "", statDate: new Date().toISOString().slice(0, 10), shift: "day", qtyProduced: "", qtyPass: "", qtyFail: "", qtyRework: "", downtimeMins: "0", note: "" });
-      void load();
+      void refresh();
     } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
   };
-
-  const totalProduced = stats.reduce((s, r) => s + r.qtyProduced, 0);
-  const totalPass = stats.reduce((s, r) => s + r.qtyPass, 0);
-  const totalFail = stats.reduce((s, r) => s + r.qtyFail, 0);
-  const totalRework = stats.reduce((s, r) => s + r.qtyRework, 0);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="font-display font-800 text-xl">Ghi sản lượng ca</h2>
-          <p className="text-sm text-muted mt-0.5">Kiểm kê và ghi nhận số lượng thực tế theo ca sản xuất</p>
         </div>
         <button onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] transition cursor-pointer border-0">
+          className="flex items-center gap-2 bg-primary text-primary-foreground text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 transition cursor-pointer border-0">
           <i className="fas fa-pen-to-square" /> Ghi ca
         </button>
       </div>
@@ -72,10 +82,10 @@ export default function StatsRecordPage() {
       {/* Summary */}
       <div className="grid grid-cols-4 gap-3 mb-5">
         {[
-          { label: "Tổng SX", value: totalProduced, icon: "fa-boxes-stacked", color: "bg-blue-50 text-blue-700" },
-          { label: "Đạt", value: totalPass, icon: "fa-circle-check", color: "bg-green-50 text-green-700" },
-          { label: "Lỗi", value: totalFail, icon: "fa-circle-xmark", color: "bg-red-50 text-red-700" },
-          { label: "Làm lại", value: totalRework, icon: "fa-rotate", color: "bg-yellow-50 text-yellow-700" },
+          { label: "Tổng SX", value: summary.produced, icon: "fa-boxes-stacked", color: "bg-blue-50 text-blue-700" },
+          { label: "Đạt", value: summary.pass, icon: "fa-circle-check", color: "bg-green-50 text-green-700" },
+          { label: "Lỗi", value: summary.fail, icon: "fa-circle-xmark", color: "bg-red-50 text-red-700" },
+          { label: "Làm lại", value: summary.rework, icon: "fa-rotate", color: "bg-yellow-50 text-yellow-700" },
         ].map(({ label, value, icon, color }) => (
           <div key={label} className={`rounded-2xl p-4 ${color}`}>
             <div className="flex items-center gap-2 mb-1">
@@ -86,6 +96,13 @@ export default function StatsRecordPage() {
           </div>
         ))}
       </div>
+
+      <input
+        className="w-full border border-border rounded-xl px-3 py-2 text-sm mb-3 bg-input focus:outline-none focus:border-primary"
+        placeholder="Tìm BOM, lệnh, ghi chú…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
 
       {/* Records */}
       {loading ? (
@@ -111,7 +128,7 @@ export default function StatsRecordPage() {
             </thead>
             <tbody>
               {stats.map((s, i) => (
-                <tr key={s.id} className={i % 2 === 0 ? "bg-card" : "bg-[#FAFAFA]"}>
+                <tr key={s.id} className={i % 2 === 0 ? "bg-card" : "bg-surface"}>
                   <td className="px-4 py-2.5">
                     <div className="font-semibold text-xs">{s.statDate}</div>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${s.shift === "day" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"}`}>
@@ -128,6 +145,15 @@ export default function StatsRecordPage() {
               ))}
             </tbody>
           </table>
+          <div className="px-4 pb-3">
+            <PaginationBar
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPage={setPage}
+              onPageSize={setPageSize}
+            />
+          </div>
         </div>
       )}
 
@@ -144,12 +170,12 @@ export default function StatsRecordPage() {
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Ngày <span className="text-red-500">*</span></label>
                   <input type="date" value={form.statDate} onChange={e => setForm({ ...form, statDate: e.target.value })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Ca</label>
                   <select value={form.shift} onChange={e => setForm({ ...form, shift: e.target.value as "day" | "night" })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] bg-card">
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary bg-card">
                     <option value="day">Ca ngày</option>
                     <option value="night">Ca đêm</option>
                   </select>
@@ -160,7 +186,7 @@ export default function StatsRecordPage() {
                 <select value={form.bomId} onChange={e => {
                   const bom = allBoms.find(b => b.id === e.target.value);
                   setForm({ ...form, bomId: e.target.value, orderId: bom?.orderId ?? "" });
-                }} className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] bg-card">
+                }} className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary bg-card">
                   <option value="">— Chọn BOM —</option>
                   {allBoms.map(b => (
                     <option key={b.id} value={b.id}>{b.orderNo} · {b.bomCode} — {b.partName}</option>
@@ -179,19 +205,19 @@ export default function StatsRecordPage() {
                     <label className="block text-xs font-semibold text-muted mb-1">{label} {required && <span className="text-red-500">*</span>}</label>
                     <input type="number" min="0" value={form[key as keyof typeof form] as string}
                       onChange={e => setForm({ ...form, [key]: e.target.value })}
-                      className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]" />
+                      className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                   </div>
                 ))}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Ghi chú</label>
                 <textarea value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} rows={2}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Ghi chú thêm về ca sản xuất..." />
               </div>
               <div className="flex gap-3">
                 <button onClick={() => void save()} disabled={saving}
-                  className="flex-1 bg-primary text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
+                  className="flex-1 bg-primary text-primary-foreground text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 cursor-pointer border-0 disabled:opacity-60">
                   {saving ? <i className="fas fa-spinner fa-spin" /> : <><i className="fas fa-save mr-2" />Lưu số liệu</>}
                 </button>
                 <button onClick={() => setShowForm(false)} className="px-4 bg-background text-muted text-sm font-semibold py-2.5 rounded-xl cursor-pointer border-0">Hủy</button>

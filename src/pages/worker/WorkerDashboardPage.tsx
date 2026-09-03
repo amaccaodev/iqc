@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { isBomProcessUnlocked } from "@shared/utils/bomProcess";
 import WorkerJobsList from "../../components/worker/WorkerJobsList";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { useOrders } from "../../hooks/useOrders";
 import SalaryDashboard from "../../components/salary/SalaryDashboard";
 

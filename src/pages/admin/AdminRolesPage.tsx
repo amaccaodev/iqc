@@ -1,10 +1,11 @@
-/**
+﻿/**
  * AdminRolesPage — Quản lý Roles và Groups (tổ)
  * Thêm / xóa role, thêm / xóa nhóm, gán role cho user, gán user vào nhóm
  */
 import { useState, useEffect, useCallback } from "react";
 import { API_BASE } from "../../lib/apiBase";
 import { toast } from "../../hooks/useToast";
+import { IconAction } from "../../components/ui";
 
 interface Role { id: string; label: string; description: string }
 interface Group { id: string; name: string; lead: string; lead_short: string; description: string }
@@ -13,6 +14,7 @@ export default function AdminRolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [tab, setTab] = useState<"roles" | "groups">("roles");
+  const [showAdd, setShowAdd] = useState(false);
   const [newRole, setNewRole] = useState({ id: "", label: "", description: "" });
   const [newGroup, setNewGroup] = useState({ id: "", name: "", lead: "", lead_short: "", description: "" });
   const [saving, setSaving] = useState(false);
@@ -35,6 +37,7 @@ export default function AdminRolesPage() {
       const res = await fetch(`${API_BASE}/roles`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newRole) });
       if (!res.ok) throw new Error(await res.text());
       setNewRole({ id: "", label: "", description: "" });
+      setShowAdd(false);
       void load();
     } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
@@ -61,6 +64,7 @@ export default function AdminRolesPage() {
       const res = await fetch(`${API_BASE}/groups`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newGroup) });
       if (!res.ok) throw new Error(await res.text());
       setNewGroup({ id: "", name: "", lead: "", lead_short: "", description: "" });
+      setShowAdd(false);
       void load();
     } catch (e) { toast.error((e as Error).message); }
     finally { setSaving(false); }
@@ -82,13 +86,12 @@ export default function AdminRolesPage() {
 
   return (
     <div>
-      <h2 className="font-display font-800 text-xl mb-1">Quản lý Roles & Tổ</h2>
-      <p className="text-sm text-muted mb-5">Thêm, sửa, xóa vai trò và nhóm/tổ trong hệ thống</p>
+      <h2 className="font-display font-800 text-xl mb-5">Quản lý vai trò và tổ</h2>
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5">
-        {([["roles", "fa-shield-halved", "Roles"], ["groups", "fa-users", "Tổ / Nhóm"]] as const).map(([t, icon, label]) => (
-          <button key={t} onClick={() => setTab(t)}
+        {([["roles", "fa-shield-halved", "Vai trò"], ["groups", "fa-users", "Tổ / Nhóm"]] as const).map(([t, icon, label]) => (
+          <button key={t} onClick={() => { setTab(t); setShowAdd(false); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer border-0 transition ${tab === t ? "bg-primary text-white" : "bg-card text-muted hover:bg-surface"}`}>
             <i className={`fas ${icon}`} /> {label}
           </button>
@@ -97,33 +100,58 @@ export default function AdminRolesPage() {
 
       {tab === "roles" && (
         <div className="space-y-4">
+          <div className="flex justify-end">
+            {!showAdd ? (
+              <button
+                type="button"
+                onClick={() => setShowAdd(true)}
+                className="bg-primary text-primary-foreground text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 cursor-pointer border-0"
+              >
+                <i className="fas fa-plus mr-2" />Thêm
+              </button>
+            ) : null}
+          </div>
+          {showAdd ? (
           <div className="bg-card rounded-2xl p-4 shadow-sm border border-border">
-            <h3 className="font-semibold text-sm mb-3">Thêm Role mới</h3>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <h3 className="font-semibold text-sm">Thêm vai trò</h3>
+              <button
+                type="button"
+                className="text-sm text-muted border-0 bg-transparent cursor-pointer"
+                onClick={() => {
+                  setShowAdd(false);
+                  setNewRole({ id: "", label: "", description: "" });
+                }}
+              >
+                Hủy
+              </button>
+            </div>
             <div className="grid grid-cols-3 gap-3 mb-3">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">ID (slug) <span className="text-red-500">*</span></label>
                 <input value={newRole.id} onChange={e => setNewRole({ ...newRole, id: e.target.value.toLowerCase().replace(/\s/g, "_") })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
-                  placeholder="vd: mechanic" />
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  placeholder="ID" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Tên hiển thị <span className="text-red-500">*</span></label>
                 <input value={newRole.label} onChange={e => setNewRole({ ...newRole, label: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
-                  placeholder="vd: Cơ điện" />
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  placeholder="Tên" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Mô tả</label>
                 <input value={newRole.description} onChange={e => setNewRole({ ...newRole, description: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
                   placeholder="Mô tả quyền..." />
               </div>
             </div>
             <button onClick={() => void addRole()} disabled={saving}
-              className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
-              <i className="fas fa-plus mr-2" />Thêm Role
+              className="bg-primary text-primary-foreground text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 cursor-pointer border-0 disabled:opacity-60">
+              <i className="fas fa-save mr-2" />Lưu vai trò
             </button>
           </div>
+          ) : null}
 
           <div className="space-y-2">
             {roles.map(r => (
@@ -133,10 +161,7 @@ export default function AdminRolesPage() {
                   <span className="font-semibold text-sm">{r.label}</span>
                   {r.description && <span className="text-xs text-muted-foreground ml-2">— {r.description}</span>}
                 </div>
-                <button onClick={() => void deleteRole(r.id)}
-                  className="text-red-400 hover:text-red-600 text-xs px-2 py-1 cursor-pointer border-0 bg-transparent">
-                  <i className="fas fa-trash" />
-                </button>
+                <IconAction icon="fa-trash" label="Xóa vai trò" tone="danger" onClick={() => void deleteRole(r.id)} />
               </div>
             ))}
           </div>
@@ -145,39 +170,64 @@ export default function AdminRolesPage() {
 
       {tab === "groups" && (
         <div className="space-y-4">
+          <div className="flex justify-end">
+            {!showAdd ? (
+              <button
+                type="button"
+                onClick={() => setShowAdd(true)}
+                className="bg-primary text-primary-foreground text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 cursor-pointer border-0"
+              >
+                <i className="fas fa-plus mr-2" />Thêm
+              </button>
+            ) : null}
+          </div>
+          {showAdd ? (
           <div className="bg-card rounded-2xl p-4 shadow-sm border border-border">
-            <h3 className="font-semibold text-sm mb-3">Thêm Tổ / Nhóm mới</h3>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <h3 className="font-semibold text-sm">Thêm tổ / nhóm</h3>
+              <button
+                type="button"
+                className="text-sm text-muted border-0 bg-transparent cursor-pointer"
+                onClick={() => {
+                  setShowAdd(false);
+                  setNewGroup({ id: "", name: "", lead: "", lead_short: "", description: "" });
+                }}
+              >
+                Hủy
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">ID <span className="text-red-500">*</span></label>
                 <input value={newGroup.id} onChange={e => setNewGroup({ ...newGroup, id: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
-                  placeholder="vd: t5" />
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  placeholder="ID" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Tên tổ <span className="text-red-500">*</span></label>
                 <input value={newGroup.name} onChange={e => setNewGroup({ ...newGroup, name: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
-                  placeholder="vd: Tổ 5" />
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  placeholder="Tên tổ" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Tổ trưởng</label>
                 <input value={newGroup.lead} onChange={e => setNewGroup({ ...newGroup, lead: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
                   placeholder="Họ tên tổ trưởng" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Tên viết tắt</label>
                 <input value={newGroup.lead_short} onChange={e => setNewGroup({ ...newGroup, lead_short: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
-                  placeholder="VD: N.V.A" />
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  placeholder="Viết tắt" />
               </div>
             </div>
             <button onClick={() => void addGroup()} disabled={saving}
-              className="bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
-              <i className="fas fa-plus mr-2" />Thêm Tổ
+              className="bg-primary text-primary-foreground text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 cursor-pointer border-0 disabled:opacity-60">
+              <i className="fas fa-save mr-2" />Lưu tổ
             </button>
           </div>
+          ) : null}
 
           <div className="space-y-2">
             {groups.map(g => (
@@ -187,10 +237,7 @@ export default function AdminRolesPage() {
                   <span className="font-semibold text-sm">{g.name}</span>
                   {g.lead && <span className="text-xs text-muted ml-2">TT: {g.lead}</span>}
                 </div>
-                <button onClick={() => void deleteGroup(g.id)}
-                  className="text-red-400 hover:text-red-600 text-xs px-2 py-1 cursor-pointer border-0 bg-transparent">
-                  <i className="fas fa-trash" />
-                </button>
+                <IconAction icon="fa-trash" label="Xóa tổ" tone="danger" onClick={() => void deleteGroup(g.id)} />
               </div>
             ))}
           </div>

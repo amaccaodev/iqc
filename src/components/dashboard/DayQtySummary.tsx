@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import type { BOMItem, ProductionOrder } from "@shared/types";
 import { BOM_STATUS_LABEL } from "@shared/constants/labels";
 import PaginationBar from "../ui/PaginationBar";
@@ -159,7 +159,7 @@ export default function DayQtySummary({
               onClick={() => applyPreset(item.id as Exclude<PresetRange, "custom">)}
               className={`h-11 rounded-xl border text-xs font-semibold cursor-pointer ${
                 preset === item.id
-                  ? "bg-primary border-[#1B3A5C] text-white"
+                  ? "bg-primary border-primary text-white"
                   : "bg-card border-border text-primary"
               }`}
             >
@@ -221,7 +221,7 @@ export default function DayQtySummary({
             </div>
             <div className="font-display font-800 text-2xl text-[#16A34A]">{passTotal.toLocaleString("vi-VN")}</div>
             <div className="text-xs font-medium text-muted mt-0.5">Số lượng đạt</div>
-            <div className="text-[11px] text-[#2D6EBD] mt-2 font-semibold">Chi tiết →</div>
+            <div className="text-[11px] text-primary mt-2 font-semibold">Chi tiết →</div>
           </button>
           <button type="button" onClick={() => openList("remain")} className="text-left bg-card rounded-2xl border border-border p-4 shadow-sm cursor-pointer">
             <div className="w-9 h-9 rounded-lg bg-[#FFF1F2] text-[#DC2626] flex items-center justify-center mb-2">
@@ -229,7 +229,7 @@ export default function DayQtySummary({
             </div>
             <div className="font-display font-800 text-2xl text-[#DC2626]">{remainTotal.toLocaleString("vi-VN")}</div>
             <div className="text-xs font-medium text-muted mt-0.5">Chưa đạt</div>
-            <div className="text-[11px] text-[#2D6EBD] mt-2 font-semibold">Chi tiết →</div>
+            <div className="text-[11px] text-primary mt-2 font-semibold">Chi tiết →</div>
           </button>
         </div>
       )}
@@ -317,7 +317,7 @@ export default function DayQtySummary({
                   type="button"
                   onClick={() => openJob(job.o, b)}
                   className={`w-full text-left rounded-xl border px-3 py-3 cursor-pointer ${
-                    current ? "border-[#2D6EBD] bg-[#EFF6FF]" : "border-border bg-surface"
+                    current ? "border-primary bg-secondary" : "border-border bg-surface"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">

@@ -3,6 +3,8 @@
  */
 import type {
   Attachment,
+  Bom,
+  BomProcess,
   DeviceLoginRequest,
   LoginRequest,
   LoginResponse,
@@ -14,7 +16,7 @@ import type {
   ProductionOrder,
   ProductionStat,
   Product,
-  ProductBomLine,
+  ProductStructureLine,
   QCComplaint,
   SemiProduct,
   ShiftClose,
@@ -27,21 +29,19 @@ import type {
 import { TEAMS } from "@shared/constants/teams";
 import { parseListQueryFromRequest } from "@shared/utils/listQuery";
 import { paginateInMemory } from "@shared/utils/pagedList";
-import { assertCanCreateShiftClose, assertCanRequestUnlock, assertCanSubmitWorkerRow } from "@shared/utils/shiftCloseGuard";
-import {
-  bomSpecsFromChecklist,
-  resolvePartChecklist,
-  validateEntryRows,
-} from "@shared/utils/specValidation";
+import { assertCanCreateShiftClose, assertCanEditShiftClose, assertCanRequestUnlock, assertCanSubmitWorkerRow } from "@shared/utils/shiftCloseGuard";
+import { measurementSpecsToMaterialSpecs, validateEntryRows } from "@shared/utils/specValidation";
 import { SEED_ORDERS, SEED_USERS } from "../../backend/src/data/seed";
 import {
+  DEMO_BOM_PROCESSES,
+  DEMO_BOMS,
   DEMO_MACHINES,
-  DEMO_PRODUCT_BOMS,
   DEMO_PRODUCTS,
   DEMO_SEMI,
   DEMO_WAREHOUSE,
 } from "./demoCatalog";
 import { MOCK_INCIDENTS, MOCK_NOTIFICATIONS } from "./workflowSeed";
+import { mockDrawingsById } from "@shared/data/sampleInspection";
 
 function clone<T>(v: T): T {
   return structuredClone(v);
@@ -81,10 +81,11 @@ const users: User[] = clone(SEED_USERS);
 const orders: ProductionOrder[] = clone(SEED_ORDERS);
 const products: Product[] = clone(DEMO_PRODUCTS);
 const semis: SemiProduct[] = clone(DEMO_SEMI);
-const productBoms: ProductBomLine[] = clone(DEMO_PRODUCT_BOMS);
 const warehouse: WarehouseStock[] = clone(DEMO_WAREHOUSE);
 const movements: WarehouseMovement[] = [];
 const machines: Machine[] = clone(DEMO_MACHINES);
+const catalogBoms: Bom[] = clone(DEMO_BOMS);
+const catalogProcesses: BomProcess[] = clone(DEMO_BOM_PROCESSES);
 const changeRequests: MachineChangeRequest[] = [];
 const incidents: MachineIncident[] = clone(MOCK_INCIDENTS);
 const notifications: Notification[] = clone(MOCK_NOTIFICATIONS);
@@ -93,30 +94,87 @@ const complaints: QCComplaint[] = [];
 const stats: ProductionStat[] = [];
 const shiftCloses: ShiftClose[] = [
   {
-    id: "sc1",
+    id: "sc-yesterday",
     workerId: "u6",
     workerName: "Cường 2T3",
     orderId: "o1",
     bomId: "b1",
     productId: "p1",
-    productName: "Van 1 chiều lò xo NOVO 20",
-    partName: "Van 1 chiều lò xo NOVO 20",
-    passQty: 80,
-    failQty: 2,
-    note: "Chốt ca demo",
-    status: "pending_teamlead",
+    productName: "Van góc 1C sau ĐH NOVO 15 tay ABS",
+    partName: "Nắp van góc novo 15",
+    passQty: 95,
+    failQty: 1,
+    note: "Ca hôm qua",
+    status: "approved",
     rateVnd: 2500,
-    amountVnd: 200_000,
+    amountVnd: 237500,
+    createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+    teamleadBy: "Phạm Văn Chí",
+    teamleadAt: new Date(Date.now() - 86_400_000 + 3_600_000).toISOString(),
+    qcBy: "T.V.Huấn",
+    qcAt: new Date(Date.now() - 86_400_000 + 7_200_000).toISOString(),
+    supervisorBy: "Lê Văn Quốc",
+    supervisorAt: new Date(Date.now() - 86_400_000 + 10_800_000).toISOString(),
+  },
+  {
+    id: "sc-pending-nga",
+    workerId: "u7",
+    workerName: "Nga 3/43",
+    orderId: "o1",
+    bomId: "b-p1-sp-novo-vg-15-02-1",
+    productId: "p1",
+    productName: "Van góc 1C sau ĐH NOVO 15 tay ABS",
+    partName: "Thân van góc 1C sau ĐH novo 15",
+    passQty: 40,
+    failQty: 0,
+    note: "Ca sáng — chờ tổ trưởng (demo sửa phiếu)",
+    status: "pending_teamlead",
+    rateVnd: 2200,
+    amountVnd: 88000,
     createdAt: new Date().toISOString(),
+  },
+  {
+    id: "sc-approved-today",
+    workerId: "u6",
+    workerName: "Cường 2T3",
+    orderId: "o-sheet",
+    bomId: "b-longden-ht",
+    productId: "p-lx20",
+    productName: "Van 1 chiều lò xo NOVO 20",
+    partName: "Long đen hãm gioăng",
+    passQty: 120,
+    failQty: 0,
+    note: "Ca sáng — tổ trưởng đã duyệt (demo mở khóa)",
+    status: "pending_qc",
+    rateVnd: 2500,
+    amountVnd: 0,
+    createdAt: new Date(Date.now() - 3_600_000).toISOString(),
+    teamleadBy: "Phạm Văn Chí",
+    teamleadAt: new Date(Date.now() - 1_800_000).toISOString(),
   },
 ];
 const shiftUnlocks: ShiftUnlockRequest[] = [];
 const payrollRates: Array<{ id: string; userId: string; productId: string; rateVnd: number }> = [
   { id: "pr1", userId: "u6", productId: "p1", rateVnd: 2500 },
   { id: "pr2", userId: "u7", productId: "p1", rateVnd: 2500 },
+  { id: "pr3", userId: "u6", productId: "p-lx20", rateVnd: 2500 },
 ];
-const productAttachments = new Map<string, Attachment[]>();
-const semiAttachments = new Map<string, Attachment[]>();
+const productAttachments = mockDrawingsById(
+  products.map((p) => p.id),
+  "prod",
+);
+const semiAttachments = mockDrawingsById(
+  semis.map((s) => s.id),
+  "semi",
+);
+for (const p of products) {
+  if (p.attachments?.length) productAttachments.set(p.id, p.attachments);
+  else p.attachments = productAttachments.get(p.id);
+}
+for (const s of semis) {
+  if (s.attachments?.length) semiAttachments.set(s.id, s.attachments);
+  else s.attachments = semiAttachments.get(s.id);
+}
 const deviceRequests: DeviceLoginRequest[] = [];
 
 function findOrder(id: string) {
@@ -133,8 +191,90 @@ function findBom(orderId: string, bomId: string) {
 function stockWithSemi() {
   return warehouse.map((w) => ({
     ...w,
-    semiProduct: semis.find((s) => s.id === w.semiProductId),
+    product: w.itemKind === "product" ? products.find((p) => p.id === w.itemId) : undefined,
+    semiProduct: w.itemKind === "semi_product" ? semis.find((s) => s.id === w.itemId) : undefined,
   }));
+}
+
+function catalogBomsOf(semiProductId: string) {
+  return catalogBoms.filter((b) => b.semiProductId === semiProductId).map((b) => ({
+    ...b,
+    processes: catalogProcesses.filter((p) => p.bomId === b.id).sort((a, c) => a.sortOrder - c.sortOrder),
+  }));
+}
+
+function jobsFromDemoSemi(
+  semi: SemiProduct,
+  produceQty: number,
+  processIds?: string[],
+): ProductionOrder["boms"] {
+  const specs = measurementSpecsToMaterialSpecs(semi.measurementSpecs ?? {});
+  const specCols = specs.map((s) => s.label);
+  while (specCols.length < 11) specCols.push("");
+  const pick = processIds?.length ? new Set(processIds) : null;
+  const jobs: ProductionOrder["boms"] = [];
+  for (const bom of catalogBomsOf(semi.id)) {
+    const steps = (bom.processes ?? []).filter((p) => !pick || pick.has(p.id));
+    steps.forEach((step, idx) => {
+      jobs.push({
+        id: uid("b"),
+        bomCode: "",
+        partCode: semi.code,
+        partName: semi.name,
+        partGroup: semi.name,
+        rawMaterial: "",
+        machine: "",
+        process: step.name,
+        processSeq: step.sortOrder || idx + 1,
+        catalogBomId: bom.id,
+        catalogBomName: bom.name,
+        catalogProcessId: step.id,
+        targetQty: produceQty,
+        passQty: 0,
+        failQty: 0,
+        assignedTeamId: "",
+        assignedTeamName: "",
+        assignedWorkers: [],
+        status: "unassigned" as const,
+        specCols,
+        materialSpecs: specs.length ? specs : undefined,
+        techNote: "",
+        workerEntries: [],
+        semiProductId: semi.id,
+        attachments: semiAttachments.get(semi.id) ?? [],
+      });
+    });
+  }
+  if (pick && !jobs.length) return [];
+  if (!jobs.length) {
+    return [
+      {
+        id: uid("b"),
+        bomCode: "",
+        partCode: semi.code,
+        partName: semi.name,
+        partGroup: semi.name,
+        rawMaterial: "",
+        machine: "",
+        process: "",
+        processSeq: 1,
+        targetQty: produceQty,
+        passQty: 0,
+        failQty: 0,
+        assignedTeamId: "",
+        assignedTeamName: "",
+        assignedWorkers: [],
+        status: "unassigned" as const,
+        specCols,
+        materialSpecs: specs.length ? specs : undefined,
+        techNote: "",
+        workerEntries: [],
+        semiProductId: semi.id,
+        attachments: semiAttachments.get(semi.id) ?? [],
+      },
+    ];
+  }
+  return jobs;
 }
 
 export async function handleDemoApi<T>(
@@ -263,14 +403,33 @@ export async function handleDemoApi<T>(
     const productId = String(body?.productId ?? "");
     const product = products.find((p) => p.id === productId);
     if (!product) throw new Error("Không tìm thấy SP");
-    const lines = productBoms.filter((b) => b.productId === productId);
+    const reqLines = (body?.lines as Array<{
+      semiProductId: string;
+      produceQty?: number;
+      processIds?: string[];
+    }>) ?? [];
+    const source = reqLines.length
+      ? reqLines
+      : semis.filter((s) => s.active && s.productId === productId).map((s) => ({
+          semiProductId: s.id,
+          produceQty: Number(body?.finishedQty ?? body?.targetQty ?? 100),
+        }));
+    const boms = source.flatMap((line) => {
+      const semi = semis.find((s) => s.id === line.semiProductId);
+      if (!semi) return [];
+      return jobsFromDemoSemi(
+        semi,
+        Number(line.produceQty ?? body?.finishedQty ?? 100),
+        "processIds" in line ? line.processIds : undefined,
+      );
+    });
     const created: ProductionOrder = {
       id: uid("o"),
       orderNo: `LSX-DEMO-${Date.now().toString(36).toUpperCase()}`,
       productLine: product.name,
       productId: product.id,
       customer: String(body?.customer ?? "Nội bộ"),
-      targetQty: Number(body?.targetQty ?? 100),
+      targetQty: Number(body?.finishedQty ?? body?.targetQty ?? 100),
       createdBy: String(body?.createdBy ?? "Demo"),
       createdAt: new Date().toLocaleDateString("vi-VN"),
       deadline: String(body?.deadline ?? ""),
@@ -278,60 +437,50 @@ export async function handleDemoApi<T>(
       status: "pending_approval",
       pendingApproval: true,
       attachments: [],
-      boms: lines.map((line, idx) => {
-        const semi = semis.find((s) => s.id === line.semiProductId);
-        const { materialSpecs, specCols } = bomSpecsFromChecklist(
-          resolvePartChecklist(semi ?? {}),
-        );
-        return {
-          id: uid("b"),
-          bomCode: `BOM-DEMO-${idx + 1}`,
-          partCode: semi?.code ?? `P-${idx}`,
-          partName: semi?.name ?? "Linh kiện",
-          rawMaterial: "",
-          machine: "",
-          process: "",
-          processStage: semi?.processStage,
-          targetQty: Number(body?.targetQty ?? 100) * (line.qtyPerUnit || 1),
-          passQty: 0,
-          failQty: 0,
-          assignedTeamId: "",
-          assignedTeamName: "",
-          assignedWorkers: [],
-          status: "unassigned" as const,
-          specCols,
-          materialSpecs: materialSpecs.length ? materialSpecs : undefined,
-          techNote: "",
-          workerEntries: [],
-          semiProductId: semi?.id,
-          attachments: semiAttachments.get(semi?.id ?? "") ?? [],
-        };
-      }),
+      boms,
     };
     orders.unshift(created);
     return created as T;
   }
   if (path === "/orders/from-products-batch" && m === "POST") {
-    const ids = (body?.productIds as string[]) ?? [];
-    const created = ids.map((productId) => {
-      // reuse from-product logic inline
-      const product = products.find((p) => p.id === productId);
-      if (!product) throw new Error(`SP ${productId} không tồn tại`);
+    const items = (body?.items as Array<{
+      productId: string;
+      finishedQty: number;
+      lines?: Array<{ semiProductId: string; produceQty?: number; processIds?: string[] }>;
+    }>) ?? [];
+    const created = items.map((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      if (!product) throw new Error(`SP ${item.productId} không tồn tại`);
+      const source = item.lines?.length
+        ? item.lines
+        : semis.filter((s) => s.active && s.productId === item.productId).map((s) => ({
+            semiProductId: s.id,
+            produceQty: item.finishedQty,
+          }));
+      const boms = source.flatMap((line) => {
+        const semi = semis.find((s) => s.id === line.semiProductId);
+        if (!semi) return [];
+        return jobsFromDemoSemi(
+          semi,
+          Number(line.produceQty ?? item.finishedQty),
+          "processIds" in line ? line.processIds : undefined,
+        );
+      });
       const order: ProductionOrder = {
         id: uid("o"),
         orderNo: `LSX-DEMO-${uid("x").slice(-4)}`,
         productLine: product.name,
-        productId,
+        productId: item.productId,
         customer: "Nội bộ",
-        targetQty: Number(body?.targetQty ?? 50),
-        createdBy: "Demo",
+        targetQty: Number(item.finishedQty ?? 50),
+        createdBy: String(body?.createdBy ?? "Demo"),
         createdAt: new Date().toLocaleDateString("vi-VN"),
-        deadline: "",
+        deadline: String(body?.deadline ?? ""),
         priority: "normal",
         status: "pending_approval",
         pendingApproval: true,
         attachments: [],
-        boms: [],
+        boms,
       };
       orders.unshift(order);
       return order;
@@ -358,6 +507,9 @@ export async function handleDemoApi<T>(
     if (!order) throw new Error("Không tìm thấy lệnh");
     order.status = "draft";
     order.pendingApproval = false;
+    if (order.boms.some((b) => b.assignedTeamId)) {
+      order.status = "approved";
+    }
     return order as T;
   }
   if (/^\/orders\/[^/]+\/complete$/.test(path) && m === "POST") {
@@ -573,23 +725,34 @@ export async function handleDemoApi<T>(
   }
   if (/^\/products\/[^/]+\/bom$/.test(path) && m === "GET") {
     const productId = path.split("/")[2];
-    return productBoms
-      .filter((b) => b.productId === productId)
-      .map((b) => ({
-        ...b,
-        semiProduct: semis.find((s) => s.id === b.semiProductId),
+    return semis
+      .filter((s) => s.active && s.productId === productId)
+      .map((s) => ({
+        semiProductId: s.id,
+        qtyPerUnit: 1,
+        stockQty: warehouse.find((w) => w.itemKind === "semi_product" && w.itemId === s.id)?.qty ?? 0,
+        semiProduct: s,
+        boms: catalogBomsOf(s.id),
       })) as T;
   }
   if (/^\/products\/[^/]+\/bom$/.test(path) && (m === "PUT" || m === "POST")) {
     const productId = path.split("/")[2];
-    const lines = (body?.lines as ProductBomLine[]) ?? (body as unknown as ProductBomLine[]) ?? [];
-    for (let i = productBoms.length - 1; i >= 0; i--) {
-      if (productBoms[i].productId === productId) productBoms.splice(i, 1);
-    }
+    const lines = (body?.lines as ProductStructureLine[]) ?? [];
     for (const line of lines) {
-      productBoms.push({ ...line, id: line.id || uid("pb"), productId });
+      const semi = semis.find((s) => s.id === line.semiProductId);
+      if (semi) {
+        semi.productId = productId;
+        semi.active = true;
+      }
     }
-    return productBoms.filter((b) => b.productId === productId) as T;
+    return semis
+      .filter((s) => s.productId === productId)
+      .map((s) => ({
+        semiProductId: s.id,
+        qtyPerUnit: 1,
+        stockQty: 0,
+        semiProduct: s,
+      })) as T;
   }
   if (/^\/products\/[^/]+\/attachments$/.test(path) && m === "GET") {
     const id = path.split("/")[2];
@@ -621,8 +784,8 @@ export async function handleDemoApi<T>(
       id: uid("sp"),
       code: String(body?.code ?? ""),
       name: String(body?.name ?? ""),
-      processStage: body?.processStage as SemiProduct["processStage"],
-      description: String(body?.description ?? ""),
+      productId: String(body?.productId ?? products[0]?.id ?? "p1"),
+      measurementSpecs: (body?.measurementSpecs as SemiProduct["measurementSpecs"]) ?? {},
       active: true,
     };
     semis.push(s);
@@ -649,7 +812,11 @@ export async function handleDemoApi<T>(
   }
 
   if (path === "/warehouse-stock" && m === "GET") {
-    const rows = stockWithSemi();
+    let rows = stockWithSemi();
+    const kind = sp.get("itemKind");
+    if (kind === "product" || kind === "semi_product") {
+      rows = rows.filter((w) => w.itemKind === kind);
+    }
     if (sp.has("page") || sp.has("q") || sp.has("pageSize")) {
       return paginateInMemory(rows, {
         ...list,
@@ -661,10 +828,16 @@ export async function handleDemoApi<T>(
     return rows as T;
   }
   if (/^\/warehouse-stock\/[^/]+$/.test(path) && m === "PATCH") {
-    const semiProductId = path.split("/")[2];
-    let row = warehouse.find((w) => w.semiProductId === semiProductId);
+    const itemId = path.split("/")[2];
+    let row = warehouse.find((w) => w.itemId === itemId);
     if (!row) {
-      row = { semiProductId, qty: 0 };
+      row = {
+        id: uid("ws"),
+        warehouseId: "wh-main",
+        itemKind: "semi_product",
+        itemId,
+        qty: 0,
+      };
       warehouse.push(row);
     }
     row.qty = Number(body?.qty ?? row.qty);
@@ -672,16 +845,24 @@ export async function handleDemoApi<T>(
   }
   if (/^\/warehouse-stock\/[^/]+\/adjust$/.test(path) && m === "POST") {
     const semiProductId = path.split("/")[2];
-    let row = warehouse.find((w) => w.semiProductId === semiProductId);
+    let row = warehouse.find((w) => w.itemKind === "semi_product" && w.itemId === semiProductId);
     if (!row) {
-      row = { semiProductId, qty: 0 };
+      row = {
+        id: uid("ws"),
+        warehouseId: "wh-main",
+        itemKind: "semi_product",
+        itemId: semiProductId,
+        qty: 0,
+      };
       warehouse.push(row);
     }
     const delta = Number(body?.delta ?? body?.qty ?? 0);
     row.qty += delta;
     const movement: WarehouseMovement = {
       id: uid("wm"),
-      semiProductId,
+      warehouseId: "wh-main",
+      itemKind: "semi_product",
+      itemId: semiProductId,
       delta,
       qtyAfter: row.qty,
       note: String(body?.note ?? ""),
@@ -695,8 +876,8 @@ export async function handleDemoApi<T>(
     return { updated: 0, errors: [], total: 0 } as T;
   }
   if (path === "/products/import-bom" && m === "POST") {
-    const rows = (body?.rows as Array<Record<string, unknown>>) ?? [];
-    if (!rows.length) throw new Error("File không có dòng dữ liệu");
+    const importRows = (body?.rows as Array<Record<string, unknown>>) ?? [];
+    if (!importRows.length) throw new Error("File không có dòng dữ liệu");
     const errors: string[] = [];
     const byProduct = new Map<
       string,
@@ -704,28 +885,21 @@ export async function handleDemoApi<T>(
         string,
         {
           productName: string;
+          productDescription: string;
+          partCode: string;
           partName: string;
-          qty: number;
-          steps: Array<{
-            seq: number;
-            process: string;
-            machine?: string;
-            processStage?: SemiProduct["processStage"];
-            teamCode?: string;
-            techNote?: string;
-            quota?: string;
-            people?: number;
-          }>;
+          processes: Array<{ seq: number; name: string; teamId: string; quota: number }>;
         }
       >
     >();
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
+    let steps = 0;
+    for (let i = 0; i < importRows.length; i++) {
+      const r = importRows[i];
       const productCode = String(r.productCode ?? "").trim();
       const partCode = String(r.partCode ?? "").trim();
       const processName = String(r.processName ?? "").trim();
-      if (!productCode || !partCode || !processName) {
-        errors.push(`Dòng ${i + 2}: thiếu Mã SP / Mã LK / Tên quy trình`);
+      if (!productCode) {
+        errors.push(`Dòng ${i + 2}: thiếu mã thành phẩm`);
         continue;
       }
       let parts = byProduct.get(productCode);
@@ -733,30 +907,38 @@ export async function handleDemoApi<T>(
         parts = new Map();
         byProduct.set(productCode, parts);
       }
-      let part = parts.get(partCode);
+      const partKey = partCode || `__product__${productCode}`;
+      let part = parts.get(partKey);
       if (!part) {
         part = {
-          productName: String(r.productName ?? productCode),
-          partName: String(r.partName ?? partCode),
-          qty: Math.max(1, Number(r.qtyPerUnit) || 1),
-          steps: [],
+          productName: String(r.productName ?? productCode).trim() || productCode,
+          productDescription: String(r.productDescription ?? "").trim(),
+          partCode,
+          partName: String(r.partName ?? partCode).trim() || partCode,
+          processes: [],
         };
-        parts.set(partCode, part);
+        parts.set(partKey, part);
       }
-      part.steps.push({
-        seq: Math.max(1, Number(r.processSeq) || part.steps.length + 1),
-        process: processName,
-        machine: r.machine ? String(r.machine) : undefined,
-        processStage: (r.processStage as SemiProduct["processStage"]) || "hot_forge",
-        teamCode: r.teamCode ? String(r.teamCode) : undefined,
-        techNote: r.techNote ? String(r.techNote) : undefined,
-        quota: r.quota ? String(r.quota) : undefined,
-        people: r.people != null ? Number(r.people) : undefined,
+      if (!partCode || !processName) continue;
+      const blob = `${r.processStage ?? ""} ${r.teamCode ?? ""}`
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      const teamId = blob.includes("tu dong") || blob.includes("auto")
+        ? "t_auto"
+        : blob.includes("lap rap") || blob.includes("assembly") || blob.includes("asm")
+          ? "t_asm"
+          : "t_hot";
+      part.processes.push({
+        seq: Math.max(1, Number(r.processSeq) || part.processes.length + 1),
+        name: processName,
+        teamId,
+        quota: Number.parseFloat(String(r.quota ?? "0")) || 0,
       });
+      steps += 1;
     }
     let productUpserts = 0;
     let semiUpserts = 0;
-    let stepCount = 0;
     for (const [productCode, parts] of byProduct) {
       const first = [...parts.values()][0];
       let product = products.find((p) => p.code.toLowerCase() === productCode.toLowerCase());
@@ -765,77 +947,159 @@ export async function handleDemoApi<T>(
           id: uid("p"),
           code: productCode,
           name: first.productName,
-          description: "Import BOM demo",
+          description: first.productDescription || "Nhập từ file danh mục",
           active: true,
         };
         products.push(product);
-        productUpserts += 1;
       } else {
-        product.name = first.productName || product.name;
+        product.name = first.productName;
+        if (first.productDescription) product.description = first.productDescription;
         product.active = true;
-        productUpserts += 1;
       }
-      // clear old bom lines
-      for (let i = productBoms.length - 1; i >= 0; i--) {
-        if (productBoms[i].productId === product.id) productBoms.splice(i, 1);
-      }
-      for (const [partCode, part] of parts) {
-        const steps = [...part.steps].sort((a, b) => a.seq - b.seq);
-        stepCount += steps.length;
-        const stage = steps[0]?.processStage ?? "hot_forge";
-        let semi = semis.find((s) => s.code.toLowerCase() === partCode.toLowerCase());
+      productUpserts += 1;
+      for (const part of parts.values()) {
+        if (!part.partCode || part.partCode.startsWith("__product__")) continue;
+        let semi = semis.find((s) => s.code.toLowerCase() === part.partCode.toLowerCase());
         if (!semi) {
           semi = {
             id: uid("sp"),
-            code: partCode,
+            code: part.partCode,
             name: part.partName,
-            processStage: stage,
-            description: `Import — ${steps.length} quy trình`,
+            productId: product.id,
+            measurementSpecs: {},
             active: true,
-            processSteps: steps,
           };
           semis.push(semi);
-          semiUpserts += 1;
         } else {
           semi.name = part.partName;
-          semi.processStage = stage;
-          semi.processSteps = steps;
+          semi.productId = product.id;
           semi.active = true;
-          semiUpserts += 1;
         }
-        productBoms.push({
-          id: uid("pb"),
-          productId: product.id,
-          semiProductId: semi.id,
-          qtyPerUnit: part.qty,
-        });
+        semiUpserts += 1;
+        if (!part.processes.length) continue;
+        let bom = catalogBoms.find((b) => b.semiProductId === semi.id);
+        if (!bom) {
+          bom = { id: uid("bom"), name: `BOM ${part.partName}`, semiProductId: semi.id };
+          catalogBoms.push(bom);
+        }
+        for (let i = catalogProcesses.length - 1; i >= 0; i--) {
+          if (catalogProcesses[i].bomId === bom.id) catalogProcesses.splice(i, 1);
+        }
+        for (const p of [...part.processes].sort((a, b) => a.seq - b.seq)) {
+          catalogProcesses.push({
+            id: uid("bp"),
+            bomId: bom.id,
+            name: p.name,
+            productionTeamId: p.teamId,
+            quotaPerShift: p.quota,
+            sortOrder: p.seq,
+          });
+        }
       }
     }
     return {
       products: byProduct.size,
-      parts: [...byProduct.values()].reduce((s, m) => s + m.size, 0),
-      steps: stepCount,
+      parts: [...byProduct.values()].reduce(
+        (s, m) => s + [...m.values()].filter((p) => p.partCode && !p.partCode.startsWith("__product__")).length,
+        0,
+      ),
+      steps,
       productUpserts,
       semiUpserts,
       errors,
-      total: rows.length,
+      total: importRows.length,
     } as T;
   }
   if (path === "/warehouse-movements" && m === "GET") {
     const limit = Number(sp.get("limit") ?? 50);
     return movements.slice(0, limit).map((mv) => ({
       ...mv,
-      semiProduct: semis.find((s) => s.id === mv.semiProductId),
+      semiProduct: mv.itemKind === "semi_product" ? semis.find((s) => s.id === mv.itemId) : undefined,
+      product: mv.itemKind === "product" ? products.find((p) => p.id === mv.itemId) : undefined,
     })) as T;
   }
 
-  if (path === "/machines" && m === "GET") return machines.filter((x) => x.active) as T;
+  if (path === "/machines" && m === "GET") {
+    const active = machines.filter((x) => x.active !== false);
+    if (sp.has("page") || sp.has("q") || sp.has("pageSize")) {
+      return paginateInMemory(active, {
+        ...list,
+        match: (x, q) =>
+          x.name.toLowerCase().includes(q) ||
+          (x.accountingCode ?? "").toLowerCase().includes(q) ||
+          (x.code ?? "").toLowerCase().includes(q),
+      }) as T;
+    }
+    return active as T;
+  }
+  if (path === "/machine-groups" && m === "GET") {
+    return [
+      { id: "mg-hot", code: "HOT", name: "Nhóm dập nóng", productionTeamId: "t_hot", isActive: true },
+      { id: "mg-auto", code: "AUTO", name: "Nhóm tự động", productionTeamId: "t_auto", isActive: true },
+    ] as T;
+  }
+  if (/^\/semi-products\/[^/]+\/boms$/.test(path) && m === "GET") {
+    const sid = path.split("/")[2];
+    return catalogBomsOf(sid) as T;
+  }
+  if (/^\/semi-products\/[^/]+\/boms$/.test(path) && (m === "PUT" || m === "POST")) {
+    const sid = path.split("/")[2];
+    if (!semis.find((s) => s.id === sid)) throw new Error("Không tìm thấy linh kiện");
+    const drafts = Array.isArray(body?.boms)
+      ? (body.boms as Array<{ id?: string; name: string; processes?: Array<Partial<BomProcess>> }>)
+      : [{ name: String(body?.name ?? "").trim() || "BOM", processes: (body?.processes as Array<Partial<BomProcess>>) ?? [] }];
+    const existing = catalogBoms.filter((b) => b.semiProductId === sid);
+    const keepIds = new Set<string>();
+    for (const draft of drafts) {
+      const name = String(draft.name ?? "").trim() || "BOM";
+      let bom =
+        draft.id && existing.find((b) => b.id === draft.id)
+          ? existing.find((b) => b.id === draft.id)
+          : undefined;
+      if (!bom && drafts.length === 1 && existing.length === 1 && !draft.id) bom = existing[0];
+      if (!bom) {
+        bom = { id: uid("bom"), name, semiProductId: sid };
+        catalogBoms.push(bom);
+      } else {
+        bom.name = name;
+      }
+      keepIds.add(bom.id);
+      for (let i = catalogProcesses.length - 1; i >= 0; i--) {
+        if (catalogProcesses[i].bomId === bom.id) catalogProcesses.splice(i, 1);
+      }
+      (draft.processes ?? []).forEach((p, idx) => {
+        const pname = (p.name || "").trim();
+        if (!pname) return;
+        catalogProcesses.push({
+          id: p.id || uid("bp"),
+          bomId: bom!.id,
+          name: pname,
+          productionTeamId: p.productionTeamId,
+          machineGroupId: p.machineGroupId,
+          quotaPerShift: Number(p.quotaPerShift) || 0,
+          sortOrder: p.sortOrder ?? idx + 1,
+        });
+      });
+    }
+    for (const old of existing) {
+      if (keepIds.has(old.id)) continue;
+      for (let i = catalogProcesses.length - 1; i >= 0; i--) {
+        if (catalogProcesses[i].bomId === old.id) catalogProcesses.splice(i, 1);
+      }
+      const bi = catalogBoms.findIndex((b) => b.id === old.id);
+      if (bi >= 0) catalogBoms.splice(bi, 1);
+    }
+    return catalogBomsOf(sid) as T;
+  }
   if (path === "/machines" && m === "POST") {
     const machine: Machine = {
       id: uid("m"),
-      code: String(body?.code ?? ""),
+      accountingCode: String(body?.accountingCode ?? body?.code ?? ""),
+      code: String(body?.accountingCode ?? body?.code ?? ""),
       name: String(body?.name ?? ""),
-      params: (body?.params as Machine["params"]) ?? [],
+      specs: (body?.specs as Machine["specs"]) ?? {},
+      productionTeamId: body?.productionTeamId ? String(body.productionTeamId) : undefined,
+      teamId: body?.teamId ? String(body.teamId) : undefined,
       active: true,
     };
     machines.push(machine);
@@ -855,7 +1119,23 @@ export async function handleDemoApi<T>(
     machines[i].active = false;
     return machines[i] as T;
   }
-  if (path === "/machine-change-requests" && m === "GET") return changeRequests as T;
+  if (path === "/machine-change-requests" && m === "GET") {
+    let rows = [...changeRequests];
+    const status = sp.get("status");
+    const target = sp.get("target");
+    if (status) rows = rows.filter((r) => r.status === status);
+    if (target) rows = rows.filter((r) => r.target === target);
+    if (sp.has("page") || sp.has("q") || sp.has("pageSize")) {
+      return paginateInMemory(rows, {
+        ...list,
+        match: (r, q) =>
+          r.requestedName.toLowerCase().includes(q) ||
+          r.reason.toLowerCase().includes(q) ||
+          (r.fromMachine ?? "").toLowerCase().includes(q),
+      }) as T;
+    }
+    return rows as T;
+  }
   if (path === "/machine-change-requests" && m === "POST") {
     const req: MachineChangeRequest = {
       id: uid("mcr"),
@@ -983,7 +1263,18 @@ export async function handleDemoApi<T>(
     return (row ?? ({ id } as QCComplaint)) as T;
   }
 
-  if (path === "/stats" && m === "GET") return stats as T;
+  if (path === "/stats" && m === "GET") {
+    if (sp.has("page") || sp.has("q") || sp.has("pageSize")) {
+      return paginateInMemory(stats, {
+        ...list,
+        match: (s, q) =>
+          s.bomId.toLowerCase().includes(q) ||
+          s.orderId.toLowerCase().includes(q) ||
+          (s.note ?? "").toLowerCase().includes(q),
+      }) as T;
+    }
+    return stats as T;
+  }
   if (path === "/stats" && m === "POST") {
     const row = { id: uid("st"), ...(body as object) } as ProductionStat;
     stats.unshift(row);
@@ -1040,6 +1331,15 @@ export async function handleDemoApi<T>(
     if (status) list = list.filter((s) => s.status === status);
     return list as T;
   }
+  if (/^\/shift-closes\/[^/]+$/.test(path) && m === "PATCH") {
+    const id = path.split("/")[2];
+    const workerId = String(body?.workerId ?? "");
+    const row = assertCanEditShiftClose(shiftCloses, id, workerId);
+    row.passQty = Number(body?.passQty) || 0;
+    row.failQty = Number(body?.failQty) || 0;
+    row.note = String(body?.note ?? "");
+    return row as T;
+  }
   if (/^\/shift-closes\/[^/]+\/review$/.test(path) && m === "POST") {
     const id = path.split("/")[2];
     const row = shiftCloses.find((s) => s.id === id);
@@ -1053,6 +1353,17 @@ export async function handleDemoApi<T>(
       row.status = "pending_qc";
       row.teamleadBy = String(body?.reviewerName ?? "");
       row.teamleadAt = now;
+      notifications.unshift({
+        id: uid("n"),
+        userId: row.workerId,
+        type: "shift",
+        refId: row.id,
+        refType: "shift_close",
+        title: "Tổ trưởng đã duyệt chốt ca",
+        body: "Xin mở khóa để đo kiểm / chốt ca tiếp trong ngày.",
+        isRead: false,
+        createdAt: now,
+      });
     } else if (stage === "qc" && row.status === "pending_qc") {
       row.status = "pending_supervisor";
       row.qcBy = String(body?.reviewerName ?? "");

@@ -68,8 +68,11 @@ export type ShiftLockUi = {
   canUnlock: boolean;
   /** Sau chốt ca: khóa đo kiểm đến khi tổ trưởng duyệt mở khóa */
   canMeasure: boolean;
-  /** close = Chốt ca; unlock = Mở khóa */
-  button: "close" | "unlock";
+  /** Chưa duyệt tổ trưởng — CN được sửa phiếu chốt ca */
+  canEditClose: boolean;
+  pendingClose: ShiftClose | null;
+  /** close = Chốt ca; unlock = Mở khóa; edit = Sửa chốt ca */
+  button: "close" | "unlock" | "edit";
   hint: string;
   waitingTeamlead: boolean;
 };
@@ -93,19 +96,25 @@ export function shiftLockState(
       canClose: true,
       canUnlock: false,
       canMeasure: true,
+      canEditClose: false,
+      pendingClose: null,
       button: "close",
       hint: todayCloses.length > 0 ? "Đã mở khóa — có thể đo kiểm và chốt ca tiếp." : "",
       waitingTeamlead: false,
     };
   }
 
+  const pendingClose = todayCloses.find((c) => PENDING_CLOSE.has(c.status)) ?? null;
+
   if (closeAtTeamlead) {
     return {
       canClose: false,
       canUnlock: false,
       canMeasure: false,
-      button: "unlock",
-      hint: "Đã chốt ca — chờ tổ trưởng duyệt phiếu. Chưa đo kiểm tiếp được; chưa gửi thêm yêu cầu mở khóa.",
+      canEditClose: true,
+      pendingClose,
+      button: "edit",
+      hint: "Phiếu chờ tổ trưởng duyệt — có thể sửa số đạt/hỏng. Sau khi duyệt, xin mở khóa để chốt ca tiếp.",
       waitingTeamlead: true,
     };
   }
@@ -115,6 +124,8 @@ export function shiftLockState(
       canClose: false,
       canUnlock: false,
       canMeasure: false,
+      canEditClose: false,
+      pendingClose: null,
       button: "unlock",
       hint: "Đã gửi yêu cầu mở khóa — chờ tổ trưởng duyệt. Chưa đo kiểm tiếp được.",
       waitingTeamlead: true,
@@ -125,10 +136,26 @@ export function shiftLockState(
     canClose: false,
     canUnlock: true,
     canMeasure: false,
+    canEditClose: false,
+    pendingClose: null,
     button: "unlock",
-    hint: "Đã chốt ca — bấm Mở khóa (tổ trưởng duyệt) rồi mới đo kiểm / chốt ca tiếp.",
+    hint: "Tổ trưởng đã duyệt chốt ca — bấm Mở khóa rồi mới đo kiểm / chốt ca tiếp.",
     waitingTeamlead: false,
   };
+}
+
+export function assertCanEditShiftClose(
+  closes: ShiftClose[],
+  closeId: string,
+  workerId: string,
+): ShiftClose {
+  const row = closes.find((c) => c.id === closeId);
+  if (!row) throw new Error("Không tìm thấy phiếu chốt ca");
+  if (row.workerId !== workerId) throw new Error("Không được sửa phiếu của người khác");
+  if (row.status !== "pending_teamlead") {
+    throw new Error("Tổ trưởng đã duyệt — không sửa được. Xin mở khóa để chốt ca tiếp.");
+  }
+  return row;
 }
 
 export function assertCanCreateShiftClose(

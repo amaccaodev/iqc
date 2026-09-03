@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Attachment } from "@shared/types";
 import { attachmentDataUrl } from "@shared/utils/attachments";
 import ZoomableImage from "./ZoomableImage";
@@ -43,8 +44,15 @@ export default function FileSlideshow({ files, title = "Tài liệu đính kèm"
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "ArrowLeft") go(-1);
+      if (e.key === "ArrowRight") go(1);
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
     };
   }, [open]);
 
@@ -163,69 +171,86 @@ export default function FileSlideshow({ files, title = "Tài liệu đính kèm"
         </div>
       )}
 
-      {open && current && (
-        <div
-          className="fixed inset-0 z-[80] bg-black flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          aria-label={current.name}
-        >
-          <div className="flex items-center justify-between text-white px-3 py-2.5 shrink-0 bg-black/80">
-            <div className="min-w-0 flex-1 pr-2">
-              <div className="text-sm font-semibold truncate">{current.name}</div>
-              <div className="text-xs text-white/60">
-                {index + 1}/{viewable.length}
-                {current.type === "image" ? " · pinch / chạm đôi để zoom" : ""}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="w-11 h-11 rounded-full bg-white/15 border-0 text-white cursor-pointer shrink-0"
-              aria-label="Đóng"
-              onClick={() => setOpen(false)}
+      {open && current && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[200] bg-black flex flex-col"
+              role="dialog"
+              aria-modal="true"
+              aria-label={current.name}
             >
-              <i className="fas fa-xmark text-lg" />
-            </button>
-          </div>
-
-          <div className="flex-1 min-h-0 relative">
-            {viewable.length > 1 ? (
-              <>
+              <div
+                className="flex items-center justify-between text-white px-3 py-2.5 shrink-0 bg-black border-b border-white/15"
+                style={{ paddingTop: "max(0.65rem, env(safe-area-inset-top))" }}
+              >
+                <div className="min-w-0 flex-1 pr-2">
+                  <div className="text-sm font-semibold truncate">{current.name}</div>
+                  <div className="text-xs text-white/60">
+                    {index + 1}/{viewable.length}
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => go(-1)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 text-white border-0 cursor-pointer"
-                  aria-label="Trước"
+                  className="h-11 px-4 rounded-full bg-white text-black font-semibold text-sm border-0 cursor-pointer shrink-0 inline-flex items-center gap-2"
+                  aria-label="Đóng"
+                  onClick={() => setOpen(false)}
                 >
-                  <i className="fas fa-chevron-left" />
+                  <i className="fas fa-xmark" />
+                  Đóng
                 </button>
-                <button
-                  type="button"
-                  onClick={() => go(1)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 text-white border-0 cursor-pointer"
-                  aria-label="Sau"
-                >
-                  <i className="fas fa-chevron-right" />
-                </button>
-              </>
-            ) : null}
-
-            {current.type === "image" && currentSrc ? (
-              <ZoomableImage src={currentSrc} alt={current.name} />
-            ) : current.type === "pdf" && currentSrc ? (
-              <iframe
-                src={currentSrc}
-                title={current.name}
-                className="w-full h-full bg-card border-0"
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center text-white/70 text-sm">
-                Không xem được file này
               </div>
-            )}
-          </div>
-        </div>
-      )}
+
+              <div className="flex-1 min-h-0 relative">
+                {viewable.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => go(-1)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 text-white border-0 cursor-pointer"
+                      aria-label="Trước"
+                    >
+                      <i className="fas fa-chevron-left" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => go(1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full bg-white/15 text-white border-0 cursor-pointer"
+                      aria-label="Sau"
+                    >
+                      <i className="fas fa-chevron-right" />
+                    </button>
+                  </>
+                ) : null}
+
+                {current.type === "image" && currentSrc ? (
+                  <ZoomableImage src={currentSrc} alt={current.name} />
+                ) : current.type === "pdf" && currentSrc ? (
+                  <iframe
+                    src={currentSrc}
+                    title={current.name}
+                    className="w-full h-full bg-card border-0"
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-white/70 text-sm">
+                    Không xem được file này
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  className="absolute top-3 right-3 z-30 h-11 px-4 rounded-full bg-white text-black font-semibold text-sm border-0 cursor-pointer shadow-lg inline-flex items-center gap-2"
+                  aria-label="Đóng ảnh"
+                  onClick={() => setOpen(false)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <i className="fas fa-xmark" />
+                  Đóng
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

@@ -23,6 +23,12 @@ export const PRIORITY_LABEL: Record<Priority, string> = {
   urgent: "Khẩn cấp",
 };
 
+/** Trạng thái danh mục (thành phẩm / linh kiện / máy) */
+export const ACTIVE_STATUS_LABEL = {
+  active: "Đang dùng",
+  inactive: "Ngưng",
+} as const;
+
 export const ROLE_LABEL: Record<Role, string> = {
   director: "GĐ/PGĐ",
   supervisor: "Quản đốc",
@@ -115,7 +121,7 @@ export const NAV_CFG: Record<Role, NavItem[]> = {
     { id: "dashboard", label: "Tổng quan", fa: "fa-gauge-high", path: "/admin/dashboard" },
     { id: "accounts", label: "Tài khoản", fa: "fa-users", path: "/admin/accounts" },
     { id: "payroll", label: "Lương NV", fa: "fa-money-check-dollar", path: "/admin/payroll" },
-    { id: "roles", label: "Roles & Groups", fa: "fa-shield-halved", path: "/admin/roles" },
+    { id: "roles", label: "Vai trò & tổ", fa: "fa-shield-halved", path: "/admin/roles" },
     { id: "products", label: "Danh mục SP", fa: "fa-boxes-stacked", path: "/admin/products" },
     { id: "warehouse", label: "Quản lý kho", fa: "fa-warehouse", path: "/admin/warehouse" },
     { id: "machines", label: "Máy móc", fa: "fa-industry", path: "/admin/machines" },
@@ -172,8 +178,8 @@ export const MOBILE_NAV: Record<Role, NavItem[]> = {
   ],
   admin: [
     { id: "dashboard", label: "Tổng quan", fa: "fa-star", path: "/admin/dashboard" },
-    { id: "incidents", label: "Báo hỏng", fa: "fa-triangle-exclamation", path: "/admin/incidents" },
-    { id: "payroll", label: "Lương", fa: "fa-sack-dollar", path: "/admin/payroll" },
+    { id: "products", label: "Danh mục", fa: "fa-boxes-stacked", path: "/admin/products" },
+    { id: "machines", label: "Máy", fa: "fa-industry", path: "/admin/machines" },
     { id: "profile", label: "Hồ sơ", fa: "fa-user", path: "/admin/profile" },
   ],
   mechanic: [

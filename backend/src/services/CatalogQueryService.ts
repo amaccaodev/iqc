@@ -1,7 +1,6 @@
 import type {
   EntityListQuery,
   PagedResult,
-  ProcessStage,
   Product,
   SemiProduct,
   WarehouseStock,
@@ -37,7 +36,7 @@ export class CatalogQueryService {
       q: query.q,
       page: query.page,
       pageSize: query.pageSize,
-      stage: query.stage as ProcessStage | "all" | undefined,
+      stage: query.stage,
     });
   }
 
@@ -50,8 +49,22 @@ export class CatalogQueryService {
       q: query.q,
       page: query.page,
       pageSize: query.pageSize,
-      stage: query.stage as ProcessStage | "all" | undefined,
+      itemKind: query.itemKind,
+      stage: query.stage,
     });
+  }
+
+  searchMachines(query: EntityListQuery) {
+    return catalogStore.searchMachines({
+      q: query.q,
+      page: query.page,
+      pageSize: query.pageSize,
+      activeOnly: query.activeOnly,
+    });
+  }
+
+  searchChangeRequests(query: EntityListQuery) {
+    return catalogStore.searchChangeRequests(query);
   }
 }
 

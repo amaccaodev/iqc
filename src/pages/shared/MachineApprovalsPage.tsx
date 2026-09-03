@@ -1,32 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
-import type { MachineChangeRequest } from "@shared/types";
+import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { MACHINE_PROPOSAL_KIND_LABEL } from "../../components/worker/ProposalActionButtons";
 import { catalogApi } from "../../services/api/CatalogApiService";
-import { useRoleUser } from "../../components/layout/RoleLayout";
-import { Btn, Card } from "../../components/ui";
+import { useRoleUser } from "../../hooks/useRoleUser";
+import { Btn, Card, PaginationBar } from "../../components/ui";
 import { toast } from "../../hooks/useToast";
+import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 
 export default function MachineApprovalsPage() {
   const user = useRoleUser();
   const target = user.role === "mechanic" ? "mechanic" : "teamlead";
-  const [items, setItems] = useState<MachineChangeRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const all = await catalogApi.listChangeRequests({ target });
-      setItems(all);
-    } catch {
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [target]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const fetchRequests = useStableFetch((query) => catalogApi.searchChangeRequests(query));
+  const { items, total, page, pageSize, setPage, setPageSize, q, setQ, loading, refresh } = usePagedList({
+    fetchPage: fetchRequests,
+    filters: { target },
+    pageSize: LIST_UI_PAGE_SIZE,
+  });
 
   const review = async (id: string, approved: boolean) => {
     try {
@@ -35,7 +23,7 @@ export default function MachineApprovalsPage() {
         reviewedBy: user.id,
         reviewedName: user.name,
       });
-      await load();
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -43,11 +31,14 @@ export default function MachineApprovalsPage() {
 
   return (
     <div>
-      <h2 className="font-display font-800 text-xl mb-1">Duyệt đề xuất máy</h2>
-      <p className="text-sm text-muted mb-5">
-        Thay máy · Thêm máy · Báo hỏng — gửi tới{" "}
-        {user.role === "mechanic" ? "Cơ điện" : "Tổ trưởng"}
-      </p>
+      <h2 className="font-display font-800 text-xl mb-5">Duyệt đề xuất máy</h2>
+
+      <input
+        className="w-full border border-border rounded-xl px-3 py-2 text-sm mb-4 bg-input focus:outline-none focus:border-primary"
+        placeholder="Tìm người gửi, lý do, máy…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
 
       {loading ? (
         <div className="text-muted">Đang tải...</div>
@@ -96,6 +87,13 @@ export default function MachineApprovalsPage() {
               </Card>
             );
           })}
+          <PaginationBar
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPage={setPage}
+            onPageSize={setPageSize}
+          />
         </div>
       )}
     </div>

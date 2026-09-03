@@ -95,3 +95,8 @@ export function useAuth(): AuthContextValue {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
+
+/** HMR có thể tách instance context — không crash cả cây provider. */
+export function useOptionalAuth(): AuthContextValue | null {
+  return useContext(AuthContext);
+}

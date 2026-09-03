@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { workflowApi } from "../services/api/WorkflowApiService";
-import { useAuth } from "./useAuth";
+import { useOptionalAuth } from "./useAuth";
 
 interface NotificationsContextValue {
   unreadCount: number;
@@ -18,7 +18,7 @@ interface NotificationsContextValue {
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const user = useOptionalAuth()?.user ?? null;
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refreshUnread = useCallback(async () => {

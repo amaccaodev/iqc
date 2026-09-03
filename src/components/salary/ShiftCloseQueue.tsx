@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ShiftClose, ShiftCloseStatus, ShiftUnlockRequest } from "@shared/types";
 import { isSameLocalDay } from "@shared/utils/shiftCloseGuard";
 import { salaryApi } from "../../services/api/SalaryApiService";
 import { Btn, Card, Modal } from "../ui";
-import { useRoleUser } from "../layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { toast } from "../../hooks/useToast";
 
 const STATUS_LABEL: Record<ShiftCloseStatus, string> = {
@@ -178,7 +178,7 @@ export default function ShiftCloseQueue({
       {stage === "teamlead" ? (
         <div className="mb-6">
           <h3 className="font-display font-700 text-base mb-3 flex items-center gap-2">
-            <i className="fas fa-lock-open text-[#1B3A5C]" /> Mở khóa chốt ca ({unlocks.length})
+            <i className="fas fa-lock-open text-primary" /> Mở khóa chốt ca ({unlocks.length})
           </h3>
           {unlocks.length === 0 ? (
             <Card cls="p-4 text-center text-sm text-muted-foreground">Không có yêu cầu mở khóa</Card>

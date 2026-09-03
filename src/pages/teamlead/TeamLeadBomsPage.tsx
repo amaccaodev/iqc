@@ -1,5 +1,5 @@
 import { TeamLeadView, type User } from "../../_AppLegacy";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { useOrders } from "../../hooks/useOrders";
 
 export default function TeamLeadBomsPage() {

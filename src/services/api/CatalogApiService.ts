@@ -1,12 +1,15 @@
 import type {
   Attachment,
+  Bom,
+  BomProcess,
   CreateOrderFromProductRequest,
   EntityListQuery,
   Machine,
   MachineChangeRequest,
+  MachineGroup,
   PagedResult,
   Product,
-  ProductBomLine,
+  ProductStructureLine,
   SemiProduct,
   WarehouseMovement,
   WarehouseStock,
@@ -32,13 +35,30 @@ class CatalogApiService extends BaseApiService {
     return this.request<Product>(`/products/${id}`, { method: "DELETE" });
   }
   listBom(productId: string) {
-    return this.get<ProductBomLine[]>(`/products/${productId}/bom`);
+    return this.get<ProductStructureLine[]>(`/products/${productId}/bom`);
   }
-  setBom(productId: string, lines: Array<{ semiProductId: string; qtyPerUnit: number }>) {
-    return this.request<ProductBomLine[]>(`/products/${productId}/bom`, {
+  setBom(productId: string, lines: Array<{ semiProductId: string; qtyPerUnit?: number }>) {
+    return this.request<ProductStructureLine[]>(`/products/${productId}/bom`, {
       method: "PUT",
       body: JSON.stringify({ lines }),
     });
+  }
+  listSemiBoms(semiProductId: string) {
+    return this.get<Bom[]>(`/semi-products/${semiProductId}/boms`);
+  }
+  upsertSemiBom(
+    semiProductId: string,
+    body:
+      | { name: string; processes: Array<Partial<BomProcess>> }
+      | { boms: Array<{ id?: string; name: string; processes: Array<Partial<BomProcess>> }> },
+  ) {
+    return this.request<Bom[]>(`/semi-products/${semiProductId}/boms`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  }
+  listMachineGroups() {
+    return this.get<MachineGroup[]>("/machine-groups");
   }
 
   listSemiProducts() {
@@ -91,6 +111,7 @@ class CatalogApiService extends BaseApiService {
     rows: Array<{
       productCode: string;
       productName?: string;
+      productDescription?: string;
       partCode: string;
       partName?: string;
       processSeq: number;
@@ -118,6 +139,9 @@ class CatalogApiService extends BaseApiService {
   listMachines() {
     return this.get<Machine[]>("/machines");
   }
+  searchMachines(query: EntityListQuery = {}): Promise<PagedResult<Machine>> {
+    return this.listPaged<Machine>("/machines", query);
+  }
   createMachine(body: Partial<Machine>) {
     return this.post<Machine>("/machines", body);
   }
@@ -134,6 +158,10 @@ class CatalogApiService extends BaseApiService {
     if (params?.target) q.set("target", params.target);
     const qs = q.toString();
     return this.get<MachineChangeRequest[]>(`/machine-change-requests${qs ? `?${qs}` : ""}`);
+  }
+
+  searchChangeRequests(query: EntityListQuery = {}): Promise<PagedResult<MachineChangeRequest>> {
+    return this.listPaged<MachineChangeRequest>("/machine-change-requests", query);
   }
   createChangeRequest(body: {
     orderId?: string;

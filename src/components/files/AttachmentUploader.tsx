@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+﻿import { useRef, useState } from "react";
 import type { Attachment } from "@shared/types";
 import { attachmentDataUrl } from "@shared/utils/attachments";
 import { fileToAttachment } from "../../utils/fileToAttachment";
@@ -54,9 +54,8 @@ export default function AttachmentUploader({
           onClick={() => inputRef.current?.click()}
         >
           <i className={`fas ${busy ? "fa-spinner fa-spin" : "fa-upload"}`} />
-          {busy ? "Đang mã hóa…" : "Thêm file (WebP/Base64)"}
+          {busy ? "Đang mã hóa…" : "Thêm file"}
         </Btn>
-        <span className="text-[11px] text-muted-foreground">Ảnh → WebP; PDF/Excel → Base64. Lưu DB, không cloud.</span>
         <input
           ref={inputRef}
           type="file"
@@ -76,7 +75,7 @@ export default function AttachmentUploader({
               <span className="text-muted-foreground">{f.size}</span>
               {attachmentDataUrl(f) ? (
                 <a
-                  className="text-[#2D6EBD]"
+                  className="text-primary"
                   href={attachmentDataUrl(f)}
                   download={f.name}
                 >

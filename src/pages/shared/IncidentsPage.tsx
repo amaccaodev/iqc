@@ -8,7 +8,7 @@ import type { Machine, MachineChangeRequest, MachineIncident } from "@shared/typ
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { workflowApi } from "../../services/api/WorkflowApiService";
 import { catalogApi } from "../../services/api/CatalogApiService";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { Btn, ResponsiveDataList, SearchPicker } from "../../components/ui";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { MACHINE_PROPOSAL_KIND_LABEL } from "../../components/worker/ProposalActionButtons";
@@ -78,6 +78,7 @@ export default function IncidentsPage() {
     page,
     pageSize,
     setPage,
+    setPageSize,
     q,
     setQ,
     loading,
@@ -158,7 +159,7 @@ export default function IncidentsPage() {
       const filtered = machines.filter(
         (m) =>
           !qLower ||
-          m.code.toLowerCase().includes(qLower) ||
+          (m.accountingCode || m.code || "").toLowerCase().includes(qLower) ||
           m.name.toLowerCase().includes(qLower),
       );
       return filtered.slice(0, 15).map((m) => ({
@@ -310,13 +311,6 @@ export default function IncidentsPage() {
             <i className="fas fa-triangle-exclamation text-orange-500 mr-2" />
             Báo hỏng
           </h2>
-          <p className="text-sm text-muted mt-0.5">
-            {isWorker
-              ? "Báo cáo và theo dõi sự cố thiết bị"
-              : user.role === "mechanic"
-                ? "Hàng đợi Cơ điện — tiếp nhận và hoàn thành"
-                : "Tiếp nhận và xử lý sự cố máy"}
-          </p>
         </div>
         {isWorker && tab === "incidents" && (
           <button
@@ -398,6 +392,7 @@ export default function IncidentsPage() {
               pageSize={pageSize}
               total={total}
               onPage={setPage}
+              onPageSize={setPageSize}
               emptyText="Chưa có sự cố"
               columns={[
                 {
@@ -481,12 +476,6 @@ export default function IncidentsPage() {
         </>
       ) : (
         <div>
-          <p className="text-sm text-muted mb-4">
-            Thay máy · Thêm máy · Báo hỏng —{" "}
-            {canReview && user.role !== "worker"
-              ? `đơn gửi tới ${user.role === "mechanic" ? "Cơ điện" : "Tổ trưởng"}`
-              : "đơn bạn đã gửi"}
-          </p>
           {approvalsLoading ? (
             <div className="text-center text-muted py-10">Đang tải...</div>
           ) : approvals.length === 0 ? (
@@ -562,7 +551,6 @@ export default function IncidentsPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="bg-card rounded-2xl w-full max-w-md p-5 space-y-3">
             <div className="font-bold text-lg">Báo hỏng máy</div>
-            <p className="text-xs text-muted -mt-1">Chỉ cần tên máy — không cần mã máy.</p>
             {machines.length > 0 && (
               <label className="text-sm block">
                 <span className="text-muted">Chọn máy</span>

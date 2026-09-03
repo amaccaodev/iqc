@@ -3,8 +3,8 @@ import { Navigate } from "react-router-dom";
 import type { LoginResponse } from "@shared/types";
 import { roleHomePath } from "@shared/constants/labels";
 import { useAuth } from "../../hooks/useAuth";
-import { useTheme } from "../../hooks/useTheme";
 import { enableDemoMode, isDemoMode } from "../../lib/demoMode";
+import ThemeSwitcher from "../../components/ui/ThemeSwitcher";
 
 export default function LoginPage() {
   const { user, login, loading } = useAuth();
@@ -23,7 +23,6 @@ function LoginForm({
   onLogin: (employeeId: string, password: string) => Promise<LoginResponse>;
   loading: boolean;
 }) {
-  const { theme, toggleTheme } = useTheme();
   const [empId, setEmpId] = useState("");
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
@@ -45,23 +44,18 @@ function LoginForm({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0F1923] via-primary to-ring flex flex-col items-center justify-center px-4 relative">
-      <button
-        type="button"
-        onClick={toggleTheme}
-        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center border border-white/20 bg-white/10 text-white cursor-pointer"
-        aria-label={theme === "dark" ? "Chuyển chế độ sáng" : "Chuyển chế độ tối"}
-      >
-        <i className={`fas ${theme === "dark" ? "fa-sun" : "fa-moon"}`} />
-      </button>
+    <div className="min-h-screen bg-gradient-to-br from-header via-background to-header flex flex-col items-center justify-center px-4 relative">
+      <div className="absolute top-4 right-4">
+        <ThemeSwitcher variant="cycle" />
+      </div>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-white/15 flex items-center justify-center mx-auto mb-4 border border-white/20">
-            <i className="fas fa-industry text-white text-2xl" />
+          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4 border border-primary">
+            <i className="fas fa-industry text-primary-foreground text-2xl" />
           </div>
-          <div className="text-white/60 text-xs uppercase tracking-widest mb-1">CTCP Công nghệ Đồng</div>
-          <h1 className="font-display font-800 text-white text-2xl">COPEX</h1>
-          <p className="text-white/50 text-sm mt-1">Hệ thống Quản lý Sản xuất</p>
+          <div className="text-header-muted text-xs uppercase tracking-widest mb-1">CTCP Công nghệ Đồng</div>
+          <h1 className="font-display font-800 text-header-foreground text-2xl">COPEX</h1>
+          <p className="text-header-muted text-sm mt-1">Hệ thống Quản lý Sản xuất</p>
         </div>
         {demo && (
           <div className="mb-3 rounded-lg border border-amber-400/40 bg-amber-500/15 px-3 py-2 text-xs text-amber-50">
@@ -82,7 +76,7 @@ function LoginForm({
                   value={empId}
                   onChange={(e) => setEmpId(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && void submit()}
-                  placeholder="VD: NV001"
+                  placeholder="Mã nhân viên"
                   data-testid="login-employee-id"
                   className="w-full pl-9 pr-3 py-2.5 border border-border rounded-lg text-sm bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />

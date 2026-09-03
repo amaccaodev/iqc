@@ -12,96 +12,107 @@ export type Role =
 
 export type ProcessStage = "hot_forge" | "auto" | "assembly";
 
-/** Một nguyên công / quy trình gia công của linh kiện (ĐMKT sheet Mẫu van) */
-export interface SemiProcessStep {
-  /** Thứ tự tuần tự trong linh kiện (1, 2, 3…) */
-  seq: number;
-  /** Tên nguyên công, vd: "1: Cắt Phôi" */
-  process: string;
-  machine?: string;
-  processStage?: ProcessStage;
-  /** Mã tổ ĐMKT (CP, DẬP, TĐ…) */
-  teamCode?: string;
-  people?: number;
-  techNote?: string;
-  quota?: string;
-  /** Checklist đo kiểm riêng của nguyên công (nếu khác linh kiện) */
-  checklist?: import("./spec.js").PartChecklistItem[];
-}
+export type MeasurementValueType = "integer" | "text" | "float" | "boolean";
+/** Field key → type, e.g. { A: "integer", B: "text", C: "float", D: "boolean" } */
+export type MeasurementSpecMap = Record<string, MeasurementValueType>;
+export type StockItemKind = "product" | "semi_product";
 
 export interface Product extends IEntity {
   code: string;
   name: string;
   description: string;
+  unitOfMeasureId?: string;
   active: boolean;
   createdAt?: string;
-  /** Bản vẽ / thông số kỹ thuật (có thể nhiều file, nội dung base64/webp trong DB) */
+  updatedAt?: string;
   attachments?: Attachment[];
 }
 
 export interface SemiProduct extends IEntity {
   code: string;
   name: string;
-  processStage: ProcessStage;
-  description: string;
+  productId: string;
+  unitOfMeasureId?: string;
+  weightKg?: number;
+  drawingId?: string;
+  measurementSpecs: MeasurementSpecMap;
   active: boolean;
   createdAt?: string;
-  /** Bản vẽ / thông số kỹ thuật của linh kiện (nhiều file) */
+  updatedAt?: string;
   attachments?: Attachment[];
-  /**
-   * Quy trình gia công tuần tự (import từ Mẫu van).
-   * Khi tạo lệnh SX: mỗi step → 1 BOM.
-   */
-  processSteps?: SemiProcessStep[];
-  /**
-   * Checklist đo kiểm đầy đủ của linh kiện (mỗi LK khác nhau).
-   * Khi tạo lệnh: copy nguyên sang BOM.materialSpecs — không chọn lẻ.
-   */
-  checklist?: import("./spec.js").PartChecklistItem[];
 }
 
-export interface ProductBomLine extends IEntity {
-  productId: string;
+/** Catalog BOM — belongs to one semi-product. One BTP can have many BOMs; one BOM can have many processes. */
+export interface Bom extends IEntity {
+  name: string;
   semiProductId: string;
-  qtyPerUnit: number;
-  /** Joined */
-  semiProduct?: SemiProduct;
-  stockQty?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  processes?: BomProcess[];
+}
+
+export interface BomProcess extends IEntity {
+  bomId: string;
+  name: string;
+  productionTeamId?: string;
+  machineGroupId?: string;
+  quotaPerShift: number;
+  unitOfMeasureId?: string;
+  sortOrder: number;
+  createdAt?: string;
+}
+
+export interface MachineGroup extends IEntity {
+  code: string;
+  name: string;
+  productionTeamId?: string;
+  isActive?: boolean;
 }
 
 export interface WarehouseStock {
-  semiProductId: string;
+  id: string;
+  warehouseId: string;
+  itemKind: StockItemKind;
+  itemId: string;
   qty: number;
   updatedAt?: string;
+  product?: Product;
+  semiProduct?: SemiProduct;
 }
 
 export interface WarehouseMovement extends IEntity {
-  semiProductId: string;
+  warehouseId: string;
+  itemKind: StockItemKind;
+  itemId: string;
   delta: number;
   qtyAfter: number;
   note?: string;
   createdBy?: string;
+  createdById?: string;
   createdAt: string;
 }
 
-export interface MachineParam {
-  label: string;
-  unit?: string;
-  min?: number;
-  max?: number;
-  target?: number;
+export interface Machine extends IEntity {
+  name: string;
+  accountingCode: string;
+  machineGroupId?: string;
+  specs: Record<string, unknown>;
+  productionTeamId?: string;
+  active: boolean;
+  createdAt?: string;
+  /** Alias of accountingCode (legacy callers) */
+  code?: string;
+  /** Alias of productionTeamId (legacy callers) */
+  teamId?: string;
 }
 
-export interface Machine extends IEntity {
-  code: string;
-  name: string;
-  params: MachineParam[];
-  active: boolean;
-  /** Khu vực / vị trí máy trên xưởng (vd: "Khu Dập nóng A1") */
-  location?: string;
-  /** Tổ sở hữu / khu vực máy — liên kết TEAMS (t_hot / t_auto / t_asm) */
-  teamId?: string;
-  createdAt?: string;
+/** Product structure for order create / admin: semis of a product + stock */
+export interface ProductStructureLine {
+  semiProductId: string;
+  qtyPerUnit: number;
+  stockQty: number;
+  semiProduct?: SemiProduct;
+  boms?: Bom[];
 }
 
 export type ChangeRequestTarget = "teamlead" | "mechanic";
@@ -137,13 +148,13 @@ export interface CreateOrderFromProductRequest {
   priority?: Priority;
   customer?: string;
   shift?: WorkShift | string;
-  /** Kích cỡ thành phẩm (vd DN15, DN20, Ø25) */
-  size?: string;
   lines: Array<{
     semiProductId: string;
     produceQty: number;
     useFromStock: boolean;
     stockUseQty?: number;
+    /** Quy trình catalog đã chọn; trống = bỏ linh kiện này */
+    processIds?: string[];
   }>;
 }
 
@@ -315,13 +326,19 @@ export interface BOMItem extends IEntity {
   rawMaterial: string;
   machine: string;
   /**
-   * Tên quy trình / nguyên công (ĐMKT sheet Mẫu van cột “Tên nguyên công”).
-   * Mỗi BOM = 1 quy trình; hết quy trình này mới mở quy trình kế tiếp cùng linh kiện.
+   * Tên quy trình thuộc catalog BOM (`catalogBomId`).
+   * Một BOM có thể có nhiều quy trình khác nhau; hết QT trước mới mở QT sau trong cùng BOM.
    */
   process: string;
-  /** Thứ tự quy trình trong cùng linh kiện (1, 2, 3…) */
+  /** Thứ tự quy trình trong cùng catalog BOM (1, 2, 3…) */
   processSeq?: number;
-  /** Nhóm linh kiện (Tên SP/Chi tiết trên sheet) — gom các quy trình tuần tự */
+  /** Id BOM danh mục — gom các quy trình của cùng một BOM */
+  catalogBomId?: string;
+  /** Tên BOM danh mục */
+  catalogBomName?: string;
+  /** Id quy trình catalog (`bom_processes.id`) */
+  catalogProcessId?: string;
+  /** Nhóm linh kiện (Tên SP/Chi tiết trên sheet) */
   partGroup?: string;
   /** Công đoạn trong quy trình 3 tổ */
   processStage?: ProcessStage;
@@ -421,11 +438,14 @@ export interface EntityListQuery {
   roles?: Role[];
   activeOnly?: boolean;
   stage?: ProcessStage | "all";
+  itemKind?: StockItemKind | "all";
   /** workflow filters */
   status?: string;
   orderId?: string;
   bomId?: string;
   unreadOnly?: boolean;
+  /** Đề xuất máy: teamlead | mechanic */
+  target?: string;
 }
 
 export interface Team extends IEntity {
@@ -595,3 +615,5 @@ export interface ApiResponse<T> {
   message?: string;
   error?: string;
 }
+
+export * from "./spec.js";

@@ -1,4 +1,5 @@
 import type { MachineChangeKind } from "@shared/types";
+import { WORKER_BTN_GHOST } from "./workerUi";
 
 export const MACHINE_PROPOSAL_KIND_LABEL: Record<MachineChangeKind, string> = {
   change_machine: "Thay máy",
@@ -55,7 +56,7 @@ export default function ProposalActionButtons({
           key={a.kind}
           type="button"
           onClick={() => onSelect(a.kind)}
-          className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-[#1B3A5C] bg-card text-left cursor-pointer hover:bg-secondary transition-colors"
+          className={`${WORKER_BTN_GHOST} w-full justify-start text-left font-semibold shadow-none px-3 py-3`}
         >
           <span className="w-9 h-9 rounded-lg bg-secondary text-primary flex items-center justify-center shrink-0">
             <i className={`fas ${a.fa}`} />

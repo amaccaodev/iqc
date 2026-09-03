@@ -11,6 +11,7 @@
     "db:push": "npx supabase db push",
     "db:migrate": "node backend/scripts/migrate_pg.mjs",
     "typecheck": "tsc --noEmit && pnpm --dir backend typecheck",
+    "dmkt:import": "python scripts/import_dmkt.py",
     "build": "vite build",
     "ci": "pnpm typecheck && pnpm build",
     "preview": "vite preview",

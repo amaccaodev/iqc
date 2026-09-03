@@ -153,6 +153,10 @@ class WorkflowApiService extends BaseApiService {
   }
 
   // ── Production Stats ───────────────────────────────────────────────────────
+  listStats(query: EntityListQuery = {}): Promise<PagedResult<ProductionStat>> {
+    return this.listPagedSafe<ProductionStat>("/stats", query);
+  }
+
   async getStats(filters?: { orderId?: string; bomId?: string; statDate?: string }): Promise<ProductionStat[]> {
     const params = new URLSearchParams();
     if (filters?.orderId) params.set("orderId", filters.orderId);

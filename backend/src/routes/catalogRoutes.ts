@@ -54,6 +54,50 @@ catalogRoutes.delete("/products/:id", (req, res) => {
   }
 });
 
+catalogRoutes.put("/semi-products/:id/boms", (req, res) => {
+  try {
+    const boms = req.body?.boms as
+      | Array<{
+          id?: string;
+          name: string;
+          processes: Array<{
+            id?: string;
+            name: string;
+            productionTeamId?: string;
+            machineGroupId?: string;
+            quotaPerShift?: number;
+            sortOrder?: number;
+          }>;
+        }>
+      | undefined;
+    const data = Array.isArray(boms)
+      ? catalogStore.replaceBoms(req.params.id, boms)
+      : catalogStore.upsertBom(
+          req.params.id,
+          String(req.body?.name ?? ""),
+          (req.body?.processes ?? []) as Array<{
+            id?: string;
+            name: string;
+            productionTeamId?: string;
+            machineGroupId?: string;
+            quotaPerShift?: number;
+            sortOrder?: number;
+          }>,
+        );
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+  }
+});
+
+catalogRoutes.get("/semi-products/:id/boms", (req, res) => {
+  res.json({ success: true, data: catalogStore.listBoms(req.params.id) });
+});
+
+catalogRoutes.get("/machine-groups", (_req, res) => {
+  res.json({ success: true, data: catalogStore.listMachineGroups() });
+});
+
 catalogRoutes.get("/products/:id/bom", (req, res) => {
   res.json({ success: true, data: catalogStore.listBom(req.params.id) });
 });
@@ -84,15 +128,20 @@ catalogRoutes.post("/semi-products", (req, res) => {
     const body = req.body as {
       code: string;
       name: string;
-      processStage?: "hot_forge" | "auto" | "assembly";
-      description?: string;
+      productId: string;
+      measurementSpecs?: Record<string, "integer" | "text" | "float" | "boolean">;
+      unitOfMeasureId?: string;
+      weightKg?: number;
     };
     if (!body.code?.trim() || !body.name?.trim()) throw new Error("Mã và tên BTP bắt buộc");
+    if (!body.productId) throw new Error("Chọn thành phẩm cho BTP");
     const data = catalogStore.createSemi({
       code: body.code.trim(),
       name: body.name.trim(),
-      processStage: body.processStage ?? "hot_forge",
-      description: body.description ?? "",
+      productId: body.productId,
+      measurementSpecs: body.measurementSpecs ?? {},
+      unitOfMeasureId: body.unitOfMeasureId,
+      weightKg: body.weightKg,
       active: true,
     });
     res.status(201).json({ success: true, data });
@@ -112,7 +161,7 @@ catalogRoutes.patch("/semi-products/:id", (req, res) => {
 
 catalogRoutes.get("/warehouse-stock", (req, res) => {
   const q = req.query as Record<string, string | undefined>;
-  if (wantsPagedListQuery(q, ["stage"])) {
+  if (wantsPagedListQuery(q, ["stage", "itemKind"])) {
     return res.json({
       success: true,
       data: catalogQueryService.searchStock(parseListQueryFromRequest(q)),
@@ -213,18 +262,38 @@ catalogRoutes.post("/products/import-bom", (req, res) => {
   }
 });
 
-catalogRoutes.get("/machines", (_req, res) => {
+catalogRoutes.get("/machines", (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  if (wantsPagedListQuery(q)) {
+    return res.json({
+      success: true,
+      data: catalogQueryService.searchMachines(parseListQueryFromRequest(q)),
+    });
+  }
   res.json({ success: true, data: catalogStore.listAllMachines() });
 });
 
 catalogRoutes.post("/machines", (req, res) => {
   try {
-    const body = req.body as { code: string; name: string; params?: unknown[]; active?: boolean };
-    if (!body.code?.trim() || !body.name?.trim()) throw new Error("Mã và tên máy bắt buộc");
+    const body = req.body as {
+      code?: string;
+      accountingCode?: string;
+      name: string;
+      machineGroupId?: string;
+      productionTeamId?: string;
+      teamId?: string;
+      specs?: Record<string, unknown>;
+      active?: boolean;
+    };
+    if (!(body.accountingCode || body.code)?.trim() || !body.name?.trim()) {
+      throw new Error("Mã kế toán và tên máy bắt buộc");
+    }
     const data = catalogStore.createMachine({
-      code: body.code.trim(),
+      accountingCode: (body.accountingCode || body.code || "").trim(),
       name: body.name.trim(),
-      params: Array.isArray(body.params) ? (body.params as never) : [],
+      machineGroupId: body.machineGroupId,
+      productionTeamId: body.productionTeamId || body.teamId,
+      specs: body.specs && typeof body.specs === "object" ? body.specs : {},
       active: body.active !== false,
     });
     res.status(201).json({ success: true, data });
@@ -252,6 +321,13 @@ catalogRoutes.delete("/machines/:id", (req, res) => {
 });
 
 catalogRoutes.get("/machine-change-requests", (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  if (wantsPagedListQuery(q)) {
+    return res.json({
+      success: true,
+      data: catalogQueryService.searchChangeRequests(parseListQueryFromRequest(q)),
+    });
+  }
   const status = typeof req.query.status === "string" ? req.query.status : undefined;
   const target = typeof req.query.target === "string" ? req.query.target : undefined;
   res.json({ success: true, data: catalogStore.listChangeRequests({ status, target }) });

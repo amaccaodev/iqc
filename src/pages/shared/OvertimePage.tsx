@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OvertimePage — Đề xuất làm thêm / OT
  * - worker/teamlead: tạo đề xuất
  * - supervisor: xem và duyệt/từ chối
@@ -8,7 +8,7 @@ import { useSearchParams } from "react-router-dom";
 import type { OvertimeRequest } from "@shared/types";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { workflowApi } from "../../services/api/WorkflowApiService";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { ResponsiveDataList } from "../../components/ui";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { toast } from "../../hooks/useToast";
@@ -30,7 +30,7 @@ export default function OvertimePage() {
   const canReview = user.role === "supervisor";
 
   const fetchPage = useStableFetch((query) => workflowApi.listOvertime(query));
-  const { items, total, page, pageSize, setPage, q, setQ, loading, refresh } = usePagedList({
+  const { items, total, page, pageSize, setPage, setPageSize, q, setQ, loading, refresh } = usePagedList({
     fetchPage,
     pageSize: LIST_UI_PAGE_SIZE,
   });
@@ -84,13 +84,10 @@ export default function OvertimePage() {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="font-display font-800 text-xl">Đề xuất làm thêm (OT)</h2>
-          <p className="text-sm text-muted mt-0.5">
-            {canCreate ? "Tạo và theo dõi đề xuất làm thêm giờ" : "Duyệt đề xuất làm thêm giờ"}
-          </p>
         </div>
         {canCreate && (
           <button onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:bg-[#2a4f78] transition cursor-pointer border-0">
+            className="flex items-center gap-2 bg-primary text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 transition cursor-pointer border-0">
             <i className="fas fa-plus" /> Tạo đề xuất
           </button>
         )}
@@ -126,6 +123,7 @@ export default function OvertimePage() {
           pageSize={pageSize}
           total={total}
           onPage={setPage}
+          onPageSize={setPageSize}
           emptyText="Không có đề xuất OT nào"
           columns={[
             { key: "reason", header: "Lý do", render: (item) => item.reason },
@@ -201,31 +199,31 @@ export default function OvertimePage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Lý do làm thêm <span className="text-red-500">*</span></label>
                 <textarea value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} rows={2}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] resize-none"
-                  placeholder="VD: Cần hoàn thành lệnh LSX-2024-001 trước deadline..." />
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
+                  placeholder="Lý do" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Ngày đề xuất <span className="text-red-500">*</span></label>
                   <input type="date" value={form.proposedDate} onChange={e => setForm({ ...form, proposedDate: e.target.value })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Số giờ OT</label>
                   <input type="number" min="1" max="8" step="0.5" value={form.proposedHours}
                     onChange={e => setForm({ ...form, proposedHours: e.target.value })}
-                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Công nhân tham gia (cách nhau bằng dấu phẩy)</label>
                 <input value={form.workerNames} onChange={e => setForm({ ...form, workerNames: e.target.value })}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C]"
-                  placeholder="VD: Nguyễn A, Trần B, Lê C" />
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  placeholder="Người tham gia" />
               </div>
               <div className="flex gap-3">
                 <button onClick={() => void create()} disabled={saving}
-                  className="flex-1 bg-primary text-white text-sm font-semibold py-2.5 rounded-xl hover:bg-[#2a4f78] cursor-pointer border-0 disabled:opacity-60">
+                  className="flex-1 bg-primary text-white text-sm font-semibold py-2.5 rounded-xl hover:opacity-90 cursor-pointer border-0 disabled:opacity-60">
                   {saving ? <i className="fas fa-spinner fa-spin" /> : <><i className="fas fa-paper-plane mr-2" />Gửi đề xuất</>}
                 </button>
                 <button onClick={() => setShowCreate(false)} className="px-4 bg-background text-muted text-sm font-semibold py-2.5 rounded-xl cursor-pointer border-0">Hủy</button>
@@ -260,7 +258,7 @@ export default function OvertimePage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Ghi chú</label>
                 <textarea value={reviewForm.note} onChange={e => setReviewForm({ ...reviewForm, note: e.target.value })} rows={2}
-                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1B3A5C] resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Ghi chú thêm..." />
               </div>
               <div className="flex gap-3">

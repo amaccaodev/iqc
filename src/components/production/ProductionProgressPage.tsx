@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { BOM_STATUS_LABEL, STATUS_LABEL } from "@shared/constants/labels";
+import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import {
   estimateFinishedQty,
   orderPartProgress,
 } from "@shared/utils/productionProgress";
 import { resolveBomTeamId, resolveUserTeamId, teamIdsMatch } from "@shared/constants/teams";
 import type { ProductionOrder, ShiftClose } from "@shared/types";
-import { Btn, Card } from "../ui";
+import { Btn, Card, PaginationBar } from "../ui";
 import { useOrders } from "../../hooks/useOrders";
-import { useRoleUser } from "../layout/RoleLayout";
+import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { orderApi } from "../../services/api/OrderApiService";
 import { salaryApi } from "../../services/api/SalaryApiService";
 import { toast } from "../../hooks/useToast";
@@ -22,7 +24,7 @@ const PENDING_SHIFT: ReadonlySet<string> = new Set([
 
 function ProgressBar({ pct, tone = "blue" }: { pct: number; tone?: "blue" | "green" | "amber" }) {
   const color =
-    tone === "green" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-[#2D6EBD]";
+    tone === "green" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-primary";
   return (
     <div className="h-2 rounded-full bg-border overflow-hidden">
       <div className={`h-full ${color} transition-all`} style={{ width: `${Math.min(100, pct)}%` }} />
@@ -43,6 +45,9 @@ function RedDot({ title }: { title: string }) {
 function PartRow({
   name,
   code,
+  process,
+  processSeq,
+  bomName,
   done,
   target,
   fail,
@@ -52,9 +57,13 @@ function PartRow({
   workersOnMachine,
   shiftClosePending,
   detailPath,
+  mine,
 }: {
   name: string;
   code: string;
+  process?: string;
+  processSeq?: number;
+  bomName?: string;
   done: number;
   target: number;
   fail: number;
@@ -64,11 +73,14 @@ function PartRow({
   workersOnMachine: number;
   shiftClosePending: boolean;
   detailPath: string;
+  mine?: boolean;
 }) {
   return (
     <Link
       to={detailPath}
-      className="block rounded-xl border border-border bg-card p-3 sm:p-4 relative no-underline text-inherit hover:border-primary/50 hover:bg-surface transition-colors"
+      className={`block rounded-xl border p-3 sm:p-4 relative no-underline text-inherit hover:border-primary/50 hover:bg-surface transition-colors ${
+        mine === false ? "border-border bg-card/70 opacity-80" : "border-border bg-card"
+      }`}
     >
       {shiftClosePending ? (
         <span className="absolute top-3 right-3">
@@ -77,10 +89,20 @@ function PartRow({
       ) : null}
       <div className="flex flex-wrap items-start justify-between gap-2 mb-2 pr-4">
         <div className="min-w-0">
-          <div className="font-semibold text-foreground text-sm sm:text-base flex items-center gap-2">
+          <div className="font-semibold text-foreground text-sm sm:text-base flex items-center gap-2 flex-wrap">
             {name}
+            {mine ? (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                Tổ bạn
+              </span>
+            ) : null}
             <i className="fas fa-chevron-right text-[10px] text-muted" />
           </div>
+          {process ? (
+            <div className="text-xs text-primary font-medium mt-0.5">
+              {bomName ? `${bomName} · ` : ""}QT {processSeq ?? ""}: {process}
+            </div>
+          ) : null}
           <div className="text-[11px] text-muted-foreground font-mono">{code}</div>
         </div>
         <div className="text-right">
@@ -127,12 +149,10 @@ function ProductCard({
   detailBase: string;
   pendingBomIds: Set<string>;
   orderHasPendingClose: boolean;
-  /** Tổ trưởng: chỉ hiện linh kiện của tổ */
+  /** Tổ trưởng: đánh dấu việc của tổ, vẫn hiện đủ BOM như GĐ */
   teamIdFilter?: string;
 }) {
-  const parts = orderPartProgress(order).filter((p) =>
-    teamIdFilter ? teamIdsMatch(resolveBomTeamId(p.bom), teamIdFilter) : true,
-  );
+  const parts = orderPartProgress(order);
   const finishedEst = estimateFinishedQty(order);
   const partDoneAvg =
     parts.length > 0 ? Math.round(parts.reduce((s, p) => s + p.pct, 0) / parts.length) : 0;
@@ -224,9 +244,7 @@ function ProductCard({
         <div className="border-t border-border bg-surface px-4 py-4 sm:px-5 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs font-semibold text-muted uppercase tracking-wide">
-              {teamIdFilter
-                ? "Linh kiện của tổ — đã làm / cần làm"
-                : "Sản phẩm con (linh kiện) — đã làm / cần làm"}
+              Linh kiện / quy trình đo — đã làm / cần làm
             </div>
             {canComplete && !isDone ? (
               <Btn size="sm" variant="secondary" onClick={() => void handleComplete()} disabled={completing}>
@@ -251,24 +269,33 @@ function ProductCard({
             </div>
           )}
 
-          {parts.map((p) => (
-            <PartRow
-              key={p.bom.id}
-              name={p.bom.partName}
-              code={p.bom.partCode || p.bom.bomCode}
-              done={p.done}
-              target={p.target}
-              fail={p.fail}
-              pct={p.pct}
-              status={BOM_STATUS_LABEL[p.bom.status] ?? p.bom.status}
-              team={p.bom.assignedTeamName}
-              workersOnMachine={
-                p.bom.workerAssignments?.length || p.bom.assignedWorkers?.length || 0
-              }
-              shiftClosePending={pendingBomIds.has(p.bom.id)}
-              detailPath={`${detailBase}/${order.id}/${p.bom.id}`}
-            />
-          ))}
+          {parts.map((p) => {
+            const mine = teamIdFilter
+              ? teamIdsMatch(resolveBomTeamId(p.bom), teamIdFilter)
+              : undefined;
+            return (
+              <PartRow
+                key={p.bom.id}
+                name={p.bom.partName}
+                code={p.bom.partCode || p.bom.bomCode}
+                process={p.bom.process}
+                processSeq={p.bom.processSeq}
+                bomName={p.bom.catalogBomName}
+                done={p.done}
+                target={p.target}
+                fail={p.fail}
+                pct={p.pct}
+                status={BOM_STATUS_LABEL[p.bom.status] ?? p.bom.status}
+                team={p.bom.assignedTeamName}
+                workersOnMachine={
+                  p.bom.workerAssignments?.length || p.bom.assignedWorkers?.length || 0
+                }
+                shiftClosePending={pendingBomIds.has(p.bom.id)}
+                detailPath={`${detailBase}/${order.id}/${p.bom.id}`}
+                mine={mine}
+              />
+            );
+          })}
           {parts.length === 0 && (
             <div className="text-sm text-muted">Lệnh chưa có linh kiện BOM.</div>
           )}
@@ -282,7 +309,20 @@ export type ProductionProgressMode = "director" | "supervisor" | "teamlead";
 
 export default function ProductionProgressPage({ mode }: { mode: ProductionProgressMode }) {
   const user = useRoleUser();
-  const { orders, setOrders, loading, refreshOrders } = useOrders();
+  const { orders, setOrders, refreshOrders } = useOrders();
+  const fetchOrders = useStableFetch((query) => orderApi.list(query));
+  const {
+    items: pagedOrders,
+    total,
+    page,
+    pageSize,
+    setPage,
+    setPageSize,
+    q,
+    setQ,
+    loading,
+    refresh,
+  } = usePagedList({ fetchPage: fetchOrders, pageSize: LIST_UI_PAGE_SIZE });
   const [selectedId, setSelectedId] = useState<string>("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [hideCompleted, setHideCompleted] = useState(true);
@@ -310,7 +350,7 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
       .listShiftCloses()
       .then(setShiftCloses)
       .catch(() => setShiftCloses([]));
-  }, [showShiftDots, orders]);
+  }, [showShiftDots, pagedOrders]);
 
   const pendingByOrder = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -333,7 +373,7 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
 
   const activeOrders = useMemo(
     () =>
-      orders.filter((o) => {
+      pagedOrders.filter((o) => {
         // Lệnh từ GĐ giao xuống: approved / đang làm / chờ duyệt — chưa phải "đã hoàn thành"
         if (!["approved", "in_progress", "pending_approval", "completed"].includes(o.status)) {
           return false;
@@ -347,7 +387,7 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
         }
         return true;
       }),
-    [orders, hideCompleted, teamIdFilter],
+    [pagedOrders, hideCompleted, teamIdFilter],
   );
 
   const visible = useMemo(() => {
@@ -355,32 +395,26 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
     return activeOrders.filter((o) => o.id === selectedId);
   }, [activeOrders, selectedId]);
 
-  const subtitle =
-    mode === "director"
-      ? "Theo dõi linh kiện đã làm / cần làm. Sai số lượng → bấm Hoàn thành rồi tạo lệnh mới."
-      : mode === "teamlead"
-        ? "Công việc của tổ — bấm linh kiện để xem máy / CN. Chấm đỏ = chốt ca chờ tổ trưởng."
-        : "Theo dõi linh kiện đã làm / cần làm. Chấm đỏ = có chốt ca từ dưới chờ duyệt.";
-
   return (
     <div className="space-y-4">
-      <div className="text-center">
-        <h2 className="font-display font-800 text-lg sm:text-xl lg:text-2xl">Công việc</h2>
-        <p className="text-sm text-muted mt-1 max-w-xl mx-auto">{subtitle}</p>
-      </div>
-      <div className="flex flex-wrap items-center justify-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-1">
+        <div>
+          <h2 className="font-display font-800 text-lg sm:text-xl lg:text-2xl">Công việc</h2>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm text-muted flex items-center gap-1.5 cursor-pointer">
           <input
             type="checkbox"
             checked={hideCompleted}
             onChange={(e) => setHideCompleted(e.target.checked)}
-            className="accent-[#1B3A5C]"
+            className="accent-primary"
           />
           Ẩn lệnh SX đã đóng
         </label>
         <button
           type="button"
           onClick={() => {
+            refresh();
             void refreshOrders();
             if (showShiftDots) {
               void salaryApi
@@ -389,11 +423,19 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
                 .catch(() => setShiftCloses([]));
             }
           }}
-          className="text-sm font-medium text-[#2D6EBD] border-0 bg-transparent cursor-pointer"
+          className="text-sm font-medium text-primary border-0 bg-transparent cursor-pointer"
         >
           <i className="fas fa-rotate-right mr-1" /> Làm mới
         </button>
+        </div>
       </div>
+
+      <input
+        className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-input focus:outline-none focus:border-primary"
+        placeholder="Tìm số lệnh, sản phẩm, khách hàng…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
 
       <Card cls="p-4">
         <label className="block text-sm">
@@ -422,9 +464,7 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
 
       {!loading && visible.length === 0 && (
         <Card cls="p-6 text-center text-sm text-muted">
-          {mode === "teamlead"
-            ? "Chưa có lệnh giao cho tổ bạn (status Đã duyệt / Đang SX từ Giám đốc)."
-            : "Chưa có lệnh để theo dõi. Tạo lệnh từ trang Lệnh SX (chọn sản phẩm có BOM)."}
+          Chưa có lệnh để theo dõi. {mode === "director" ? "Tạo lệnh từ trang Lệnh SX." : "Chờ lệnh đã duyệt từ Giám đốc."}
         </Card>
       )}
 
@@ -446,11 +486,19 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
             onCompleted={(updated) => {
               setOrders(orders.map((o) => (o.id === updated.id ? updated : o)));
               void refreshOrders();
+              refresh();
             }}
           />
           );
         })}
       </div>
+      <PaginationBar
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPage={setPage}
+        onPageSize={setPageSize}
+      />
     </div>
   );
 }

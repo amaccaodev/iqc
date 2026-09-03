@@ -1,4 +1,4 @@
-import type { PartChecklistItem } from "@shared/types/spec";
+﻿import type { PartChecklistItem } from "@shared/types/spec";
 
 const emptyRow = (): PartChecklistItem => ({
   name: "",
@@ -29,10 +29,6 @@ export default function PartChecklistEditor({
 
   return (
     <div className="space-y-2">
-      <div className="text-xs text-muted">
-        Nhập <strong>đủ</strong> thông số đo của linh kiện này (mỗi LK khác nhau). Khi tạo lệnh SX hệ
-        thống copy full checklist — không chọn lẻ.
-      </div>
       {rows.map((row, idx) => (
         <div
           key={idx}
@@ -102,7 +98,7 @@ export default function PartChecklistEditor({
           </button>
           <input
             className="col-span-12 border border-border rounded-lg px-2 py-1.5 text-xs"
-            placeholder="Gợi ý / vị trí bản vẽ (tuỳ chọn)"
+            placeholder="Vị trí bản vẽ"
             value={row.hint ?? ""}
             onChange={(e) => update(idx, { hint: e.target.value })}
           />
@@ -111,7 +107,7 @@ export default function PartChecklistEditor({
       <button
         type="button"
         onClick={add}
-        className="text-xs font-semibold text-[#2D6EBD] border-0 bg-transparent cursor-pointer"
+        className="text-xs font-semibold text-primary border-0 bg-transparent cursor-pointer"
       >
         <i className="fas fa-plus mr-1" /> Thêm thông số
       </button>

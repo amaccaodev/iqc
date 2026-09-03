@@ -186,6 +186,24 @@ payrollRoutes.post("/shift-unlocks/:id/review", async (req, res) => {
   }
 });
 
+payrollRoutes.patch("/shift-closes/:id", (req, res) => {
+  try {
+    const actor = resolveActor(req);
+    if (actor && actor.role !== "worker") throw new Error("Chỉ công nhân được sửa phiếu chốt ca.");
+    const workerId = actor?.id || String((req.body as { workerId?: string })?.workerId ?? "");
+    if (!workerId) throw new Error("Thiếu công nhân");
+    const body = req.body as { passQty?: number; failQty?: number; note?: string };
+    const data = shiftSalaryStore.updatePendingClose(req.params.id, workerId, {
+      passQty: Number(body.passQty) || 0,
+      failQty: Number(body.failQty) || 0,
+      note: body.note ?? "",
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+  }
+});
+
 payrollRoutes.post("/shift-closes/:id/review", async (req, res) => {
   try {
     const { stage, approved, reviewerName, rejectReason } = req.body as {
@@ -220,6 +238,18 @@ payrollRoutes.post("/shift-closes/:id/review", async (req, res) => {
     }
     if (approved && stage === "teamlead") {
       await notifyRoles(["qc"], "Chốt ca chờ QC", `${data.workerName} — ${data.partName} (${data.passQty} đạt)`, data.id);
+      try {
+        await workflowService.createNotification({
+          userId: data.workerId,
+          type: "shift",
+          refId: data.id,
+          refType: "shift_close",
+          title: "Tổ trưởng đã duyệt chốt ca",
+          body: "Xin mở khóa để đo kiểm / chốt ca tiếp trong ngày.",
+        });
+      } catch {
+        /* optional */
+      }
     } else if (approved && stage === "qc") {
       await notifyRoles(["supervisor"], "Chốt ca chờ Quản đốc", `${data.workerName} — ${data.partName}`, data.id);
     } else if (approved && stage === "supervisor") {

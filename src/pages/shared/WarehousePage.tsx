@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ProcessStage, SemiProduct, WarehouseMovement, WarehouseStock } from "@shared/types";
+import type { SemiProduct, StockItemKind, WarehouseMovement, WarehouseStock } from "@shared/types";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
-import { PROCESS_STAGE_LABEL } from "@shared/constants/teams";
 import { Btn, Card, ResponsiveDataList, SearchPicker } from "../../components/ui";
 import { catalogApi } from "../../services/api/CatalogApiService";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { createEntityPickerSearch } from "../../core/entityPicker";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { downloadWarehouseTemplate, parseWarehouseCsv } from "../../utils/warehouseImport";
@@ -23,19 +22,21 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
   const { name } = useRoleUser();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [stage, setStage] = useState<ProcessStage | "all">("all");
+  const [itemKind, setItemKind] = useState<StockItemKind | "all">("all");
   const fetchStock = useStableFetch((query) => catalogApi.searchStock(query));
   const {
     items: stock,
     total,
     page,
+    pageSize,
     setPage,
+    setPageSize,
     q,
     setQ,
     refresh: refreshStock,
   } = usePagedList({
     fetchPage: fetchStock,
-    filters: { stage },
+    filters: { itemKind },
     pageSize: LIST_UI_PAGE_SIZE,
     enabled: true,
   });
@@ -53,6 +54,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
   const [adjustLabel, setAdjustLabel] = useState("");
   const [adjustDelta, setAdjustDelta] = useState("");
   const [adjustNote, setAdjustNote] = useState("");
+  const [showAdjust, setShowAdjust] = useState(false);
 
   const loadStats = useCallback(async () => {
     const all = await catalogApi.listStock();
@@ -76,10 +78,10 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
       createEntityPickerSearch(
         (query) => catalogApi.searchStock(query),
         (r) => ({
-          id: r.semiProductId,
-          label: `${r.semiProduct?.code ?? r.semiProductId} — ${r.semiProduct?.name ?? ""}`,
+          id: r.itemId,
+          label: `${r.semiProduct?.code ?? r.itemId} — ${r.semiProduct?.name ?? ""}`,
           subLabel: r.semiProduct
-            ? `${PROCESS_STAGE_LABEL[r.semiProduct.processStage]} · Tồn ${r.qty.toLocaleString("vi-VN")}`
+            ? `${r.itemKind === "product" ? "Thành phẩm" : "BTP"} · Tồn ${r.qty.toLocaleString("vi-VN")}`
             : undefined,
         }),
       ),
@@ -91,8 +93,8 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
     await Promise.all([loadStats(), loadMovements()]);
   }, [refreshStock, loadStats, loadMovements]);
 
-  const saveQty = async (semiProductId: string, qty: number) => {
-    await catalogApi.setStock(semiProductId, qty, "Kiểm kê tồn kho", name);
+  const saveQty = async (itemId: string, qty: number) => {
+    await catalogApi.setStock(itemId, qty, "Kiểm kê tồn kho", name);
     await reloadAll();
   };
 
@@ -106,6 +108,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
     await catalogApi.adjustStock(adjustId, delta, adjustNote || undefined, name);
     setAdjustDelta("");
     setAdjustNote("");
+    setShowAdjust(false);
     await reloadAll();
   };
 
@@ -137,10 +140,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
     <div className="max-w-full min-w-0">
       <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-4 lg:mb-6">
         <div>
-          <h2 className="font-display font-800 text-xl lg:text-2xl mb-1">Quản lý kho BTP</h2>
-          <p className="text-sm text-muted">
-            Tồn kho bán thành phẩm — tìm kiếm + phân trang (mobile: thẻ, PC: bảng).
-          </p>
+          <h2 className="font-display font-800 text-xl lg:text-2xl">Quản lý kho</h2>
         </div>
         {!readOnly && (
           <div className="flex flex-wrap gap-2">
@@ -160,7 +160,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
       <div className="grid grid-cols-3 gap-3 mb-4">
         <Card cls="p-3 text-center">
           <div className="text-2xl font-bold text-primary">{statsSku}</div>
-          <div className="text-xs text-muted">Mặt hàng BTP</div>
+          <div className="text-xs text-muted">Mặt hàng</div>
         </Card>
         <Card cls="p-3 text-center">
           <div className="text-2xl font-bold text-primary">{statsQty.toLocaleString("vi-VN")}</div>
@@ -179,7 +179,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
           <Card cls="p-3 lg:p-4 mb-4">
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <label className="text-sm block sm:col-span-2 lg:col-span-1">
-                <span className="text-muted">Tìm BTP</span>
+                <span className="text-muted">Tìm mã / tên</span>
                 <input
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1"
                   placeholder="Mã hoặc tên…"
@@ -188,29 +188,40 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
                 />
               </label>
               <label className="text-sm block">
-                <span className="text-muted">Công đoạn</span>
+                <span className="text-muted">Loại hàng</span>
                 <select
                   className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1"
-                  value={stage}
-                  onChange={(e) => setStage(e.target.value as ProcessStage | "all")}
+                  value={itemKind}
+                  onChange={(e) => setItemKind(e.target.value as StockItemKind | "all")}
                 >
                   <option value="all">Tất cả</option>
-                  {(Object.keys(PROCESS_STAGE_LABEL) as ProcessStage[]).map((s) => (
-                    <option key={s} value={s}>
-                      {PROCESS_STAGE_LABEL[s]}
-                    </option>
-                  ))}
+                  <option value="semi_product">Bán thành phẩm</option>
+                  <option value="product">Thành phẩm</option>
                 </select>
               </label>
-              <div className="text-xs text-muted flex items-end pb-2">
-                {total} kết quả · trang {page}
+              <div className="text-xs text-muted flex items-end pb-2 justify-between gap-2">
+                <span>{total} kết quả · trang {page}</span>
+                {!readOnly && !showAdjust ? (
+                  <Btn size="sm" onClick={() => setShowAdjust(true)}>
+                    <i className="fas fa-plus" /> Nhập / xuất
+                  </Btn>
+                ) : null}
               </div>
             </div>
           </Card>
 
-          {!readOnly && (
+          {!readOnly && showAdjust && (
             <Card cls="p-3 lg:p-4 mb-4 space-y-3">
-              <div className="font-semibold text-sm">Nhập / xuất kho nhanh</div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="font-semibold text-sm">Nhập / xuất kho nhanh</div>
+                <button
+                  type="button"
+                  className="text-sm text-muted border-0 bg-transparent cursor-pointer"
+                  onClick={() => setShowAdjust(false)}
+                >
+                  Hủy
+                </button>
+              </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <SearchPicker
                   value={adjustId}
@@ -224,7 +235,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
                 />
                 <input
                   className="border border-border rounded-lg px-3 py-2 text-sm"
-                  placeholder="SL +/- (VD: 50 hoặc -20)"
+                  placeholder="Số lượng"
                   value={adjustDelta}
                   onChange={(e) => setAdjustDelta(e.target.value)}
                 />
@@ -243,11 +254,12 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
 
           <ResponsiveDataList
             items={stock}
-            getKey={(r) => r.semiProductId}
+            getKey={(r) => r.itemId}
             page={page}
-            pageSize={LIST_UI_PAGE_SIZE}
+            pageSize={pageSize}
             total={total}
             onPage={setPage}
+            onPageSize={setPageSize}
             emptyText="Không có mặt hàng phù hợp"
             columns={[
               {
@@ -261,14 +273,14 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
                 key: "name",
                 header: "Tên",
                 render: (r) => (
-                  <span className="font-medium">{r.semiProduct?.name ?? r.semiProductId}</span>
+                  <span className="font-medium">{r.semiProduct?.name ?? r.itemId}</span>
                 ),
               },
               {
-                key: "stage",
-                header: "Công đoạn",
+                key: "kind",
+                header: "Loại",
                 render: (r) =>
-                  r.semiProduct ? PROCESS_STAGE_LABEL[r.semiProduct.processStage] : "—",
+                  r.itemKind === "product" ? "Thành phẩm" : "BTP",
               },
               {
                 key: "qty",
@@ -299,7 +311,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
                           onBlur={(e) => {
                             const qty = Number(e.target.value);
                             if (Number.isNaN(qty) || qty < 0) return;
-                            if (qty !== r.qty) void saveQty(r.semiProductId, qty);
+                            if (qty !== r.qty) void saveQty(r.itemId, qty);
                           }}
                         />
                       ),
@@ -315,11 +327,11 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
                     <div className="min-w-0">
                       <code className="text-[11px] text-muted">{r.semiProduct?.code}</code>
                       <div className="font-semibold text-sm truncate">
-                        {r.semiProduct?.name ?? r.semiProductId}
+                        {r.semiProduct?.name ?? r.itemId}
                       </div>
                       <div className="text-xs text-muted">
                         {r.semiProduct
-                          ? PROCESS_STAGE_LABEL[r.semiProduct.processStage]
+                          ? r.itemKind === "product" ? "Thành phẩm" : "BTP"
                           : "—"}
                       </div>
                     </div>
@@ -337,7 +349,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
                       onBlur={(e) => {
                         const qty = Number(e.target.value);
                         if (Number.isNaN(qty) || qty < 0) return;
-                        if (qty !== r.qty) void saveQty(r.semiProductId, qty);
+                        if (qty !== r.qty) void saveQty(r.itemId, qty);
                       }}
                     />
                   )}
@@ -350,9 +362,6 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
 
       {tab === "import" && !readOnly && (
         <Card cls="p-4 lg:p-5 space-y-4">
-          <p className="text-xs text-muted">
-            Import tồn kho từ Excel (xuất CSV UTF-8). Cột: Mã BTP, Số lượng.
-          </p>
           <div className="flex flex-wrap gap-2">
             <Btn variant="secondary" onClick={downloadWarehouseTemplate}>
               <i className="fas fa-download" /> Tải file mẫu
@@ -396,7 +405,7 @@ export default function WarehousePage({ readOnly = false }: WarehousePageProps) 
           {movements.map((m) => (
             <Card key={m.id} cls="p-3 flex flex-wrap justify-between gap-2 text-sm">
               <div>
-                <span className="font-medium">{m.semiProduct?.name ?? m.semiProductId}</span>
+                <span className="font-medium">{m.semiProduct?.name ?? m.itemId}</span>
                 <code className="ml-2 text-[10px] text-muted">{m.semiProduct?.code}</code>
                 {m.note && <div className="text-xs text-muted mt-0.5">{m.note}</div>}
               </div>

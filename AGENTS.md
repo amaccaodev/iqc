@@ -66,21 +66,26 @@ Dùng **cùng một stack** cho mọi màn hình có danh sách lớn (NV, SP, B
 ### Cây đo kiểm (IQC)
 
 ```
-Sản phẩm (ProductionOrder / Product)
- └── Linh kiện (chi tiết sheet Mẫu van)
-      └── Quy trình / nguyên công = 1 BOM (processSeq tuần tự)
-           └── Thông số (materialSpecs[])
+Thành phẩm (Product)
+ └── Linh kiện (SemiProduct) — measurement_specs jsonb
+      └── BOM catalog (part_boms, nhiều BOM / BTP)
+           └── Quy trình (bom_processes, nhiều QT / BOM, sort_order tuần tự trong BOM)
+Kho chung: warehouse_stocks (item_kind = product | semi_product)
+Lệnh SX: public.boms = job runtime (copy từng quy trình + measurement_specs, gắn catalogBomId)
 ```
 
-- Mỗi nguyên công ĐMKT = **1 BOM = 1 quy trình**; hết QT trước mới mở QT sau (`shared/src/utils/bomProcess.ts`).
+- Catalog: Product → SemiProduct → Bom → BomProcess. Thành phẩm và BTP chung một kho.
+- Tạo lệnh SX copy `measurementSpecs` → `BOMItem.materialSpecs` cho form đo điểm công nhân.
+- Mỗi quy trình trên lệnh = 1 job runtime; hết QT trước mới mở QT sau **trong cùng BOM** (`shared/src/utils/bomProcess.ts`).
 - Tổ trưởng phân công: **tên quy trình + máy + người** (`TeamLeadAssignPage`).
 - Đề xuất CN: chỉ **Thay máy / Thêm máy / Báo hỏng** (bỏ “Xin phê duyệt”); nút đồng bộ style (`ProposalActionButtons`).
-- Checklist: `buildMaterialSpecsFromChecklist()` + `checklistToSpecCols()` trong `shared/src/utils/specValidation.ts`.
-- Demo: `LSX-2024-005` Van góc NOVO 15 (Nắp / Thân — từng nguyên công một BOM).
+- Spec helper: `measurementSpecsToMaterialSpecs()` + `checklistToSpecCols()` trong `shared/src/utils/specValidation.ts`.
+- Demo: `LSX-2024-005` Van góc NOVO 15 (Nắp / Thân — từng nguyên công một job).
 - Theo dõi GĐ / Quản đốc: `/director/production`, `/supervisor/production` (`productionProgress.ts`).
 - File ĐMKT: `documents/*.xlsx` (Mẫu van = chi tiết + nguyên công).
 - Import BOM CSV: Admin → **Import BOM** — `downloadProductBomTemplate` / `parseProductBomCsv` (`src/utils/productBomImport.ts`); API `POST /products/import-bom`. Mỗi dòng = 1 quy trình của 1 linh kiện thuộc 1 SP.
 - Bản vẽ / thông số: Base64/WebP trong DB (`contentBase64`); FE `fileToAttachment` + `AttachmentUploader`.
+- Schema: `supabase/schema.sql` (greenfield uuid) + `supabase/migrations/20240820000004_products_machines.sql` (text id, khớp app). Catalog BOM = `part_boms` — không đụng `public.boms` (job lệnh SX).
 
 ### Scale-up path
 

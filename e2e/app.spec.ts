@@ -69,4 +69,31 @@ test.describe("IQC Production Management", () => {
     await page.getByTestId("dim-input-0").fill("19");
     await expect(page.getByTestId("spec-warning")).toBeVisible();
   });
+
+  test("tablet navbar is available for every role", async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    const accounts = [
+      { emp: "NV001", pwd: "123456", item: "Lệnh SX" },
+      { emp: "NV010", pwd: "123456", item: "Phân công" },
+      { emp: "NV020", pwd: "123456", item: "Phân công" },
+      { emp: "NV030", pwd: "123456", item: "Sản xuất" },
+      { emp: "NV040", pwd: "123456", item: "Kiểm tra" },
+      { emp: "NV050", pwd: "123456", item: "Ghi ca" },
+      { emp: "NV000", pwd: "admin123", item: "Danh mục SP" },
+      { emp: "NV060", pwd: "123456", item: "Phê duyệt" },
+    ];
+    for (const a of accounts) {
+      await page.goto("/login");
+      await page.getByTestId("login-employee-id").fill(a.emp);
+      await page.getByTestId("login-password").fill(a.pwd);
+      await page.getByTestId("login-submit").click();
+      await expect(page).not.toHaveURL(/\/login/);
+      const tablet = page.getByRole("navigation", { name: "Điều hướng tablet" });
+      await expect(tablet).toBeVisible();
+      await expect(tablet.getByRole("button", { name: a.item })).toBeVisible();
+      await tablet.getByRole("button", { name: a.item }).click();
+      await page.getByRole("button", { name: /Đăng xuất/i }).click();
+      await expect(page).toHaveURL(/\/login/);
+    }
+  });
 });

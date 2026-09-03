@@ -1,10 +1,19 @@
 import { Router } from "express";
+import {
+  parseListQueryFromRequest,
+  wantsPagedListQuery,
+} from "../../../shared/src/utils/listQuery.js";
 import { workflowService } from "../services/WorkflowService.js";
 
 export const statsRoutes = Router();
 
 statsRoutes.get("/stats", async (req, res) => {
   try {
+    const q = req.query as Record<string, string | undefined>;
+    if (wantsPagedListQuery(q, ["orderId", "bomId", "statDate"])) {
+      const data = await workflowService.listStatsPaged(parseListQueryFromRequest(q));
+      return res.json({ success: true, data });
+    }
     const data = await workflowService.getStats({
       orderId: req.query.orderId as string,
       bomId: req.query.bomId as string,

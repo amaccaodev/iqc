@@ -265,8 +265,8 @@ ordersRoutes.post("/orders/from-product", async (req, res) => {
       })),
     });
     await notifyRoles(
-      ["supervisor", "director"],
-      `Lệnh mới ${data.orderNo}`,
+        ["supervisor"],
+        `Lệnh mới chờ phê duyệt ${data.orderNo}`,
       `${data.productLine} · ${data.boms.length} BTP · ${readiness.summary}${
         readiness.warnings.length ? ` — ${readiness.warnings.join("; ")}` : ""
       }`,
@@ -292,8 +292,8 @@ ordersRoutes.post("/orders/from-products-batch", async (req, res) => {
         })),
       });
       await notifyRoles(
-        ["supervisor", "director"],
-        `Lệnh mới ${order.orderNo}`,
+        ["supervisor"],
+        `Lệnh mới chờ phê duyệt ${order.orderNo}`,
         `${order.productLine} · ${order.boms.length} BTP · ${readiness.summary}${
           readiness.warnings.length ? ` — ${readiness.warnings.join("; ")}` : ""
         }`,

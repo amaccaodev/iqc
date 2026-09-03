@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import type { BOMItem, BOMStatus, ProductionOrder } from "@shared/types";
 import { BOM_STATUS_LABEL } from "@shared/constants/labels";
 import PaginationBar from "../ui/PaginationBar";
@@ -132,8 +132,7 @@ export default function DashboardCharts({
     <div className="mb-6 space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
-          <h3 className="font-display font-700 text-sm mb-1">BOM theo trạng thái</h3>
-          <p className="text-[11px] text-muted-foreground mb-3">Bấm phần biểu đồ để xem danh sách. Bấm dòng để mở chi tiết.</p>
+          <h3 className="font-display font-700 text-sm mb-3">BOM theo trạng thái</h3>
           <PieChart
             slices={slices}
             onSelect={(s) => openSheet(`${s.label} · ${s.value} BOM (${s.percent}%)`, s.items)}
@@ -141,8 +140,7 @@ export default function DashboardCharts({
           />
         </div>
         <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
-          <h3 className="font-display font-700 text-sm mb-1">Sản lượng theo lệnh</h3>
-          <p className="text-[11px] text-muted-foreground mb-3">Bấm điểm để xem số. Số liệu nằm ô riêng, không ghi đè lên đường.</p>
+          <h3 className="font-display font-700 text-sm mb-3">Sản lượng theo lệnh</h3>
           <LineChart
             points={pagedPoints}
             onSelect={(p) => openSheet(`LSX-${p.label} · ${p.pass.toLocaleString()} đạt`, p.items)}
@@ -299,7 +297,7 @@ function LineChart({ points, onSelect }: { points: LinePoint[]; onSelect: (p: Li
   return (
     <div>
       <div className="flex gap-3 text-[11px] mb-2">
-        <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-[#2D6EBD] inline-block" /> Đạt</span>
+        <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-primary inline-block" /> Đạt</span>
         <span className="flex items-center gap-1 text-muted-foreground"><span className="w-4 border-t border-dashed border-[#94A3B8] inline-block" /> Mục tiêu</span>
       </div>
       <button
@@ -325,7 +323,7 @@ function LineChart({ points, onSelect }: { points: LinePoint[]; onSelect: (p: Li
             </g>
           ))}
           <path d={targetLine} fill="none" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 3" />
-          <path d={passLine} fill="none" stroke="#2D6EBD" strokeWidth="2.5" />
+          <path d={passLine} fill="none" stroke="var(--primary)" strokeWidth="2.5" />
           <line x1={xAt(activeIdx)} x2={xAt(activeIdx)} y1={pad.t} y2={h - pad.b} stroke="#93C5FD" strokeWidth="1" strokeDasharray="3 3" />
           {points.map((p, i) => {
             const on = p.id === active.id;
@@ -333,8 +331,8 @@ function LineChart({ points, onSelect }: { points: LinePoint[]; onSelect: (p: Li
               <g key={p.id} className="cursor-pointer" onClick={() => setActiveId(p.id)}>
                 <circle cx={xAt(i)} cy={yAt(p.pass)} r="16" fill="transparent" />
                 <circle cx={xAt(i)} cy={yAt(p.target)} r={on ? 4 : 3} fill="#94A3B8" />
-                <circle cx={xAt(i)} cy={yAt(p.pass)} r={on ? 6 : 4} fill="#2D6EBD" stroke="white" strokeWidth="2" />
-                <text x={xAt(i)} y={h - 8} textAnchor="middle" fontSize="9" fill={on ? "#1B3A5C" : "#94A3B8"} fontWeight={on ? 700 : 400}>
+                <circle cx={xAt(i)} cy={yAt(p.pass)} r={on ? 6 : 4} fill="var(--primary)" stroke="white" strokeWidth="2" />
+                <text x={xAt(i)} y={h - 8} textAnchor="middle" fontSize="9" fill={on ? "var(--primary)" : "#94A3B8"} fontWeight={on ? 700 : 400}>
                   {shortAxisLabel(p.label)}
                 </text>
               </g>
@@ -349,7 +347,7 @@ function LineChart({ points, onSelect }: { points: LinePoint[]; onSelect: (p: Li
               type="button"
               onClick={() => { setActiveId(p.id); onSelect(p); }}
               className={`flex-shrink-0 min-w-[132px] rounded-xl border px-3 py-2 text-left cursor-pointer ${
-                p.id === active.id ? "border-[#2D6EBD] bg-[#EFF6FF]" : "border-border bg-surface"
+                p.id === active.id ? "border-primary bg-secondary" : "border-border bg-surface"
               }`}
             >
               <div className="text-[10px] text-muted-foreground truncate">{p.label}</div>

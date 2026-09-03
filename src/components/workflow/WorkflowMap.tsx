@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Role } from "@shared/types";
 import {
@@ -37,10 +37,10 @@ export default function WorkflowMap() {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h3 className="font-display font-700 text-base flex items-center gap-2">
-            <i className="fas fa-diagram-project text-[#2D6EBD]" /> Quy trình sản xuất
+            <i className="fas fa-diagram-project text-primary" /> Quy trình sản xuất
           </h3>
           <p className="text-xs text-muted mt-0.5">
-            Bấm từng bước để xem chức năng · {summary.done} hoàn thành · {summary.partial} đang làm
+            {summary.done} hoàn thành · {summary.partial} đang làm
           </p>
         </div>
       </div>

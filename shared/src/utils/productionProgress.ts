@@ -113,7 +113,9 @@ function findCatalogMachine(
   return catalog.find(
     (m) =>
       (machineId && m.id === machineId) ||
-      (name && (m.name.toLowerCase() === name || m.code.toLowerCase() === name)),
+      (name &&
+        (m.name.toLowerCase() === name ||
+          (m.accountingCode || m.code || "").toLowerCase() === name)),
   );
 }
 
@@ -135,7 +137,7 @@ export function enrichMachineWorkRows(
       ...row,
       machineId: row.machineId || m?.id,
       machineName: row.machineName || m?.name || row.machineName,
-      location: m?.location || row.location,
+      location: row.location,
       teamId: teamId || undefined,
       teamName: teamName || undefined,
       teamMismatch,

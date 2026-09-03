@@ -4,6 +4,7 @@ export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 100;
 /** Page size mặc định cho UI list (mobile-friendly, dễ thấy phân trang) */
 export const LIST_UI_PAGE_SIZE = 10;
+export const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 /** Số dòng trong SearchPicker dropdown */
 export const PICKER_PAGE_SIZE = 15;
 export const SEARCH_DEBOUNCE_MS = 300;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import type { BOMItem, Machine, ProductionOrder, WorkerMachineAssignment } from "@shared/types";
 import { resolveBomTeamId, resolveUserTeamId, teamIdsMatch, filterMachinesForTeam } from "@shared/constants/teams";
 import {
@@ -7,7 +7,7 @@ import {
   isBomProcessUnlocked,
 } from "@shared/utils/bomProcess";
 import { Btn, Card, Modal } from "../../components/ui";
-import { useRoleUser } from "../../components/layout/RoleLayout";
+import { useRoleUser } from "../../hooks/useRoleUser";
 import { useOrders } from "../../hooks/useOrders";
 import { useUsers } from "../../hooks/useUsers";
 import { catalogApi } from "../../services/api/CatalogApiService";
@@ -160,12 +160,7 @@ export default function TeamLeadAssignPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="font-display font-800 text-xl mb-1">Phân công quy trình</h2>
-        <p className="text-sm text-muted">
-          Mỗi linh kiện (sheet Mẫu van) tách thành các quy trình tuần tự. Gán theo{" "}
-          <strong className="font-semibold text-foreground">tên quy trình → máy → người</strong>. Hết
-          quy trình trước mới mở quy trình sau.
-        </p>
+        <h2 className="font-display font-800 text-xl">Phân công quy trình</h2>
       </div>
 
       <Card cls="p-4">
@@ -222,6 +217,7 @@ export default function TeamLeadAssignPage() {
                 )}
               </div>
               <div className="text-xs text-muted mb-0.5">
+                {b.catalogBomName ? <span className="font-medium text-foreground">{b.catalogBomName} · </span> : null}
                 Linh kiện: <span className="font-medium text-foreground">{b.partGroup || b.partName}</span>
               </div>
               <div className="font-semibold text-sm text-primary">
@@ -262,7 +258,7 @@ export default function TeamLeadAssignPage() {
                 </div>
               )}
               <Btn size="sm" onClick={() => openAssign(o, b)} disabled={!unlocked}>
-                <i className="fas fa-user-gear" /> Phân công (quy trình · máy · người)
+                <i className="fas fa-user-gear" /> Phân công
               </Btn>
             </Card>
           );
@@ -309,7 +305,7 @@ export default function TeamLeadAssignPage() {
                       <div
                         key={w.id}
                         className={`p-3 rounded-xl border-2 transition-all ${
-                          row.checked ? "border-[#1B3A5C] bg-secondary" : "border-border"
+                          row.checked ? "border-primary bg-secondary" : "border-border"
                         }`}
                       >
                         <label className="flex items-center gap-3 cursor-pointer">
@@ -329,7 +325,7 @@ export default function TeamLeadAssignPage() {
                                 },
                               }))
                             }
-                            className="accent-[#1B3A5C]"
+                            className="accent-primary"
                           />
                           <div>
                             <div className="font-semibold text-sm">{w.name}</div>
@@ -355,12 +351,11 @@ export default function TeamLeadAssignPage() {
                                 }));
                               }}
                             >
-                              <option value="">— Chọn máy (theo khu vực tổ) —</option>
+                              <option value="">— Chọn máy —</option>
                               {teamMachines.map((m) => (
                                 <option key={m.id} value={m.id}>
                                   {m.name}
-                                  {m.code ? ` (${m.code})` : ""}
-                                  {m.location ? ` · ${m.location}` : ""}
+                                  {m.accountingCode || m.code ? ` (${m.accountingCode || m.code})` : ""}
                                 </option>
                               ))}
                               {assignModal.b.machine &&

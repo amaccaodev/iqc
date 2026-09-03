@@ -51,7 +51,6 @@ export default function SalaryDashboard({
       <h3 className="font-display font-700 text-base mb-3 flex items-center gap-2">
         <i className="fas fa-sack-dollar text-[#16A34A]" /> {title}
       </h3>
-      <p className="text-[11px] text-muted-foreground mb-3">Bấm cột biểu đồ hoặc dòng tổng hợp để xem chi tiết từng ca</p>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <button
           type="button"

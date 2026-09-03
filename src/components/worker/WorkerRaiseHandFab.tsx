@@ -6,6 +6,7 @@ import { workflowApi } from "../../services/api/WorkflowApiService";
 import { SearchPicker } from "../ui";
 import DraggableFab from "../ui/DraggableFab";
 import ProposalActionButtons, { MACHINE_PROPOSAL_KIND_LABEL } from "./ProposalActionButtons";
+import { WORKER_BTN_GHOST, WORKER_BTN_PRIMARY } from "./workerUi";
 import { toast } from "../../hooks/useToast";
 
 interface WorkerRaiseHandFabProps {
@@ -39,7 +40,12 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
     async (query: string) => {
       const q = query.trim().toLowerCase();
       return machines
-        .filter((m) => !q || m.name.toLowerCase().includes(q) || m.code.toLowerCase().includes(q))
+        .filter(
+          (m) =>
+            !q ||
+            m.name.toLowerCase().includes(q) ||
+            (m.accountingCode || m.code || "").toLowerCase().includes(q),
+        )
         .slice(0, 20)
         .map((m) => ({ id: m.id, label: m.name }));
     },
@@ -125,7 +131,7 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
         ariaLabel="Đề xuất máy"
         hidden={hidden}
         onPress={() => setMenuOpen(true)}
-        className="bg-[#1B3A5C] text-white dark:bg-[var(--nav-active)]"
+        className="bg-primary text-primary-foreground"
       >
         <span className="relative flex flex-col items-center justify-center leading-none">
           <i className="fas fa-hand text-xl" aria-hidden />
@@ -148,12 +154,11 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
             className="relative z-10 w-full sm:max-w-md bg-card text-foreground rounded-t-2xl sm:rounded-2xl shadow-xl border border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
           >
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-[#1B3A5C] text-white flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
                 <i className="fas fa-hand" />
               </div>
               <div>
                 <div className="font-display font-700 text-base">Đề xuất máy</div>
-                <p className="text-xs text-muted">Chọn một trong 3 loại yêu cầu</p>
               </div>
             </div>
 
@@ -161,7 +166,7 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
 
             <button
               type="button"
-              className="mt-3 w-full py-2.5 rounded-xl border-2 border-[#1B3A5C] bg-card text-sm font-semibold cursor-pointer"
+              className={`${WORKER_BTN_GHOST} mt-3 w-full`}
               onClick={() => setMenuOpen(false)}
             >
               Đóng
@@ -210,7 +215,7 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
               <span className="text-muted">Tên máy</span>
               <input
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1"
-                placeholder="VD: Cam 0.1, Dập nóng D80T-01…"
+                placeholder="Tên máy"
                 value={fromMachineName}
                 onChange={(e) => {
                   setFromMachineName(e.target.value);
@@ -259,10 +264,8 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
                 className="w-full border border-border rounded-lg px-3 py-2 text-sm mt-1 min-h-[80px]"
                 placeholder={
                   kind === "report_broken"
-                    ? "VD: Máy rung mạnh, dừng giữa ca…"
-                    : kind === "add_machine"
-                      ? "VD: Cần thêm máy để kịp định mức…"
-                      : "VD: Máy hiện tại đo lệch, xin thay…"
+                    ? "Mô tả sự cố"
+                    : "Lý do"
                 }
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -272,7 +275,7 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                className="flex-1 py-2.5 rounded-xl border-2 border-[#1B3A5C] bg-card text-sm font-semibold cursor-pointer"
+                className={`${WORKER_BTN_GHOST} flex-1`}
                 onClick={closeForm}
               >
                 Huỷ
@@ -280,7 +283,7 @@ export default function WorkerRaiseHandFab({ hidden = false }: WorkerRaiseHandFa
               <button
                 type="button"
                 disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-primary text-white border-0 text-sm font-semibold cursor-pointer disabled:opacity-60"
+                className={`${WORKER_BTN_PRIMARY} flex-1`}
                 onClick={() => void submit()}
               >
                 {saving ? "Đang gửi…" : "Gửi"}

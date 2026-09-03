@@ -11,4 +11,4 @@ create index if not exists idx_products_active on public.products (active);
 
 create index if not exists idx_semi_products_code on public.semi_products (code);
 create index if not exists idx_semi_products_name on public.semi_products (name);
-create index if not exists idx_semi_products_stage on public.semi_products (process_stage);
+create index if not exists idx_semi_products_product on public.semi_products (product_id);

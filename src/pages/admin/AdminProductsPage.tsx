@@ -1,46 +1,91 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Attachment, ProcessStage, ProductBomLine } from "@shared/types";
+import type { Attachment, MeasurementSpecMap, ProductStructureLine } from "@shared/types";
+import { TEAMS } from "@shared/constants/teams";
+import { ACTIVE_STATUS_LABEL } from "@shared/constants/labels";
 import type { PartChecklistItem } from "@shared/types/spec";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
-import { PROCESS_STAGE_LABEL } from "@shared/constants/teams";
 import { Btn, Card, ResponsiveDataList, SearchPicker } from "../../components/ui";
 import AttachmentUploader from "../../components/files/AttachmentUploader";
 import PartChecklistEditor from "../../components/admin/PartChecklistEditor";
+import CatalogImportForm from "../../components/admin/CatalogImportForm";
 import { catalogApi } from "../../services/api/CatalogApiService";
 import { createEntityPickerSearch } from "../../core/entityPicker";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { useAuth } from "../../hooks/useAuth";
 import { toast } from "../../hooks/useToast";
-import {
-  downloadProductBomTemplate,
-  parseProductBomCsv,
-  type ProductBomImportRow,
-} from "../../utils/productBomImport";
 
-const STAGES: ProcessStage[] = ["hot_forge", "auto", "assembly"];
+const field =
+  "w-full border border-border rounded-lg px-3 py-2.5 text-sm bg-input text-foreground";
+
+type ProcessDraft = {
+  id?: string;
+  name: string;
+  productionTeamId: string;
+  machineGroupId: string;
+  quotaPerShift: number;
+  sortOrder: number;
+};
+type BomDraft = { key: string; id?: string; name: string; processes: ProcessDraft[] };
+
+function emptyProcess(sortOrder = 1): ProcessDraft {
+  return { name: "", productionTeamId: "t_hot", machineGroupId: "", quotaPerShift: 0, sortOrder };
+}
+function emptyBomDraft(): BomDraft {
+  return { key: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name: "BOM", processes: [emptyProcess(1)] };
+}
+
+function ActiveBadge({ active }: { active?: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+        active
+          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+          : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+      }`}
+    >
+      {active ? ACTIVE_STATUS_LABEL.active : ACTIVE_STATUS_LABEL.inactive}
+    </span>
+  );
+}
+
+function specsToChecklist(specs: MeasurementSpecMap): PartChecklistItem[] {
+  return Object.entries(specs).map(([name, t]) => ({
+    name,
+    type: t === "boolean" ? "qualitative" : t === "text" ? "text" : "numeric",
+  }));
+}
+
+function checklistToSpecs(items: PartChecklistItem[]): MeasurementSpecMap {
+  const out: MeasurementSpecMap = {};
+  for (const i of items.filter((x) => x.name?.trim())) {
+    const key = i.name.trim();
+    if (i.type === "qualitative") out[key] = "boolean";
+    else if (i.type === "text") out[key] = "text";
+    else out[key] = "float";
+  }
+  return out;
+}
 
 export default function AdminProductsPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<"products" | "semi" | "import">("products");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [importPreview, setImportPreview] = useState<ProductBomImportRow[]>([]);
-  const [importMsg, setImportMsg] = useState("");
-  const [importBusy, setImportBusy] = useState(false);
+  const [tab, setTab] = useState<"products" | "semi" | "bom" | "import">("products");
 
   const fetchProducts = useStableFetch((query) => catalogApi.searchProducts(query));
   const {
     items: products,
     total: productTotal,
     page: productPage,
+    pageSize: productPageSize,
     setPage: setProductPage,
+    setPageSize: setProductPageSize,
     q: productQ,
     setQ: setProductQ,
     refresh: refreshProducts,
   } = usePagedList({
     fetchPage: fetchProducts,
     filters: { activeOnly: false },
-    enabled: tab === "products",
+    enabled: tab === "products" || tab === "semi" || tab === "bom" || tab === "import",
     pageSize: LIST_UI_PAGE_SIZE,
   });
 
@@ -49,32 +94,58 @@ export default function AdminProductsPage() {
     items: semis,
     total: semiTotal,
     page: semiPage,
+    pageSize: semiPageSize,
     setPage: setSemiPage,
+    setPageSize: setSemiPageSize,
     q: semiQ,
     setQ: setSemiQ,
     refresh: refreshSemis,
   } = usePagedList({
     fetchPage: fetchSemis,
-    enabled: tab === "semi",
+    enabled: tab === "semi" || tab === "bom" || tab === "import",
     pageSize: LIST_UI_PAGE_SIZE,
   });
 
   const [selectedProductId, setSelectedProductId] = useState("");
   const [selectedProductLabel, setSelectedProductLabel] = useState("");
-  const [bomLines, setBomLines] = useState<ProductBomLine[]>([]);
+  const [bomLines, setBomLines] = useState<ProductStructureLine[]>([]);
   const [productFiles, setProductFiles] = useState<Attachment[]>([]);
   const [selectedSemiId, setSelectedSemiId] = useState("");
   const [selectedSemiLabel, setSelectedSemiLabel] = useState("");
   const [semiFiles, setSemiFiles] = useState<Attachment[]>([]);
   const [semiChecklist, setSemiChecklist] = useState<PartChecklistItem[]>([]);
   const [checklistSaving, setChecklistSaving] = useState(false);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [showAddSemi, setShowAddSemi] = useState(false);
   const [newProduct, setNewProduct] = useState({ code: "", name: "", description: "" });
   const [newSemi, setNewSemi] = useState({
     code: "",
     name: "",
-    processStage: "hot_forge" as ProcessStage,
+    productId: "",
   });
   const [saving, setSaving] = useState(false);
+  const [bomSemiId, setBomSemiId] = useState("");
+  const [bomSemiLabel, setBomSemiLabel] = useState("");
+  const [bomDrafts, setBomDrafts] = useState<BomDraft[]>([]);
+  const [bomSaving, setBomSaving] = useState(false);
+  const productDetailRef = useRef<HTMLDivElement>(null);
+  const semiDetailRef = useRef<HTMLDivElement>(null);
+
+  const openProduct = (p: { id: string; code: string; name: string }) => {
+    setSelectedProductId(p.id);
+    setSelectedProductLabel(`${p.code} — ${p.name}`);
+    requestAnimationFrame(() => {
+      productDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const openSemi = (s: { id: string; code: string; name: string }) => {
+    setSelectedSemiId(s.id);
+    setSelectedSemiLabel(`${s.code} — ${s.name}`);
+    requestAnimationFrame(() => {
+      semiDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   useEffect(() => {
     if (!selectedProductId) {
@@ -97,17 +168,94 @@ export default function AdminProductsPage() {
       .listSemiProducts()
       .then((list) => {
         const hit = list.find((s) => s.id === selectedSemiId);
-        setSemiChecklist(hit?.checklist?.length ? hit.checklist : []);
+        setSemiChecklist(hit ? specsToChecklist(hit.measurementSpecs ?? {}) : []);
       })
       .catch(() => setSemiChecklist([]));
   }, [selectedSemiId]);
+
+  useEffect(() => {
+    if (!bomSemiId) {
+      setBomDrafts([]);
+      return;
+    }
+    void catalogApi
+      .listSemiBoms(bomSemiId)
+      .then((list) => {
+        setBomDrafts(
+          list.length
+            ? list.map((b) => {
+                const procs = [...(b.processes ?? [])].sort((a, c) => a.sortOrder - c.sortOrder);
+                return {
+                  key: b.id,
+                  id: b.id,
+                  name: b.name || "BOM",
+                  processes: procs.length
+                    ? procs.map((p) => ({
+                        id: p.id,
+                        name: p.name,
+                        productionTeamId: p.productionTeamId || "",
+                        machineGroupId: p.machineGroupId || "",
+                        quotaPerShift: p.quotaPerShift || 0,
+                        sortOrder: p.sortOrder,
+                      }))
+                    : [emptyProcess(1)],
+                };
+              })
+            : [emptyBomDraft()],
+        );
+      })
+      .catch(() => setBomDrafts([emptyBomDraft()]));
+  }, [bomSemiId]);
+
+  const saveProcessBom = async () => {
+    if (!bomSemiId) return;
+    const boms = bomDrafts
+      .map((d) => ({
+        id: d.id,
+        name: d.name.trim() || "BOM",
+        processes: d.processes
+          .map((p, i) => ({ ...p, name: p.name.trim(), sortOrder: i + 1 }))
+          .filter((p) => p.name),
+      }))
+      .filter((b) => b.processes.length > 0);
+    if (!boms.length) {
+      toast.error("Nhập ít nhất một quy trình");
+      return;
+    }
+    setBomSaving(true);
+    try {
+      const saved = await catalogApi.upsertSemiBom(bomSemiId, { boms });
+      setBomDrafts(
+        saved.map((b) => ({
+          key: b.id,
+          id: b.id,
+          name: b.name,
+          processes: (b.processes ?? []).length
+            ? [...(b.processes ?? [])].sort((a, c) => a.sortOrder - c.sortOrder).map((p) => ({
+                id: p.id,
+                name: p.name,
+                productionTeamId: p.productionTeamId || "",
+                machineGroupId: p.machineGroupId || "",
+                quotaPerShift: p.quotaPerShift || 0,
+                sortOrder: p.sortOrder,
+              }))
+            : [emptyProcess(1)],
+        })),
+      );
+      toast.success(`Đã lưu ${boms.length} BOM · ${boms.reduce((s, b) => s + b.processes.length, 0)} quy trình`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBomSaving(false);
+    }
+  };
 
   const saveChecklist = async () => {
     if (!selectedSemiId) return;
     const cleaned = semiChecklist.filter((c) => c.name?.trim());
     setChecklistSaving(true);
     try {
-      await catalogApi.updateSemi(selectedSemiId, { checklist: cleaned });
+      await catalogApi.updateSemi(selectedSemiId, { measurementSpecs: checklistToSpecs(cleaned) });
       refreshSemis();
       toast.success(`Đã lưu ${cleaned.length} thông số đo cho linh kiện.`);
     } catch (e) {
@@ -133,7 +281,7 @@ export default function AdminProductsPage() {
         (s) => ({
           id: s.id,
           label: `${s.code} — ${s.name}`,
-          subLabel: PROCESS_STAGE_LABEL[s.processStage],
+          subLabel: s.productId,
         }),
       ),
     [],
@@ -148,6 +296,7 @@ export default function AdminProductsPage() {
     try {
       await catalogApi.createProduct(newProduct);
       setNewProduct({ code: "", name: "", description: "" });
+      setShowAddProduct(false);
       refreshProducts();
     } catch (e) {
       toast.error((e as Error).message);
@@ -163,8 +312,17 @@ export default function AdminProductsPage() {
     }
     setSaving(true);
     try {
-      await catalogApi.createSemi(newSemi);
-      setNewSemi({ code: "", name: "", processStage: "hot_forge" });
+      if (!newSemi.productId) {
+        toast.error("Chọn thành phẩm cho BTP");
+        return;
+      }
+      await catalogApi.createSemi({
+        ...newSemi,
+        measurementSpecs: {},
+        active: true,
+      });
+      setNewSemi({ code: "", name: "", productId: "" });
+      setShowAddSemi(false);
       refreshSemis();
     } catch (e) {
       toast.error((e as Error).message);
@@ -195,113 +353,173 @@ export default function AdminProductsPage() {
     setBomLines((prev) => [
       ...prev,
       {
-        id: `tmp-${Date.now()}`,
-        productId: selectedProductId,
         semiProductId: "",
         qtyPerUnit: 1,
+        stockQty: 0,
       },
     ]);
   };
 
-  const onPickImportFile = async (file: File) => {
-    const text = await file.text();
-    const rows = parseProductBomCsv(text);
-    setImportPreview(rows);
-    setImportMsg(
-      rows.length
-        ? `Đã đọc ${rows.length} dòng quy trình. Xem trước rồi bấm Xác nhận import.`
-        : "Không đọc được dòng hợp lệ. Kiểm tra header CSV (Mã SP, Mã LK, STT QT, Tên quy trình…).",
-    );
-  };
-
-  const runBomImport = async () => {
-    if (!importPreview.length) return;
-    setImportBusy(true);
-    setImportMsg("");
-    try {
-      const result = await catalogApi.importProductBom(importPreview);
-      const errBlock = result.errors.length
-        ? `\nLỗi:\n- ${result.errors.slice(0, 8).join("\n- ")}`
-        : "";
-      setImportMsg(
-        `Import xong: ${result.products} SP · ${result.parts} linh kiện · ${result.steps} quy trình.` +
-          errBlock,
-      );
-      refreshProducts();
-      refreshSemis();
-      if (selectedProductId) {
-        const next = await catalogApi.listBom(selectedProductId);
-        setBomLines(next);
-      }
-    } catch (e) {
-      setImportMsg((e as Error).message);
-    } finally {
-      setImportBusy(false);
-    }
-  };
-
   return (
     <div className="max-w-full min-w-0">
-      <h2 className="font-display font-800 text-xl mb-1">Danh mục sản phẩm</h2>
-      <p className="text-sm text-muted mb-5">
-        Thành phẩm, BTP/linh kiện và định mức quy trình (sheet Mẫu van).{" "}
-        <Link to="/admin/warehouse" className="text-[#2D6EBD] underline">
-          Quản lý tồn kho →
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 mb-6">
+        <div>
+          <h2 className="font-display font-800 text-2xl">Danh mục sản phẩm</h2>
+        </div>
+        <Link
+          to="/admin/warehouse"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline"
+        >
+          <i className="fas fa-warehouse" /> Quản lý tồn kho
         </Link>
-      </p>
+      </div>
 
-      <div className="flex gap-2 mb-5 flex-wrap">
+      <div className="flex gap-1 mb-6 p-1 rounded-2xl bg-card border border-border w-full lg:w-fit overflow-x-auto">
         {(
           [
-            ["products", "Thành phẩm"],
-            ["semi", "Bán thành phẩm"],
-            ["import", "Import BOM"],
+            ["products", "Thành phẩm", "fa-box"],
+            ["semi", "Linh kiện", "fa-puzzle-piece"],
+            ["bom", "BOM / quy trình", "fa-diagram-project"],
+            ["import", "Nhập dữ liệu", "fa-file-import"],
           ] as const
-        ).map(([t, label]) => (
+        ).map(([t, label, icon]) => (
           <button
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold border-0 cursor-pointer ${
-              tab === t ? "bg-primary text-white" : "bg-card text-muted"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border-0 cursor-pointer whitespace-nowrap ${
+              tab === t ? "bg-primary text-white shadow-sm" : "bg-transparent text-muted hover:bg-surface"
             }`}
           >
-            {label}
+            <i className={`fas ${icon} text-xs`} /> {label}
           </button>
         ))}
       </div>
 
       {tab === "products" && (
-        <div className="space-y-4">
-          <Card cls="p-4">
-            <div className="font-semibold mb-3">Thêm thành phẩm</div>
-            <div className="grid sm:grid-cols-3 gap-2 mb-3">
-              <input
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm"
-                placeholder="Mã SP"
-                value={newProduct.code}
-                onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
-              />
-              <input
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm"
-                placeholder="Tên SP"
-                value={newProduct.name}
-                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-              />
-              <input
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm"
-                placeholder="Mô tả"
-                value={newProduct.description}
-                onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-              />
+        <div className="lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] lg:gap-5 lg:items-start space-y-4 lg:space-y-0">
+          <div className="space-y-4 min-w-0">
+          {showAddProduct ? (
+          <Card cls="p-4 lg:p-5">
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div className="font-semibold">Thêm thành phẩm</div>
+              <button
+                type="button"
+                className="text-sm text-muted border-0 bg-transparent cursor-pointer"
+                onClick={() => {
+                  setShowAddProduct(false);
+                  setNewProduct({ code: "", name: "", description: "" });
+                }}
+              >
+                Hủy
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3 mb-3 mt-3">
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1">Mã thành phẩm</span>
+                <input
+                  className={field}
+                  placeholder="Mã"
+                  value={newProduct.code}
+                  onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1">Tên thành phẩm</span>
+                <input
+                  className={field}
+                  placeholder="Tên hiển thị"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1">Mô tả</span>
+                <input
+                  className={field}
+                  placeholder="Mô tả"
+                  value={newProduct.description}
+                  onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                />
+              </label>
             </div>
             <Btn onClick={() => void addProduct()} cls={saving ? "opacity-60" : ""}>
-              Thêm SP
+              Lưu thành phẩm
             </Btn>
           </Card>
+          ) : null}
 
-          <Card cls="p-4">
-            <div className="font-semibold mb-2">Định mức BTP cho thành phẩm</div>
+          <Card cls="p-4 lg:p-5">
+            <div className="flex items-end justify-between gap-3 mb-3">
+              <div className="font-semibold">Danh sách thành phẩm</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-muted tabular-nums">{productTotal} mục</div>
+                {!showAddProduct ? (
+                  <Btn size="sm" onClick={() => setShowAddProduct(true)}>
+                    <i className="fas fa-plus" /> Thêm
+                  </Btn>
+                ) : null}
+              </div>
+            </div>
+            <input
+              className={`${field} mb-3`}
+              placeholder="Tìm mã, tên thành phẩm…"
+              value={productQ}
+              onChange={(e) => setProductQ(e.target.value)}
+            />
+            <ResponsiveDataList
+              items={products}
+              getKey={(p) => p.id}
+              page={productPage}
+              pageSize={productPageSize}
+              total={productTotal}
+              onPage={setProductPage}
+              onPageSize={setProductPageSize}
+              emptyText="Không có sản phẩm"
+              onRowClick={(p) => openProduct(p)}
+              isRowActive={(p) => p.id === selectedProductId}
+              columns={[
+                {
+                  key: "code",
+                  header: "Mã",
+                  render: (p) => <code className="text-xs">{p.code}</code>,
+                },
+                {
+                  key: "name",
+                  header: "Tên",
+                  render: (p) => <span className="font-semibold">{p.name}</span>,
+                },
+                {
+                  key: "desc",
+                  header: "Mô tả",
+                  render: (p) => <span className="text-muted">{p.description || "—"}</span>,
+                },
+                {
+                  key: "active",
+                  header: "Trạng thái",
+                  render: (p) => <ActiveBadge active={p.active} />,
+                },
+              ]}
+              renderCard={(p) => (
+                <Card cls="p-3">
+                  <div className="flex justify-between gap-2">
+                    <div>
+                      <code className="text-xs text-muted">{p.code}</code>
+                      <div className="font-semibold">{p.name}</div>
+                    </div>
+                    <ActiveBadge active={p.active} />
+                  </div>
+                </Card>
+              )}
+            />
+          </Card>
+          </div>
+
+          <div ref={productDetailRef} className="space-y-4 lg:sticky lg:top-4 min-w-0">
+          <Card cls="p-4 lg:p-5">
+            <div className="font-semibold mb-3">
+              {selectedProductId ? `Chi tiết — ${selectedProductLabel}` : "Định mức linh kiện"}
+            </div>
             <SearchPicker
               className="mb-3"
               value={selectedProductId}
@@ -315,7 +533,7 @@ export default function AdminProductsPage() {
             />
             <div className="space-y-2 mb-3">
               {bomLines.map((line, idx) => (
-                <div key={line.id} className="rounded-xl border border-border p-2.5 space-y-2">
+                <div key={line.semiProductId || `new-${idx}`} className="rounded-xl border border-border p-2.5 space-y-2">
                   <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                   <SearchPicker
                     className="flex-1"
@@ -341,8 +559,8 @@ export default function AdminProductsPage() {
                                       id,
                                       code: item.label.split(" — ")[0] ?? "",
                                       name: item.label.split(" — ")[1] ?? item.label,
-                                      processStage: "hot_forge",
-                                      description: "",
+                                      productId: selectedProductId,
+                                      measurementSpecs: {},
                                       active: true,
                                     }
                                   : undefined,
@@ -371,19 +589,20 @@ export default function AdminProductsPage() {
                     Xóa
                   </button>
                   </div>
-                  {line.semiProduct?.processSteps && line.semiProduct.processSteps.length > 0 ? (
+                  {line.boms?.some((b) => (b.processes?.length ?? 0) > 0) ? (
                     <div className="text-[11px] text-muted pl-1 space-y-0.5">
                       <div className="font-semibold text-foreground">
-                        {line.semiProduct.processSteps.length} quy trình (tuần tự)
+                        {line.boms.reduce((n, b) => n + (b.processes?.length ?? 0), 0)} quy trình (tuần tự)
                       </div>
-                      {[...line.semiProduct.processSteps]
-                        .sort((a, b) => a.seq - b.seq)
-                        .map((s) => (
-                          <div key={`${line.id}-${s.seq}`}>
-                            QT {s.seq}: {s.process}
-                            {s.machine ? ` · máy ${s.machine}` : ""}
-                          </div>
-                        ))}
+                      {line.boms.flatMap((b) =>
+                        [...(b.processes ?? [])]
+                          .sort((a, c) => a.sortOrder - c.sortOrder)
+                          .map((p) => (
+                            <div key={p.id}>
+                              QT {p.sortOrder}: {p.name}
+                            </div>
+                          )),
+                      )}
                     </div>
                   ) : null}
                 </div>
@@ -407,10 +626,7 @@ export default function AdminProductsPage() {
 
           {selectedProductId ? (
             <Card cls="p-4">
-              <div className="font-semibold mb-2">Bản vẽ / thông số thành phẩm</div>
-              <p className="text-xs text-muted mb-3">
-                Có thể gắn nhiều file. Ảnh lưu WebP Base64 trong DB — không dùng link cloud.
-              </p>
+              <div className="font-semibold mb-3">Bản vẽ / thông số thành phẩm</div>
               <AttachmentUploader
                 files={productFiles}
                 uploadedBy={user?.name || "admin"}
@@ -426,111 +642,154 @@ export default function AdminProductsPage() {
               />
             </Card>
           ) : null}
+          </div>
+        </div>
+      )}
 
-          <Card cls="p-3">
+      {tab === "semi" && (
+        <div className="lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] lg:gap-5 lg:items-start space-y-4 lg:space-y-0">
+          <div className="space-y-4 min-w-0">
+          {showAddSemi ? (
+          <Card cls="p-4 lg:p-5">
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <div className="font-semibold">Thêm linh kiện</div>
+              <button
+                type="button"
+                className="text-sm text-muted border-0 bg-transparent cursor-pointer"
+                onClick={() => {
+                  setShowAddSemi(false);
+                  setNewSemi({ code: "", name: "", productId: "" });
+                }}
+              >
+                Hủy
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3 mb-3 mt-3">
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1">Mã linh kiện</span>
+                <input
+                  className={field}
+                  placeholder="Mã"
+                  value={newSemi.code}
+                  onChange={(e) => setNewSemi({ ...newSemi, code: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1">Tên linh kiện</span>
+                <input
+                  className={field}
+                  placeholder="Tên hiển thị"
+                  value={newSemi.name}
+                  onChange={(e) => setNewSemi({ ...newSemi, name: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[11px] font-semibold text-muted mb-1">Thành phẩm</span>
+                <select
+                  className={field}
+                  value={newSemi.productId}
+                  onChange={(e) => setNewSemi({ ...newSemi, productId: e.target.value })}
+                >
+                  <option value="">— Chọn thành phẩm —</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.code} — {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <Btn onClick={() => void addSemi()}>Lưu linh kiện</Btn>
+          </Card>
+          ) : null}
+
+          <Card cls="p-4 lg:p-5">
+            <div className="flex items-end justify-between gap-3 mb-3">
+              <div className="font-semibold">Danh sách linh kiện</div>
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-muted tabular-nums">{semiTotal} mục</div>
+                {!showAddSemi ? (
+                  <Btn size="sm" onClick={() => setShowAddSemi(true)}>
+                    <i className="fas fa-plus" /> Thêm
+                  </Btn>
+                ) : null}
+              </div>
+            </div>
             <input
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm mb-3"
-              placeholder="Tìm thành phẩm…"
-              value={productQ}
-              onChange={(e) => setProductQ(e.target.value)}
+              className={`${field} mb-3`}
+              placeholder="Tìm mã, tên linh kiện…"
+              value={semiQ}
+              onChange={(e) => setSemiQ(e.target.value)}
             />
             <ResponsiveDataList
-              items={products}
-              getKey={(p) => p.id}
-              page={productPage}
-              pageSize={LIST_UI_PAGE_SIZE}
-              total={productTotal}
-              onPage={setProductPage}
-              emptyText="Không có sản phẩm"
+              items={semis}
+              getKey={(s) => s.id}
+              page={semiPage}
+              pageSize={semiPageSize}
+              total={semiTotal}
+              onPage={setSemiPage}
+              onPageSize={setSemiPageSize}
+              emptyText="Không có BTP"
+              onRowClick={(s) => openSemi(s)}
+              isRowActive={(s) => s.id === selectedSemiId}
               columns={[
                 {
                   key: "code",
                   header: "Mã",
-                  render: (p) => <code className="text-xs">{p.code}</code>,
+                  render: (s) => <code className="text-xs">{s.code}</code>,
                 },
                 {
                   key: "name",
                   header: "Tên",
-                  render: (p) => <span className="font-semibold">{p.name}</span>,
+                  render: (s) => <span className="font-semibold">{s.name}</span>,
                 },
                 {
-                  key: "desc",
-                  header: "Mô tả",
-                  render: (p) => <span className="text-muted">{p.description || "—"}</span>,
+                  key: "product",
+                  header: "Thành phẩm",
+                  render: (s) => {
+                    const p = products.find((x) => x.id === s.productId);
+                    return <span className="text-xs">{p ? `${p.code}` : s.productId}</span>;
+                  },
                 },
                 {
-                  key: "active",
-                  header: "TT",
-                  render: (p) => (
-                    <span className={p.active ? "text-green-600" : "text-slate-400"}>
-                      {p.active ? "Active" : "Off"}
-                    </span>
-                  ),
+                  key: "specs",
+                  header: "Đo kiểm",
+                  render: (s) => {
+                    const n = Object.keys(s.measurementSpecs ?? {}).length;
+                    return n ? (
+                      <span className="text-emerald-700 font-semibold">{n} thông số</span>
+                    ) : (
+                      <span className="text-amber-700">Thiếu thông số</span>
+                    );
+                  },
                 },
               ]}
-              renderCard={(p) => (
+              renderCard={(s) => (
                 <Card cls="p-3">
-                  <div className="flex justify-between gap-2">
-                    <div>
-                      <code className="text-xs text-muted">{p.code}</code>
-                      <div className="font-semibold">{p.name}</div>
-                    </div>
-                    <span className={`text-xs ${p.active ? "text-green-600" : "text-slate-400"}`}>
-                      {p.active ? "Active" : "Off"}
-                    </span>
+                  <code className="text-xs text-muted">{s.code}</code>
+                  <div className="font-semibold">{s.name}</div>
+                  <div className="text-sm text-muted">
+                    {s.productId}
+                    {Object.keys(s.measurementSpecs ?? {}).length
+                      ? ` · ${Object.keys(s.measurementSpecs).length} thông số đo`
+                      : " · thiếu thông số đo"}
                   </div>
                 </Card>
               )}
             />
           </Card>
-        </div>
-      )}
+          </div>
 
-      {tab === "semi" && (
-        <div className="space-y-4">
-          <Card cls="p-4">
-            <div className="font-semibold mb-3">Thêm bán thành phẩm</div>
-            <div className="grid sm:grid-cols-3 gap-2 mb-3">
-              <input
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm"
-                placeholder="Mã BTP"
-                value={newSemi.code}
-                onChange={(e) => setNewSemi({ ...newSemi, code: e.target.value })}
-              />
-              <input
-                className="w-full border border-border rounded-lg px-3 py-2 text-sm"
-                placeholder="Tên BTP"
-                value={newSemi.name}
-                onChange={(e) => setNewSemi({ ...newSemi, name: e.target.value })}
-              />
-              <select
-                className="border border-border rounded-lg px-3 py-2 text-sm"
-                value={newSemi.processStage}
-                onChange={(e) =>
-                  setNewSemi({ ...newSemi, processStage: e.target.value as ProcessStage })
-                }
-              >
-                {STAGES.map((s) => (
-                  <option key={s} value={s}>
-                    {PROCESS_STAGE_LABEL[s]}
-                  </option>
-                ))}
-              </select>
+          <div ref={semiDetailRef} className="space-y-4 lg:sticky lg:top-4 min-w-0">
+          <Card cls="p-4 lg:p-5">
+            <div className="font-semibold mb-3">
+              {selectedSemiId ? `Chi tiết — ${selectedSemiLabel}` : "Checklist đo & bản vẽ"}
             </div>
-            <Btn onClick={() => void addSemi()}>Thêm BTP</Btn>
-          </Card>
-
-          <Card cls="p-4">
-            <div className="font-semibold mb-2">Bản vẽ / checklist đo linh kiện (BTP)</div>
-            <p className="text-xs text-muted mb-3">
-              Mỗi linh kiện có checklist đo riêng. Nhập full thông số tại đây — tạo lệnh SX sẽ copy
-              nguyên sang BOM, không chọn lẻ.
-            </p>
             <SearchPicker
               className="mb-3"
               value={selectedSemiId}
               displayValue={selectedSemiLabel}
-              placeholder="Chọn BTP để gắn bản vẽ + checklist…"
+              placeholder="Tìm linh kiện…"
               onSearch={searchSemisPicker}
               onChange={(id, item) => {
                 setSelectedSemiId(id);
@@ -568,144 +827,190 @@ export default function AdminProductsPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">Chọn linh kiện ở trên để nhập checklist + bản vẽ.</p>
+              <p className="text-xs text-muted-foreground">Chưa chọn linh kiện.</p>
             )}
           </Card>
+          </div>
+        </div>
+      )}
 
-          <Card cls="p-3">
-            <input
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm mb-3"
-              placeholder="Tìm BTP…"
-              value={semiQ}
-              onChange={(e) => setSemiQ(e.target.value)}
+      {tab === "bom" && (
+        <div className="space-y-4">
+          <Card cls="p-4 lg:p-6">
+            <div className="font-semibold text-lg mb-3">BOM quy trình theo linh kiện</div>
+            <SearchPicker
+              className="mb-3"
+              value={bomSemiId}
+              displayValue={bomSemiLabel}
+              placeholder="Tìm linh kiện…"
+              onSearch={searchSemisPicker}
+              onChange={(id, item) => {
+                setBomSemiId(id);
+                setBomSemiLabel(item?.label ?? "");
+              }}
             />
-            <ResponsiveDataList
-              items={semis}
-              getKey={(s) => s.id}
-              page={semiPage}
-              pageSize={LIST_UI_PAGE_SIZE}
-              total={semiTotal}
-              onPage={setSemiPage}
-              emptyText="Không có BTP"
-              columns={[
-                {
-                  key: "code",
-                  header: "Mã",
-                  render: (s) => <code className="text-xs">{s.code}</code>,
-                },
-                {
-                  key: "name",
-                  header: "Tên",
-                  render: (s) => <span className="font-semibold">{s.name}</span>,
-                },
-                {
-                  key: "stage",
-                  header: "Công đoạn",
-                  render: (s) => PROCESS_STAGE_LABEL[s.processStage],
-                },
-                {
-                  key: "steps",
-                  header: "Quy trình",
-                  render: (s) =>
-                    s.processSteps?.length
-                      ? `${s.processSteps.length} QT`
-                      : "—",
-                },
-                {
-                  key: "checklist",
-                  header: "Đo kiểm",
-                  render: (s) =>
-                    s.checklist?.length ? (
-                      <span className="text-emerald-700 font-semibold">{s.checklist.length} TS</span>
-                    ) : (
-                      <span className="text-amber-700">Thiếu</span>
-                    ),
-                },
-              ]}
-              renderCard={(s) => (
-                <Card cls="p-3">
-                  <code className="text-xs text-muted">{s.code}</code>
-                  <div className="font-semibold">{s.name}</div>
-                  <div className="text-sm text-muted">
-                    {PROCESS_STAGE_LABEL[s.processStage]}
-                    {s.processSteps?.length
-                      ? ` · ${s.processSteps.length} quy trình`
-                      : ""}
-                    {s.checklist?.length
-                      ? ` · ${s.checklist.length} thông số đo`
-                      : " · thiếu checklist"}
+            {bomSemiId ? (
+              <div className="space-y-4">
+                {bomDrafts.map((bom, bomIdx) => (
+                  <div key={bom.key} className="rounded-2xl border border-border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm font-semibold"
+                        placeholder="Tên BOM"
+                        value={bom.name}
+                        onChange={(e) =>
+                          setBomDrafts((prev) =>
+                            prev.map((b, i) => (i === bomIdx ? { ...b, name: e.target.value } : b)),
+                          )
+                        }
+                      />
+                      {bomDrafts.length > 1 ? (
+                        <button
+                          type="button"
+                          className="text-red-500 text-sm border-0 bg-transparent cursor-pointer shrink-0"
+                          onClick={() => setBomDrafts((prev) => prev.filter((_, i) => i !== bomIdx))}
+                        >
+                          Xóa BOM
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="space-y-2">
+                      {bom.processes.map((row, idx) => (
+                        <div
+                          key={row.id || `${bom.key}-p-${idx}`}
+                          className="grid sm:grid-cols-12 gap-2 items-center rounded-xl border border-border p-2.5"
+                        >
+                          <div className="sm:col-span-1 text-xs text-muted font-mono">QT {idx + 1}</div>
+                          <input
+                            className="sm:col-span-5 border border-border rounded-lg px-3 py-2 text-sm"
+                            placeholder="Tên quy trình"
+                            value={row.name}
+                            onChange={(e) =>
+                              setBomDrafts((prev) =>
+                                prev.map((b, i) =>
+                                  i === bomIdx
+                                    ? {
+                                        ...b,
+                                        processes: b.processes.map((p, pi) =>
+                                          pi === idx ? { ...p, name: e.target.value } : p,
+                                        ),
+                                      }
+                                    : b,
+                                ),
+                              )
+                            }
+                          />
+                          <select
+                            className="sm:col-span-3 border border-border rounded-lg px-3 py-2 text-sm"
+                            value={row.productionTeamId}
+                            onChange={(e) =>
+                              setBomDrafts((prev) =>
+                                prev.map((b, i) =>
+                                  i === bomIdx
+                                    ? {
+                                        ...b,
+                                        processes: b.processes.map((p, pi) =>
+                                          pi === idx ? { ...p, productionTeamId: e.target.value } : p,
+                                        ),
+                                      }
+                                    : b,
+                                ),
+                              )
+                            }
+                          >
+                            <option value="">— Tổ —</option>
+                            {TEAMS.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            className="sm:col-span-2 border border-border rounded-lg px-3 py-2 text-sm"
+                            placeholder="ĐM/ca"
+                            value={String(row.quotaPerShift || "")}
+                            onChange={(e) =>
+                              setBomDrafts((prev) =>
+                                prev.map((b, i) =>
+                                  i === bomIdx
+                                    ? {
+                                        ...b,
+                                        processes: b.processes.map((p, pi) =>
+                                          pi === idx
+                                            ? { ...p, quotaPerShift: Number(e.target.value) || 0 }
+                                            : p,
+                                        ),
+                                      }
+                                    : b,
+                                ),
+                              )
+                            }
+                          />
+                          <button
+                            type="button"
+                            className="sm:col-span-1 text-red-500 text-sm border-0 bg-transparent cursor-pointer"
+                            onClick={() =>
+                              setBomDrafts((prev) =>
+                                prev.map((b, i) =>
+                                  i === bomIdx
+                                    ? { ...b, processes: b.processes.filter((_, pi) => pi !== idx) }
+                                    : b,
+                                ),
+                              )
+                            }
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <Btn
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        setBomDrafts((prev) =>
+                          prev.map((b, i) =>
+                            i === bomIdx
+                              ? {
+                                  ...b,
+                                  processes: [...b.processes, emptyProcess(b.processes.length + 1)],
+                                }
+                              : b,
+                          ),
+                        )
+                      }
+                    >
+                      + Quy trình
+                    </Btn>
                   </div>
-                </Card>
-              )}
-            />
+                ))}
+                <div className="flex flex-wrap gap-2">
+                  <Btn variant="secondary" onClick={() => setBomDrafts((prev) => [...prev, emptyBomDraft()])}>
+                    + BOM
+                  </Btn>
+                  <Btn onClick={() => void saveProcessBom()} disabled={bomSaving}>
+                    {bomSaving ? "Đang lưu…" : "Lưu"}
+                  </Btn>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted">Chưa chọn linh kiện.</p>
+            )}
           </Card>
         </div>
       )}
 
       {tab === "import" && (
-        <Card cls="p-4 lg:p-5 space-y-4">
-          <div>
-            <div className="font-semibold mb-1">Import BOM theo linh kiện / quy trình</div>
-            <p className="text-xs text-muted">
-              Tải file mẫu CSV (UTF-8), điền theo sheet Mẫu van: mỗi dòng = 1 quy trình của 1 linh
-              kiện thuộc 1 sản phẩm chính. Hệ thống tạo/cập nhật SP, BTP và định mức; khi tạo lệnh SX
-              mỗi quy trình thành 1 BOM tuần tự.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Btn variant="secondary" onClick={downloadProductBomTemplate}>
-              <i className="fas fa-download" /> Tải file mẫu
-            </Btn>
-            <Btn variant="secondary" onClick={() => fileRef.current?.click()}>
-              <i className="fas fa-upload" /> Chọn file CSV
-            </Btn>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,.txt"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void onPickImportFile(f);
-                e.target.value = "";
-              }}
-            />
-          </div>
-          {importPreview.length > 0 && (
-            <div className="text-xs border border-border rounded-lg overflow-hidden max-h-72 overflow-y-auto">
-              <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-surface font-semibold text-muted sticky top-0">
-                <span className="col-span-2">Mã SP</span>
-                <span className="col-span-2">Mã LK</span>
-                <span className="col-span-1">STT</span>
-                <span className="col-span-4">Quy trình</span>
-                <span className="col-span-3">Máy</span>
-              </div>
-              {importPreview.slice(0, 40).map((r, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-12 gap-1 px-3 py-2 border-t border-border"
-                >
-                  <code className="col-span-2 truncate">{r.productCode}</code>
-                  <code className="col-span-2 truncate">{r.partCode}</code>
-                  <span className="col-span-1 tabular-nums">{r.processSeq}</span>
-                  <span className="col-span-4 truncate">{r.processName}</span>
-                  <span className="col-span-3 truncate">{r.machine || "—"}</span>
-                </div>
-              ))}
-              {importPreview.length > 40 && (
-                <div className="px-3 py-2 text-muted border-t border-border">
-                  … và {importPreview.length - 40} dòng nữa
-                </div>
-              )}
-            </div>
-          )}
-          {importMsg && <p className="text-sm whitespace-pre-wrap">{importMsg}</p>}
-          {importPreview.length > 0 && (
-            <Btn onClick={() => void runBomImport()} disabled={importBusy}>
-              {importBusy ? "Đang import…" : "Xác nhận import"}
-            </Btn>
-          )}
-        </Card>
+        <CatalogImportForm
+          onImported={() => {
+            refreshProducts();
+            refreshSemis();
+            if (selectedProductId) {
+              void catalogApi.listBom(selectedProductId).then(setBomLines);
+            }
+          }}
+        />
       )}
     </div>
   );
