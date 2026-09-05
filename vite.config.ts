@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
   const isProdBuild = mode === "production"
 
   return {
+    // Luôn lấy root repo — `npm run dev` từ `src/` vẫn phục vụ `public/sheets`
+    root: path.resolve(__dirname),
+    publicDir: path.resolve(__dirname, 'public'),
     base: process.env.GITHUB_PAGES === 'true'
       ? '/iqc/'
       : process.env.FIGMA_PUBLIC_URL

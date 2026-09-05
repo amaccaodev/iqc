@@ -1,5 +1,6 @@
-﻿import { useState, useRef } from "react"
+﻿import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { useOrderDeepLink } from "./hooks/useOrderDeepLink"
 import { orderApi } from "./services/api/OrderApiService"
 import QrCodeImage from "./components/qr/QrCodeImage"
 import FileSlideshow from "./components/files/FileSlideshow"
@@ -7,6 +8,7 @@ import DashboardCharts from "./components/charts/DashboardCharts"
 import DayQtySummary from "./components/dashboard/DayQtySummary"
 import PaginationBar from "./components/ui/PaginationBar"
 import { toast } from "./hooks/useToast"
+import { countOrderParts, groupOrderJobsByPart, bomStepLabel, partProcessChain } from "@shared/utils/orderParts"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Role = "director" | "supervisor" | "teamlead" | "worker" | "qc" | "stats" | "admin" | "mechanic"
@@ -632,7 +634,7 @@ function OrderList({
                   <span><i className="fas fa-user-tie mr-1" />{o.createdBy}</span>
                   <span><i className="fas fa-boxes-stacked mr-1" />SL: {(o.targetQty ?? 0).toLocaleString()} cái</span>
                   <span><i className="fas fa-calendar mr-1" />Hạn: {formatDeadline(o.deadline)}</span>
-                  <span><i className="fas fa-layer-group mr-1" />{o.boms.length} BOM</span>
+                  <span><i className="fas fa-layer-group mr-1" />{countOrderParts(o)} linh kiện</span>
                   {o.attachments.length > 0 && <span><i className="fas fa-paperclip mr-1" />{o.attachments.length} tệp</span>}
                 </div>
               </div>
@@ -778,6 +780,16 @@ function BOMDetail({
 function DirectorView({ user, orders, setOrders, screen, onCreateOrder, orderPaging }: { user: User; orders: ProductionOrder[]; setOrders: (o: ProductionOrder[]) => void; screen: string; onCreateOrder?: () => void; orderPaging?: { page: number; pageSize: number; total: number; onPage: (p: number) => void; onPageSize?: (n: number) => void } }) {
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null)
   const [selectedBOM, setSelectedBOM] = useState<BOMItem | null>(null)
+  const deep = useOrderDeepLink(orders)
+  const openedDeep = useRef("")
+  useEffect(() => {
+    if (!deep.orderId || !deep.order) return
+    const key = `${deep.orderId}:${deep.bomId}`
+    if (openedDeep.current === key) return
+    openedDeep.current = key
+    setSelectedOrder(deep.order)
+    if (deep.bom) setSelectedBOM(deep.bom)
+  }, [deep.orderId, deep.bomId, deep.order, deep.bom])
   const [showCreate, setShowCreate] = useState(false)
   const [showBOMForm, setShowBOMForm] = useState(false)
   const [form, setForm] = useState({
@@ -962,31 +974,59 @@ function DirectorView({ user, orders, setOrders, screen, onCreateOrder, orderPag
         <AttachmentList attachments={selectedOrder.attachments} onAdd={(a) => addAttachment(selectedOrder.id, a)} />
       </Card>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display font-700 text-base">Danh sách BOM ({selectedOrder.boms.length})</h3>
+        <h3 className="font-display font-700 text-base">
+          Danh sách linh kiện ({countOrderParts(selectedOrder)})
+        </h3>
       </div>
       <div className="space-y-2">
-        {selectedOrder.boms.map(b => (
-          <button key={b.id} onClick={() => setSelectedBOM(b)} className="w-full text-left cursor-pointer border-0 bg-transparent p-0">
-            <Card cls="p-4 hover:border-ring transition-all">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <code className="text-[11px] bg-background text-primary px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
-                    <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
-                  </div>
-                  <div className="font-semibold text-sm mt-1">{b.partName}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{b.machine} · {b.targetQty.toLocaleString()} cái · {b.assignedTeamName || "Chưa phân"}</div>
+        {groupOrderJobsByPart(selectedOrder.boms).map((p) => (
+          <Card key={p.key} cls="p-4">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="min-w-0">
+                <div className="font-semibold text-sm">{p.partName}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {p.partCode} · {p.sxQty.toLocaleString()} cái
+                  {p.useFromStock ? ` · kho ${p.stockUseQty.toLocaleString()}` : ""}
                 </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  {b.passQty > 0 && <div className="text-green-600 font-semibold">{b.passQty.toLocaleString()} đạt</div>}
-                  {b.failQty > 0 && <div className="text-red-500">{b.failQty} hỏng</div>}
-                  <i className="fas fa-chevron-right text-[#CBD5E1] mt-1" />
-                </div>
+                {partProcessChain(p) ? (
+                  <div className="text-[11px] text-muted mt-1">{partProcessChain(p)}</div>
+                ) : null}
               </div>
-            </Card>
-          </button>
+              <Badge cls={bColor(p.jobs[p.jobs.length - 1]?.status ?? "unassigned")}>
+                {p.jobs.length} bước
+              </Badge>
+            </div>
+            <div className="space-y-1.5">
+              {p.recipes.flatMap((r) =>
+                r.steps.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setSelectedBOM(b)}
+                    className="w-full text-left cursor-pointer border border-border rounded-lg px-3 py-2 bg-surface hover:border-ring"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{bomStepLabel(b)}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {b.assignedTeamName || "Chưa phân tổ"}
+                          {b.passQty > 0 ? ` · ${b.passQty.toLocaleString()} đạt` : ""}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
+                        <i className="fas fa-chevron-right text-[#CBD5E1] text-xs" />
+                      </div>
+                    </div>
+                  </button>
+                )),
+              )}
+            </div>
+          </Card>
         ))}
-        {selectedOrder.boms.length === 0 && <div className="text-sm text-muted-foreground text-center py-4">Chưa có BOM nào</div>}
+        {selectedOrder.boms.length === 0 && (
+          <div className="text-sm text-muted-foreground text-center py-4">Chưa có linh kiện</div>
+        )}
       </div>
     </div>
   )
@@ -1236,6 +1276,15 @@ function SupervisorView({ orders, setOrders, screen, orderPaging }: { orders: Pr
   const [selectedOrder, setSelectedOrder] = useState<ProductionOrder | null>(null)
   const [assignModal, setAssignModal] = useState<BOMItem | null>(null)
   const [assignTeamId, setAssignTeamId] = useState("")
+  const deep = useOrderDeepLink(orders)
+  const openedDeep = useRef("")
+  useEffect(() => {
+    if (!deep.orderId || !deep.order) return
+    const key = `${deep.orderId}:${deep.bomId}`
+    if (openedDeep.current === key) return
+    openedDeep.current = key
+    setSelectedOrder(deep.order)
+  }, [deep.orderId, deep.bomId, deep.order])
 
   const saveAssignment = async () => {
     if (!assignModal || !assignTeamId || !selectedOrder) return
@@ -1274,25 +1323,67 @@ function SupervisorView({ orders, setOrders, screen, orderPaging }: { orders: Pr
           <AttachmentList attachments={selectedOrder.attachments} /></div>
         )}
       </Card>
-      <h3 className="font-display font-700 text-base mb-3">Phân công BOM</h3>
+      <h3 className="font-display font-700 text-base mb-3">
+        Phân công linh kiện ({countOrderParts(selectedOrder)})
+      </h3>
       <div className="space-y-3">
-        {selectedOrder.boms.map(b => (
-          <Card key={b.id} cls="p-4">
-            <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-              <div>
-                <code className="text-[11px] bg-background text-primary px-2 py-0.5 rounded font-mono font-bold">{b.bomCode}</code>
-                <div className="font-semibold text-sm mt-1">{b.partName}</div>
-                <div className="text-xs text-muted-foreground">{b.machine} · {b.process} · {b.targetQty.toLocaleString()} cái</div>
+        {groupOrderJobsByPart(selectedOrder.boms).map((p) => (
+          <Card key={p.key} cls="p-4">
+            <div className="mb-2">
+              <div className="font-semibold text-sm">{p.partName}</div>
+              <div className="text-xs text-muted-foreground">
+                {p.partCode} · {p.sxQty.toLocaleString()} cái
               </div>
-              <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
+              {partProcessChain(p) ? (
+                <div className="text-[11px] text-muted mt-1">{partProcessChain(p)}</div>
+              ) : null}
             </div>
-            {b.assignedTeamName
-              ? <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-2 text-sm text-primary font-medium"><i className="fas fa-users" />{b.assignedTeamName}</div>
-                  <Btn size="sm" variant="ghost" onClick={() => { setAssignModal(b); setAssignTeamId(b.assignedTeamId) }}><i className="fas fa-pen text-xs" /> Chỉnh</Btn>
-                </div>
-              : <Btn size="sm" onClick={() => { setAssignModal(b); setAssignTeamId("") }}><i className="fas fa-users-gear" /> Phân tổ</Btn>
-            }
+            <div className="space-y-2">
+              {p.recipes.flatMap((r) =>
+                r.steps.map((b) => (
+                  <div key={b.id} className="rounded-lg border border-border bg-surface p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                      <div>
+                        <div className="font-medium text-sm">{bomStepLabel(b)}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {b.machine ? `${b.machine} · ` : ""}
+                          {b.targetQty.toLocaleString()} cái
+                        </div>
+                      </div>
+                      <Badge cls={bColor(b.status)}>{BOM_STATUS_LABEL[b.status]}</Badge>
+                    </div>
+                    {b.assignedTeamName ? (
+                      <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                          <i className="fas fa-users" />
+                          {b.assignedTeamName}
+                        </div>
+                        <Btn
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setAssignModal(b)
+                            setAssignTeamId(b.assignedTeamId)
+                          }}
+                        >
+                          <i className="fas fa-pen text-xs" /> Chỉnh
+                        </Btn>
+                      </div>
+                    ) : (
+                      <Btn
+                        size="sm"
+                        onClick={() => {
+                          setAssignModal(b)
+                          setAssignTeamId("")
+                        }}
+                      >
+                        <i className="fas fa-users-gear" /> Phân tổ
+                      </Btn>
+                    )}
+                  </div>
+                )),
+              )}
+            </div>
           </Card>
         ))}
       </div>
@@ -1914,7 +2005,7 @@ function StatsView({ orders, screen }: { orders: ProductionOrder[]; screen: stri
                 <Badge cls={sColor(o.status)}>{STATUS_LABEL[o.status]}</Badge>
               </div>
               <div className="grid grid-cols-4 gap-1 text-xs text-center mb-2">
-                {[["BOM",o.boms.length,"text-primary"],["Mục tiêu",tgt.toLocaleString(),"text-foreground"],["Đạt",pass.toLocaleString(),"text-green-600"],["Tỷ lệ",`${r}%`,r>=90?"text-green-600":r>=70?"text-yellow-600":"text-red-500"]].map(([l,v,c]) => (
+                {[["Linh kiện",countOrderParts(o),"text-primary"],["Mục tiêu",tgt.toLocaleString(),"text-foreground"],["Đạt",pass.toLocaleString(),"text-green-600"],["Tỷ lệ",`${r}%`,r>=90?"text-green-600":r>=70?"text-yellow-600":"text-red-500"]].map(([l,v,c]) => (
                   <div key={l as string}><div className={`font-bold ${c}`}>{v}</div><div className="text-muted-foreground">{l}</div></div>
                 ))}
               </div>

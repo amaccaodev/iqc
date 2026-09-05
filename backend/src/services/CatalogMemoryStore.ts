@@ -83,7 +83,7 @@ const changeRequests: MachineChangeRequest[] = [];
 
 function stripHeavy(atts: Attachment[] | undefined): Attachment[] | undefined {
   if (!atts?.length) return atts;
-  return atts.map(({ contentBase64: _, url: __, ...meta }) => meta);
+  return atts.map(({ contentBase64: _, ...meta }) => meta);
 }
 
 function hydrateStock(row: WarehouseStock): WarehouseStock {
@@ -653,7 +653,9 @@ export const catalogStore = {
   },
   addProductAttachment(productId: string, input: Omit<Attachment, "id">): Attachment {
     if (!products.find((p) => p.id === productId)) throw new Error("Không tìm thấy sản phẩm");
-    if (!input.contentBase64) throw new Error("Thiếu nội dung file (contentBase64)");
+    if (!input.contentBase64 && !input.url) {
+      throw new Error("Thiếu nội dung file (ảnh hoặc đường dẫn)");
+    }
     const att: Attachment = withAttachmentPreview({
       ...input,
       id: id("pa"),
@@ -680,7 +682,9 @@ export const catalogStore = {
   },
   addSemiAttachment(semiId: string, input: Omit<Attachment, "id">): Attachment {
     if (!semiProducts.find((s) => s.id === semiId)) throw new Error("Không tìm thấy linh kiện/BTP");
-    if (!input.contentBase64) throw new Error("Thiếu nội dung file (contentBase64)");
+    if (!input.contentBase64 && !input.url) {
+      throw new Error("Thiếu nội dung file (ảnh hoặc đường dẫn)");
+    }
     const att: Attachment = withAttachmentPreview({
       ...input,
       id: id("sa"),

@@ -8,7 +8,7 @@ function enrichDemoFlow(orders: ProductionOrder[]): ProductionOrder[] {
   return orders.map((o) => ({
     ...o,
     boms: o.boms.map((b) => {
-      if (o.id === "o1" && b.id === "b1" && b.workerEntries.length === 0) {
+      if (o.id === "o1" && b.id === "b-sp-novo-vg-15-01-1" && b.workerEntries.length === 0) {
         return {
           ...b,
           workerEntries: [
@@ -26,7 +26,7 @@ function enrichDemoFlow(orders: ProductionOrder[]): ProductionOrder[] {
           ],
         };
       }
-      if (o.id === "o1" && b.id === "b-p1-sp-novo-vg-15-02-1") {
+      if (o.id === "o1" && b.id === "b-sp-novo-vg-15-02-1") {
         return {
           ...b,
           assignedWorkers: ["Nga 3/43"],

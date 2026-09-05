@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { MACHINE_PROPOSAL_KIND_LABEL } from "../../components/worker/ProposalActionButtons";
 import { catalogApi } from "../../services/api/CatalogApiService";
@@ -8,6 +10,8 @@ import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 
 export default function MachineApprovalsPage() {
   const user = useRoleUser();
+  const [searchParams] = useSearchParams();
+  const requestId = searchParams.get("requestId") || "";
   const target = user.role === "mechanic" ? "mechanic" : "teamlead";
   const fetchRequests = useStableFetch((query) => catalogApi.searchChangeRequests(query));
   const { items, total, page, pageSize, setPage, setPageSize, q, setQ, loading, refresh } = usePagedList({
@@ -15,6 +19,11 @@ export default function MachineApprovalsPage() {
     filters: { target },
     pageSize: LIST_UI_PAGE_SIZE,
   });
+
+  useEffect(() => {
+    if (!requestId) return;
+    document.getElementById(`req-${requestId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [requestId, items]);
 
   const review = async (id: string, approved: boolean) => {
     try {
@@ -49,7 +58,11 @@ export default function MachineApprovalsPage() {
           {items.map((r) => {
             const kind = r.kind ?? "change_machine";
             return (
-              <Card key={r.id} cls="p-4">
+              <div id={`req-${r.id}`}>
+              <Card
+                key={r.id}
+                cls={`p-4 ${requestId === r.id ? "ring-2 ring-primary/40 border-primary" : ""}`}
+              >
                 <div className="flex justify-between gap-2 mb-2">
                   <div>
                     <div className="font-semibold text-sm">{r.requestedName}</div>
@@ -85,6 +98,7 @@ export default function MachineApprovalsPage() {
                   </div>
                 )}
               </Card>
+              </div>
             );
           })}
           <PaginationBar

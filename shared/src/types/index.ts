@@ -351,6 +351,8 @@ export interface BOMItem extends IEntity {
   targetQty: number;
   /** SL lấy từ kho (không SX) */
   stockUseQty?: number;
+  /** Tồn kho còn lại sau khi trừ lệnh này */
+  stockLeftQty?: number;
   useFromStock?: boolean;
   passQty: number;
   failQty: number;

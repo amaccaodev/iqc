@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from "react";
 import type { BomProcess, ProductStructureLine } from "@shared/types";
 import { assessBomReadiness, type BomReadinessResult } from "@shared/utils/bomReadiness";
+import { planStockUse } from "@shared/utils/stockUse";
 import { Btn, Card, SearchPicker } from "../ui";
 import type { SearchPickerItem } from "../ui/SearchPicker";
 import { catalogApi } from "../../services/api/CatalogApiService";
@@ -30,6 +31,8 @@ interface BomLineState {
   hasChecklist: boolean;
   checklistCount: number;
   processes: ProcessChoice[];
+  /** Một quy trình (BOM) = cả dây cắt phôi → hoàn thiện; nhiều BOM = phương án máy khác nhau */
+  selectedBomId: string;
   selectedProcessIds: string[];
 }
 
@@ -105,6 +108,8 @@ function bomLinesToState(
     const need = Math.ceil(finishedQty * Number(b.qtyPerUnit || 1));
     const specCount = Object.keys(b.semiProduct?.measurementSpecs ?? {}).length;
     const processes = flattenProcesses(b);
+    const groups = groupProcessesByBom(processes);
+    const selectedBomId = groups[0]?.bomId ?? "";
     return {
       semiProductId: b.semiProductId,
       name: b.semiProduct?.name ?? b.semiProductId,
@@ -118,21 +123,40 @@ function bomLinesToState(
       hasChecklist: specCount > 0,
       checklistCount: specCount,
       processes,
-      selectedProcessIds: processes.length ? processes.map((p) => p.id) : ["__all__"],
+      selectedBomId,
+      selectedProcessIds: selectedBomId
+        ? processes.filter((p) => p.bomId === selectedBomId).map((p) => p.id)
+        : processes.length
+          ? []
+          : ["__all__"],
     };
   });
 }
 
-function recalcBom(lines: BomLineState[], finishedQty: number): BomLineState[] {
-  return lines.map((l) => {
-    const need = Math.ceil(finishedQty * l.qtyPerUnit);
-    const stockUse = l.useFromStock ? Math.min(l.stockUseQty || need, l.stockQty, need) : 0;
-    return {
-      ...l,
-      stockUseQty: l.useFromStock ? stockUse : 0,
-      produceQty: Math.max(0, need - (l.useFromStock ? stockUse : 0)),
-    };
+function applyStockPlan(
+  line: BomLineState,
+  finishedQty: number,
+  stockUseQty?: number,
+  useFromStock = line.useFromStock,
+): BomLineState {
+  const plan = planStockUse({
+    need: finishedQty * line.qtyPerUnit,
+    stockQty: line.stockQty,
+    useFromStock,
+    stockUseQty,
   });
+  return {
+    ...line,
+    useFromStock,
+    stockUseQty: plan.stockUseQty,
+    produceQty: plan.produceQty,
+  };
+}
+
+function recalcBom(lines: BomLineState[], finishedQty: number): BomLineState[] {
+  return lines.map((l) =>
+    applyStockPlan(l, finishedQty, l.useFromStock ? Math.min(finishedQty * l.qtyPerUnit, l.stockQty) : 0),
+  );
 }
 
 function readinessOf(
@@ -257,20 +281,26 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
         const bomLines = r.bomLines.map((l, i) => {
           if (i !== idx) return l;
           const need = Math.ceil(r.finishedQty * l.qtyPerUnit);
-          const stockUse = checked ? Math.min(need, l.stockQty) : 0;
-          return {
-            ...l,
-            useFromStock: checked,
-            stockUseQty: stockUse,
-            produceQty: Math.max(0, need - stockUse),
-          };
+          return applyStockPlan(l, r.finishedQty, checked ? Math.min(need, l.stockQty) : 0, checked);
         });
         return { ...r, bomLines };
       }),
     );
   };
 
-  const toggleProcess = (rowKey: string, semiProductId: string, processId: string, checked: boolean) => {
+  const setStockUseQty = (rowKey: string, idx: number, qty: number) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== rowKey) return r;
+        const bomLines = r.bomLines.map((l, i) =>
+          i === idx ? applyStockPlan(l, r.finishedQty, qty, true) : l,
+        );
+        return { ...r, bomLines };
+      }),
+    );
+  };
+
+  const selectBom = (rowKey: string, semiProductId: string, bomId: string) => {
     setRows((prev) =>
       prev.map((r) => {
         if (r.key !== rowKey) return r;
@@ -278,10 +308,11 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
           ...r,
           bomLines: r.bomLines.map((l) => {
             if (l.semiProductId !== semiProductId) return l;
-            const selectedProcessIds = checked
-              ? [...new Set([...l.selectedProcessIds, processId])]
-              : l.selectedProcessIds.filter((id) => id !== processId);
-            return { ...l, selectedProcessIds };
+            return {
+              ...l,
+              selectedBomId: bomId,
+              selectedProcessIds: l.processes.filter((p) => p.bomId === bomId).map((p) => p.id),
+            };
           }),
         };
       }),
@@ -296,13 +327,16 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
           ...r,
           bomLines: r.bomLines.map((l) => {
             if (l.semiProductId !== semiProductId) return l;
+            if (!checked) {
+              return { ...l, selectedBomId: "", selectedProcessIds: [] };
+            }
+            const firstBom = groupProcessesByBom(l.processes)[0]?.bomId ?? "";
             return {
               ...l,
-              selectedProcessIds: checked
-                ? l.processes.length
-                  ? l.processes.map((p) => p.id)
-                  : ["__all__"]
-                : [],
+              selectedBomId: firstBom,
+              selectedProcessIds: firstBom
+                ? l.processes.filter((p) => p.bomId === firstBom).map((p) => p.id)
+                : ["__all__"],
             };
           }),
         };
@@ -322,9 +356,20 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
       return;
     }
     for (const r of valid) {
-      const selectedLines = r.bomLines.filter((l) => l.selectedProcessIds.length > 0);
+      const selectedLines = r.bomLines.filter((l) =>
+        l.produceQty > 0
+          ? l.selectedProcessIds.length > 0
+          : l.useFromStock && l.stockUseQty > 0,
+      );
       if (!selectedLines.length) {
-        toast.error(`«${r.productLabel}» — chọn ít nhất một quy trình BOM`);
+        toast.error(`«${r.productLabel}» — chọn quy trình BOM hoặc dùng kho`);
+        return;
+      }
+      const missingProcess = selectedLines.find(
+        (l) => l.produceQty > 0 && l.selectedProcessIds.length === 0,
+      );
+      if (missingProcess) {
+        toast.error(`«${r.productLabel}» — ${missingProcess.name}: thiếu ${missingProcess.produceQty}, chọn quy trình SX`);
         return;
       }
       if (r.readiness && !r.readiness.complete) {
@@ -347,15 +392,20 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
           productId: r.productId,
           finishedQty: r.finishedQty,
           lines: r.bomLines
-            .filter((l) => l.selectedProcessIds.length > 0)
+            .filter((l) =>
+              l.produceQty > 0
+                ? l.selectedProcessIds.length > 0
+                : l.useFromStock && l.stockUseQty > 0,
+            )
             .map((l) => ({
               semiProductId: l.semiProductId,
               produceQty: l.produceQty,
               useFromStock: l.useFromStock,
               stockUseQty: l.stockUseQty,
-              processIds: l.selectedProcessIds.includes("__all__")
-                ? undefined
-                : l.selectedProcessIds,
+              processIds:
+                l.produceQty <= 0 || l.selectedProcessIds.includes("__all__")
+                  ? undefined
+                  : l.selectedProcessIds,
             })),
         })),
       });
@@ -523,11 +573,18 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
                     <p className="text-xs text-muted-foreground">Sản phẩm chưa có định mức BTP</p>
                   )}
                   {row.bomLines.map((l) => {
-                    const need = Math.ceil(row.finishedQty * l.qtyPerUnit);
+                    const plan = planStockUse({
+                      need: row.finishedQty * l.qtyPerUnit,
+                      stockQty: l.stockQty,
+                      useFromStock: l.useFromStock,
+                      stockUseQty: l.stockUseQty,
+                    });
                     const allOn =
                       l.processes.length > 0
-                        ? l.selectedProcessIds.length === l.processes.length
+                        ? Boolean(l.selectedBomId) && l.selectedProcessIds.length > 0
                         : l.selectedProcessIds.includes("__all__");
+                    const recipes = groupProcessesByBom(l.processes);
+                    const lineIdx = row.bomLines.findIndex((x) => x.semiProductId === l.semiProductId);
                     return (
                       <div
                         key={l.semiProductId}
@@ -556,56 +613,47 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
                           )}
                         </label>
                         <div className="text-[11px] text-muted pl-6">
-                          {l.code} · Cần {need} · SX {l.produceQty} · Kho {l.stockQty}
+                          {l.code} · Cần {plan.need} · Tồn kho {plan.stockQty}
+                          {l.useFromStock
+                            ? ` · Dùng kho ${plan.stockUseQty} · Còn lại ${plan.leftover} · SX ${plan.produceQty}`
+                            : ` · SX ${plan.produceQty}`}
                         </div>
+                        {l.useFromStock ? (
+                          <div
+                            className={`mt-1.5 ml-6 rounded-md px-2 py-1 text-[11px] font-semibold ${
+                              plan.covered
+                                ? "bg-emerald-50 text-emerald-800"
+                                : "bg-amber-50 text-amber-900"
+                            }`}
+                          >
+                            {plan.covered
+                              ? `Đủ kho — dùng ${plan.stockUseQty}, còn lại ${plan.leftover}, không cần SX`
+                              : `Dùng kho ${plan.stockUseQty} · Còn lại ${plan.leftover} · Thiếu ${plan.shortage} (cần SX)`}
+                          </div>
+                        ) : null}
                         {l.processes.length > 0 ? (
-                          <div className="mt-2 pl-6 space-y-3">
-                            {groupProcessesByBom(l.processes).map((g) => {
-                              const bomOn = g.processes.every((p) =>
-                                l.selectedProcessIds.includes(p.id),
-                              );
+                          <div className={`mt-2 pl-6 space-y-2 ${plan.covered ? "opacity-60" : ""}`}>
+                            {recipes.length > 1 ? (
+                              <p className="text-[10px] text-muted">
+                                Chọn 1 quy trình — cùng dây cắt phôi → hoàn thiện, khác máy
+                              </p>
+                            ) : null}
+                            {recipes.map((g) => {
+                              const selected = l.selectedBomId === g.bomId;
                               return (
                                 <div key={g.bomId}>
                                   <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
                                     <input
-                                      type="checkbox"
-                                      checked={bomOn}
-                                      onChange={(e) => {
-                                        for (const p of g.processes) {
-                                          toggleProcess(
-                                            row.key,
-                                            l.semiProductId,
-                                            p.id,
-                                            e.target.checked,
-                                          );
-                                        }
-                                      }}
+                                      type="radio"
+                                      name={`${row.key}-${l.semiProductId}-recipe`}
+                                      checked={selected}
+                                      disabled={plan.covered}
+                                      onChange={() => selectBom(row.key, l.semiProductId, g.bomId)}
                                     />
-                                    {g.bomName}
+                                    Quy trình: {g.bomName}
                                   </label>
-                                  <div className="mt-1 space-y-1 pl-5">
-                                    {g.processes.map((p) => (
-                                      <label
-                                        key={p.id}
-                                        className="flex items-center gap-2 text-xs cursor-pointer"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={l.selectedProcessIds.includes(p.id)}
-                                          onChange={(e) =>
-                                            toggleProcess(
-                                              row.key,
-                                              l.semiProductId,
-                                              p.id,
-                                              e.target.checked,
-                                            )
-                                          }
-                                        />
-                                        <span>
-                                          QT {p.sortOrder}: {p.name}
-                                        </span>
-                                      </label>
-                                    ))}
+                                  <div className="mt-0.5 pl-5 text-[11px] text-muted">
+                                    {g.processes.map((p) => p.name).join(" → ")}
                                   </div>
                                 </div>
                               );
@@ -616,21 +664,36 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
                             Linh kiện chưa có quy trình BOM — Admin cần nhập BOM trước.
                           </p>
                         )}
-                        <label className="flex items-center gap-2 text-xs mt-1.5 cursor-pointer pl-6">
-                          <input
-                            type="checkbox"
-                            checked={l.useFromStock}
-                            disabled={l.stockQty <= 0}
-                            onChange={(e) =>
-                              toggleStock(
-                                row.key,
-                                row.bomLines.findIndex((x) => x.semiProductId === l.semiProductId),
-                                e.target.checked,
-                              )
-                            }
-                          />
-                          Dùng kho
-                        </label>
+                        <div className="mt-1.5 pl-6 space-y-1.5">
+                          <label className="flex items-center gap-2 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={l.useFromStock}
+                              disabled={l.stockQty <= 0}
+                              onChange={(e) => toggleStock(row.key, lineIdx, e.target.checked)}
+                            />
+                            Dùng kho
+                            {l.stockQty <= 0 ? (
+                              <span className="text-muted font-normal">— hết tồn</span>
+                            ) : null}
+                          </label>
+                          {l.useFromStock ? (
+                            <label className="flex items-center gap-2 text-xs">
+                              <span className="text-muted shrink-0">Lấy từ kho</span>
+                              <input
+                                className="w-28 border border-border rounded-lg px-2 py-1 text-sm"
+                                type="number"
+                                min={0}
+                                max={l.stockQty}
+                                value={String(l.stockUseQty)}
+                                onChange={(e) =>
+                                  setStockUseQty(row.key, lineIdx, Number(e.target.value) || 0)
+                                }
+                              />
+                              <span className="text-muted">/ {l.stockQty}</span>
+                            </label>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })}

@@ -149,6 +149,53 @@ export default function IncidentsPage() {
       .catch(() => setMachines([]));
   }, [loadStats, loadApprovals]);
 
+  const focusId = searchParams.get("id") || "";
+  const requestId = searchParams.get("requestId") || "";
+  const [focusIncident, setFocusIncident] = useState<MachineIncident | null>(null);
+
+  useEffect(() => {
+    if (!focusId) {
+      setFocusIncident(null);
+      return;
+    }
+    const local = incidents.find((i) => i.id === focusId);
+    if (local) {
+      setFocusIncident(local);
+      return;
+    }
+    let cancelled = false;
+    void workflowApi
+      .getIncidentById(focusId)
+      .then((inc) => {
+        if (!cancelled) setFocusIncident(inc);
+      })
+      .catch(() => {
+        if (!cancelled) setFocusIncident(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [focusId, incidents]);
+
+  useEffect(() => {
+    if (!requestId) return;
+    document.getElementById(`req-${requestId}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [requestId, approvals]);
+
+  const openIncident = (inc: MachineIncident) => {
+    setFocusIncident(inc);
+    const p = new URLSearchParams(searchParams);
+    p.set("id", inc.id);
+    setSearchParams(p, { replace: true });
+  };
+
+  const closeFocus = () => {
+    setFocusIncident(null);
+    const p = new URLSearchParams(searchParams);
+    p.delete("id");
+    setSearchParams(p, { replace: true });
+  };
+
   useEffect(() => {
     if (tab === "approvals") void loadApprovals();
   }, [tab, loadApprovals]);
@@ -394,6 +441,7 @@ export default function IncidentsPage() {
               onPage={setPage}
               onPageSize={setPageSize}
               emptyText="Chưa có sự cố"
+              onRowClick={(inc) => openIncident(inc)}
               columns={[
                 {
                   key: "title",
@@ -435,7 +483,17 @@ export default function IncidentsPage() {
                 },
               ]}
               renderCard={(inc) => (
-                <div className="bg-card rounded-xl border border-border p-4">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openIncident(inc)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") openIncident(inc);
+                  }}
+                  className={`bg-card rounded-xl border p-4 cursor-pointer ${
+                    focusId === inc.id ? "border-primary ring-2 ring-primary/30" : "border-border"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
                       <div className="font-semibold text-foreground leading-snug">
@@ -463,7 +521,7 @@ export default function IncidentsPage() {
                       </span>
                     </div>
                   </div>
-                  {renderActions(inc)}
+                  <div onClick={(e) => e.stopPropagation()}>{renderActions(inc)}</div>
                   {inc.resolutionNote ? (
                     <div className="mt-2 text-xs bg-green-50 text-green-800 rounded-lg px-3 py-2">
                       Xử lý: {inc.resolutionNote}
@@ -502,7 +560,13 @@ export default function IncidentsPage() {
                     ((user.role === "teamlead" || user.role === "supervisor") &&
                       r.target === "teamlead"));
                 return (
-                  <div key={r.id} className="bg-card rounded-xl border border-border p-4">
+                  <div
+                    key={r.id}
+                    id={`req-${r.id}`}
+                    className={`bg-card rounded-xl border p-4 ${
+                      requestId === r.id ? "border-primary ring-2 ring-primary/30" : "border-border"
+                    }`}
+                  >
                     <div className="flex justify-between gap-2 mb-2">
                       <div className="min-w-0">
                         <div className="font-semibold text-sm leading-snug">{title}</div>
@@ -611,6 +675,55 @@ export default function IncidentsPage() {
                 Gửi
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {focusIncident && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-card rounded-2xl w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="font-bold text-lg">Chi tiết sự cố</div>
+                <div className="text-sm text-muted mt-0.5">{formatIncidentTitle(focusIncident)}</div>
+              </div>
+              <button
+                type="button"
+                className="text-muted-foreground cursor-pointer border-0 bg-transparent text-xl leading-none"
+                onClick={closeFocus}
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${SEVERITY_COLOR[focusIncident.severity]}`}>
+                {SEVERITY_LABEL[focusIncident.severity]}
+              </span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_COLOR[focusIncident.status]}`}>
+                {STATUS_LABEL[focusIncident.status]}
+              </span>
+            </div>
+            <p className="text-sm">{focusIncident.description}</p>
+            <div className="text-xs text-muted space-y-1">
+              {focusIncident.machineCode ? <div>Mã máy: {focusIncident.machineCode}</div> : null}
+              <div>Người báo: {focusIncident.reportedName}</div>
+              {focusIncident.assignedName ? <div>Tiếp nhận: {focusIncident.assignedName}</div> : null}
+              {focusIncident.downtimeMinutes ? <div>Downtime: {focusIncident.downtimeMinutes} phút</div> : null}
+            </div>
+            {focusIncident.resolutionNote ? (
+              <div className="text-xs bg-green-50 text-green-800 rounded-lg px-3 py-2">
+                Xử lý: {focusIncident.resolutionNote}
+              </div>
+            ) : null}
+            <div onClick={(e) => e.stopPropagation()}>{renderActions(focusIncident)}</div>
+            <button
+              type="button"
+              className="w-full py-2 rounded-xl border border-border bg-card cursor-pointer text-sm"
+              onClick={closeFocus}
+            >
+              Đóng
+            </button>
           </div>
         </div>
       )}

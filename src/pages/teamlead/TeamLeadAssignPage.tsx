@@ -207,7 +207,7 @@ export default function TeamLeadAssignPage() {
                 <code className="text-[11px] font-mono text-primary font-bold">{b.bomCode}</code>
                 {b.processSeq != null && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-secondary text-primary">
-                    QT {b.processSeq}
+                    Bước {b.processSeq}
                   </span>
                 )}
                 {!unlocked && (
@@ -280,7 +280,7 @@ export default function TeamLeadAssignPage() {
               </div>
               <div className="font-semibold text-sm text-primary">
                 Quy trình: {assignModal.b.process || "—"}
-                {assignModal.b.processSeq != null ? ` (QT ${assignModal.b.processSeq})` : ""}
+                {assignModal.b.processSeq != null ? ` (Bước ${assignModal.b.processSeq})` : ""}
               </div>
               <code className="text-xs font-mono text-muted">{assignModal.b.bomCode}</code>
               <div className="text-xs text-muted-foreground">{assignModal.o.orderNo}</div>

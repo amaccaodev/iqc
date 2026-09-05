@@ -42,6 +42,7 @@ import {
 } from "./demoCatalog";
 import { MOCK_INCIDENTS, MOCK_NOTIFICATIONS } from "./workflowSeed";
 import { mockDrawingsById } from "@shared/data/sampleInspection";
+import { withAttachmentPreview } from "@shared/utils/attachments";
 
 function clone<T>(v: T): T {
   return structuredClone(v);
@@ -98,7 +99,7 @@ const shiftCloses: ShiftClose[] = [
     workerId: "u6",
     workerName: "Cường 2T3",
     orderId: "o1",
-    bomId: "b1",
+    bomId: "b-sp-novo-vg-15-01-1",
     productId: "p1",
     productName: "Van góc 1C sau ĐH NOVO 15 tay ABS",
     partName: "Nắp van góc novo 15",
@@ -121,7 +122,7 @@ const shiftCloses: ShiftClose[] = [
     workerId: "u7",
     workerName: "Nga 3/43",
     orderId: "o1",
-    bomId: "b-p1-sp-novo-vg-15-02-1",
+    bomId: "b-sp-novo-vg-15-02-1",
     productId: "p1",
     productName: "Van góc 1C sau ĐH NOVO 15 tay ABS",
     partName: "Thân van góc 1C sau ĐH novo 15",
@@ -159,22 +160,59 @@ const payrollRates: Array<{ id: string; userId: string; productId: string; rateV
   { id: "pr2", userId: "u7", productId: "p1", rateVnd: 2500 },
   { id: "pr3", userId: "u6", productId: "p-lx20", rateVnd: 2500 },
 ];
-const productAttachments = mockDrawingsById(
-  products.map((p) => p.id),
-  "prod",
-);
-const semiAttachments = mockDrawingsById(
-  semis.map((s) => s.id),
-  "semi",
-);
+const ATT_LS_PROD = "iqc_demo_prod_att";
+const ATT_LS_SEMI = "iqc_demo_semi_att";
+
+function loadAttMap(key: string): Map<string, Attachment[]> | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const entries = JSON.parse(raw) as [string, Attachment[]][];
+    if (!Array.isArray(entries)) return null;
+    return new Map(entries.map(([id, list]) => [id, (list ?? []).map(withAttachmentPreview)]));
+  } catch {
+    return null;
+  }
+}
+
+function persistAttMaps() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(ATT_LS_PROD, JSON.stringify([...productAttachments.entries()]));
+    localStorage.setItem(ATT_LS_SEMI, JSON.stringify([...semiAttachments.entries()]));
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+const productAttachments =
+  loadAttMap(ATT_LS_PROD) ??
+  mockDrawingsById(
+    products.map((p) => p.id),
+    "prod",
+  );
+const semiAttachments =
+  loadAttMap(ATT_LS_SEMI) ??
+  mockDrawingsById(
+    semis.map((s) => s.id),
+    "semi",
+  );
 for (const p of products) {
-  if (p.attachments?.length) productAttachments.set(p.id, p.attachments);
-  else p.attachments = productAttachments.get(p.id);
+  if (p.attachments?.length && !productAttachments.get(p.id)?.length) {
+    productAttachments.set(p.id, p.attachments);
+  } else {
+    p.attachments = productAttachments.get(p.id);
+  }
 }
 for (const s of semis) {
-  if (s.attachments?.length) semiAttachments.set(s.id, s.attachments);
-  else s.attachments = semiAttachments.get(s.id);
+  if (s.attachments?.length && !semiAttachments.get(s.id)?.length) {
+    semiAttachments.set(s.id, s.attachments);
+  } else {
+    s.attachments = semiAttachments.get(s.id);
+  }
 }
+persistAttMaps();
 const deviceRequests: DeviceLoginRequest[] = [];
 
 function findOrder(id: string) {
@@ -203,17 +241,65 @@ function catalogBomsOf(semiProductId: string) {
   }));
 }
 
+function consumeWarehouse(semiProductId: string, qty: number) {
+  const want = Math.max(0, Number(qty) || 0);
+  const row = warehouse.find((w) => w.itemKind === "semi_product" && w.itemId === semiProductId);
+  const onHand = row?.qty ?? 0;
+  const take = Math.min(want, onHand);
+  if (row && take > 0) row.qty = onHand - take;
+  return { used: take, left: Math.max(0, onHand - take) };
+}
+
 function jobsFromDemoSemi(
   semi: SemiProduct,
   produceQty: number,
   processIds?: string[],
+  stock?: { useFromStock: boolean; stockUseQty: number },
 ): ProductionOrder["boms"] {
   const specs = measurementSpecsToMaterialSpecs(semi.measurementSpecs ?? {});
   const specCols = specs.map((s) => s.label);
   while (specCols.length < 11) specCols.push("");
   const pick = processIds?.length ? new Set(processIds) : null;
   const jobs: ProductionOrder["boms"] = [];
-  for (const bom of catalogBomsOf(semi.id)) {
+  const stockUse = stock?.useFromStock ? Math.max(0, stock.stockUseQty) : 0;
+  const consumed = stockUse > 0 ? consumeWarehouse(semi.id, stockUse) : { used: 0, left: 0 };
+  if (produceQty <= 0) {
+    if (consumed.used > 0) {
+      jobs.push({
+        id: uid("b"),
+        bomCode: "",
+        partCode: semi.code,
+        partName: semi.name,
+        partGroup: semi.name,
+        rawMaterial: "",
+        machine: "",
+        process: "Xuất kho",
+        processSeq: 0,
+        targetQty: 0,
+        stockUseQty: consumed.used,
+        stockLeftQty: consumed.left,
+        useFromStock: true,
+        passQty: 0,
+        failQty: 0,
+        assignedTeamId: "",
+        assignedTeamName: "",
+        assignedWorkers: [],
+        status: "qc_passed",
+        specCols,
+        materialSpecs: specs.length ? specs : undefined,
+        techNote: `Dùng kho: ${consumed.used} · Còn lại: ${consumed.left}`,
+        workerEntries: [],
+        semiProductId: semi.id,
+        attachments: semiAttachments.get(semi.id) ?? [],
+      });
+    }
+    return jobs;
+  }
+  const recipes = catalogBomsOf(semi.id);
+  const boms = pick
+    ? recipes.filter((bom) => (bom.processes ?? []).some((p) => pick.has(p.id)))
+    : recipes.slice(0, 1);
+  for (const bom of boms) {
     const steps = (bom.processes ?? []).filter((p) => !pick || pick.has(p.id));
     steps.forEach((step, idx) => {
       jobs.push({
@@ -230,6 +316,9 @@ function jobsFromDemoSemi(
         catalogBomName: bom.name,
         catalogProcessId: step.id,
         targetQty: produceQty,
+        stockUseQty: jobs.length === 0 ? consumed.used : 0,
+        stockLeftQty: jobs.length === 0 && stock?.useFromStock ? consumed.left : undefined,
+        useFromStock: jobs.length === 0 ? Boolean(stock?.useFromStock) : false,
         passQty: 0,
         failQty: 0,
         assignedTeamId: "",
@@ -259,6 +348,9 @@ function jobsFromDemoSemi(
         process: "",
         processSeq: 1,
         targetQty: produceQty,
+        stockUseQty: consumed.used,
+        stockLeftQty: stock?.useFromStock ? consumed.left : undefined,
+        useFromStock: Boolean(stock?.useFromStock),
         passQty: 0,
         failQty: 0,
         assignedTeamId: "",
@@ -407,12 +499,16 @@ export async function handleDemoApi<T>(
       semiProductId: string;
       produceQty?: number;
       processIds?: string[];
+      useFromStock?: boolean;
+      stockUseQty?: number;
     }>) ?? [];
     const source = reqLines.length
       ? reqLines
       : semis.filter((s) => s.active && s.productId === productId).map((s) => ({
           semiProductId: s.id,
           produceQty: Number(body?.finishedQty ?? body?.targetQty ?? 100),
+          useFromStock: false,
+          stockUseQty: 0,
         }));
     const boms = source.flatMap((line) => {
       const semi = semis.find((s) => s.id === line.semiProductId);
@@ -421,6 +517,10 @@ export async function handleDemoApi<T>(
         semi,
         Number(line.produceQty ?? body?.finishedQty ?? 100),
         "processIds" in line ? line.processIds : undefined,
+        {
+          useFromStock: Boolean("useFromStock" in line && line.useFromStock),
+          stockUseQty: Number("stockUseQty" in line ? line.stockUseQty : 0) || 0,
+        },
       );
     });
     const created: ProductionOrder = {
@@ -446,7 +546,13 @@ export async function handleDemoApi<T>(
     const items = (body?.items as Array<{
       productId: string;
       finishedQty: number;
-      lines?: Array<{ semiProductId: string; produceQty?: number; processIds?: string[] }>;
+      lines?: Array<{
+        semiProductId: string;
+        produceQty?: number;
+        processIds?: string[];
+        useFromStock?: boolean;
+        stockUseQty?: number;
+      }>;
     }>) ?? [];
     const created = items.map((item) => {
       const product = products.find((p) => p.id === item.productId);
@@ -456,6 +562,8 @@ export async function handleDemoApi<T>(
         : semis.filter((s) => s.active && s.productId === item.productId).map((s) => ({
             semiProductId: s.id,
             produceQty: item.finishedQty,
+            useFromStock: false,
+            stockUseQty: 0,
           }));
       const boms = source.flatMap((line) => {
         const semi = semis.find((s) => s.id === line.semiProductId);
@@ -464,6 +572,10 @@ export async function handleDemoApi<T>(
           semi,
           Number(line.produceQty ?? item.finishedQty),
           "processIds" in line ? line.processIds : undefined,
+          {
+            useFromStock: Boolean("useFromStock" in line && line.useFromStock),
+            stockUseQty: Number("stockUseQty" in line ? line.stockUseQty : 0) || 0,
+          },
         );
       });
       const order: ProductionOrder = {
@@ -756,17 +868,26 @@ export async function handleDemoApi<T>(
   }
   if (/^\/products\/[^/]+\/attachments$/.test(path) && m === "GET") {
     const id = path.split("/")[2];
-    return (productAttachments.get(id) ?? []) as T;
+    return (productAttachments.get(id) ?? []).map(withAttachmentPreview) as T;
   }
   if (/^\/products\/[^/]+\/attachments$/.test(path) && m === "POST") {
     const id = path.split("/")[2];
-    const att = { ...(body as unknown as Attachment), id: uid("att") };
+    const att = withAttachmentPreview({ ...(body as unknown as Attachment), id: uid("att") });
     const listAtt = productAttachments.get(id) ?? [];
     listAtt.push(att);
     productAttachments.set(id, listAtt);
+    persistAttMaps();
     return att as T;
   }
-  if (/^\/products\/[^/]+\/attachments\/[^/]+$/.test(path) && m === "DELETE") return undefined as T;
+  if (/^\/products\/[^/]+\/attachments\/[^/]+$/.test(path) && m === "DELETE") {
+    const [, , id, , attId] = path.split("/");
+    productAttachments.set(
+      id,
+      (productAttachments.get(id) ?? []).filter((a) => a.id !== attId),
+    );
+    persistAttMaps();
+    return undefined as T;
+  }
 
   if (path === "/semi-products" && m === "GET") {
     const active = semis.filter((s) => s.active);
@@ -800,15 +921,25 @@ export async function handleDemoApi<T>(
   }
   if (/^\/semi-products\/[^/]+\/attachments$/.test(path) && m === "GET") {
     const id = path.split("/")[2];
-    return (semiAttachments.get(id) ?? []) as T;
+    return (semiAttachments.get(id) ?? []).map(withAttachmentPreview) as T;
   }
   if (/^\/semi-products\/[^/]+\/attachments$/.test(path) && m === "POST") {
     const id = path.split("/")[2];
-    const att = { ...(body as unknown as Attachment), id: uid("att") };
+    const att = withAttachmentPreview({ ...(body as unknown as Attachment), id: uid("att") });
     const listAtt = semiAttachments.get(id) ?? [];
     listAtt.push(att);
     semiAttachments.set(id, listAtt);
+    persistAttMaps();
     return att as T;
+  }
+  if (/^\/semi-products\/[^/]+\/attachments\/[^/]+$/.test(path) && m === "DELETE") {
+    const [, , id, , attId] = path.split("/");
+    semiAttachments.set(
+      id,
+      (semiAttachments.get(id) ?? []).filter((a) => a.id !== attId),
+    );
+    persistAttMaps();
+    return undefined as T;
   }
 
   if (path === "/warehouse-stock" && m === "GET") {

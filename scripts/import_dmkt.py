@@ -608,12 +608,7 @@ export const DMKT_WAREHOUSE: WarehouseStock[] = {ts_json(warehouse)};
             }
         )
 
-    orders_body = f"""/** Auto-generated from documents/*.xlsx — `python scripts/import_dmkt.py` */
-import type {{ ProductionOrder }} from "../../../shared/src/types/index.js";
-
-export const SEED_ORDERS: ProductionOrder[] = {ts_json(orders)};
-"""
-    write_ts(OUT_ORDERS, orders_body)
+    # Lệnh SX demo nằm ở shared/src/data/buildCatalogOrders.ts — không ghi lại file JSON 25-job.
     print(
         "products",
         len(products),
@@ -623,8 +618,7 @@ export const SEED_ORDERS: ProductionOrder[] = {ts_json(orders)};
         len(processes),
         "machines",
         len(machines),
-        "orders",
-        len(orders),
+        "orders skipped (buildCatalogOrders)",
     )
 
 

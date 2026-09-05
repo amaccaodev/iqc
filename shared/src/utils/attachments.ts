@@ -36,10 +36,7 @@ export function inferAttachmentType(mimeOrName: string): Attachment["type"] {
 /** Metadata nhẹ khi list (không gửi base64) */
 export function attachmentMetaOnly(file: Attachment): Attachment {
   const { contentBase64: _, ...rest } = file;
-  return {
-    ...rest,
-    url: undefined,
-  };
+  return rest;
 }
 
 export function withAttachmentPreview(file: Attachment): Attachment {

@@ -18,8 +18,8 @@ export function isBomProcessDone(bom: BOMItem): boolean {
 }
 
 /**
- * Trong cùng catalog BOM: hết quy trình seq nhỏ hơn mới mở seq hiện tại.
- * Quy trình của BOM khác (cùng linh kiện) không khóa nhau.
+ * Trong cùng quy trình (catalog BOM): hết bước seq nhỏ hơn mới mở bước hiện tại.
+ * Quy trình khác (BOM khác, cùng linh kiện) không khóa nhau.
  * Job không có processSeq → luôn mở (legacy).
  */
 export function isBomProcessUnlocked(order: ProductionOrder, bom: BOMItem): boolean {
@@ -44,6 +44,6 @@ export function bomProcessLockReason(order: ProductionOrder, bom: BOMItem): stri
   const prev = order.boms
     .filter((b) => bomPartGroupKey(b) === group && (b.processSeq ?? 0) === seq - 1)
     .sort((a, b) => (a.processSeq ?? 0) - (b.processSeq ?? 0))[0];
-  const prevName = prev?.process || `quy trình ${seq - 1}`;
-  return `Chưa xong «${prevName}» — hết quy trình trước mới mở quy trình này`;
+  const prevName = prev?.process || `bước ${seq - 1}`;
+  return `Chưa xong «${prevName}» — hết bước trước trong cùng quy trình mới mở bước này`;
 }

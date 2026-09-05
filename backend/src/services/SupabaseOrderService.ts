@@ -52,12 +52,16 @@ function jobsFromSemi(
   useFromStock: boolean,
   extraNote: string,
   processIds?: string[],
+  stockLeft = 0,
 ): BOMItem[] {
   const jobs: BOMItem[] = [];
   const { materialSpecs, specCols } = specsFromSemi(sp);
-  const catalogBoms = catalogStore.listBoms(sp.id);
   const pick = processIds?.length ? new Set(processIds) : null;
   const attachments = catalogStore.listSemiAttachments(sp.id, true);
+  const allBoms = catalogStore.listBoms(sp.id);
+  const catalogBoms = pick
+    ? allBoms.filter((bom) => (bom.processes ?? []).some((p) => pick.has(p.id)))
+    : allBoms.slice(0, 1);
 
   const pushJob = (
     processName: string,
@@ -76,6 +80,7 @@ function jobsFromSemi(
       process: processName,
       targetQty: produceQty,
       stockUseQty: jobs.length === 0 ? stockUse : 0,
+      stockLeftQty: jobs.length === 0 && useFromStock ? stockLeft : undefined,
       useFromStock: jobs.length === 0 ? useFromStock : false,
       passQty: 0,
       failQty: 0,
@@ -92,6 +97,20 @@ function jobsFromSemi(
       ...extra,
     });
   };
+
+  if (produceQty <= 0) {
+    if (useFromStock && stockUse > 0) {
+      pushJob("Xuất kho", 0, {
+        catalogBomId: catalogBoms[0]?.id,
+        catalogBomName: catalogBoms[0]?.name,
+        useFromStock: true,
+        stockUseQty: stockUse,
+        targetQty: 0,
+        status: "qc_passed",
+      });
+    }
+    return jobs;
+  }
 
   for (const bom of catalogBoms) {
     const steps = (bom.processes ?? []).filter((p) => !pick || pick.has(p.id));
@@ -302,19 +321,25 @@ export class SupabaseOrderService {
       if (!sp) continue;
       const stockUse = line.useFromStock ? Math.max(0, Number(line.stockUseQty) || 0) : 0;
       const produceQty = Math.max(0, Number(line.produceQty) || 0);
-      if (stockUse > 0) catalogStore.consumeStock(sp.id, stockUse);
+      const onHand =
+        catalogStore.listStock().find((w) => w.itemKind === "semi_product" && w.itemId === sp.id)
+          ?.qty ?? 0;
+      const take = Math.min(stockUse, onHand);
+      const stockLeft = Math.max(0, onHand - take);
+      if (take > 0) catalogStore.consumeStock(sp.id, take);
       const noteParts = [
         payload.note?.trim() ?? "",
-        stockUse > 0 ? `Dùng kho: ${stockUse}` : "",
+        take > 0 ? `Dùng kho: ${take} · Còn lại: ${stockLeft}` : "",
       ].filter(Boolean);
       boms.push(
         ...jobsFromSemi(
           sp,
           produceQty,
-          stockUse,
+          take,
           Boolean(line.useFromStock),
           noteParts.join("\n"),
           line.processIds,
+          stockLeft,
         ),
       );
     }

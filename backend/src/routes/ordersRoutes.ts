@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { assessBomReadiness } from "../../../shared/src/utils/bomReadiness.js";
+import { groupOrderJobsByPart } from "../../../shared/src/utils/orderParts.js";
 import { assertCanSubmitWorkerRow } from "../../../shared/src/utils/shiftCloseGuard.js";
 import { validateEntryRows } from "../../../shared/src/utils/specValidation.js";
 import { catalogStore } from "../services/CatalogMemoryStore.js";
@@ -179,7 +180,7 @@ ordersRoutes.post("/orders/:orderId/boms/:bomId/worker-row", async (req, res) =>
             ["teamlead"],
             "Số đo ngoài chuẩn",
             `${body.workerName || "CN"} — ${bom.partName} (SP #${data.row.tt}): ${detail}`,
-            { refId: data.order.id, type: "order", refType: "measurement_error" },
+            { refId: `${data.order.id}/${req.params.bomId}`, type: "order", refType: "measurement_error" },
           );
         }
       }
@@ -255,19 +256,20 @@ ordersRoutes.post("/orders/:orderId/boms/:bomId/worker-shift-close", async (req,
 ordersRoutes.post("/orders/from-product", async (req, res) => {
   try {
     const data = await supabaseOrderService.createOrderFromProduct(req.body);
+    const parts = groupOrderJobsByPart(data.boms);
     const readiness = assessBomReadiness({
       productName: data.productLine,
       productHasAttachments: (data.attachments?.length ?? 0) > 0,
-      lines: data.boms.map((b) => ({
-        name: b.partName,
-        code: b.partCode,
-        hasAttachments: (b.attachments?.length ?? 0) > 0,
+      lines: parts.map((p) => ({
+        name: p.partName,
+        code: p.partCode,
+        hasAttachments: p.jobs.some((b) => (b.attachments?.length ?? 0) > 0),
       })),
     });
     await notifyRoles(
         ["supervisor"],
         `Lệnh mới chờ phê duyệt ${data.orderNo}`,
-      `${data.productLine} · ${data.boms.length} BTP · ${readiness.summary}${
+      `${data.productLine} · ${parts.length} linh kiện · ${readiness.summary}${
         readiness.warnings.length ? ` — ${readiness.warnings.join("; ")}` : ""
       }`,
       { refId: data.id, type: "order", refType: "production_order" },
@@ -282,19 +284,20 @@ ordersRoutes.post("/orders/from-products-batch", async (req, res) => {
   try {
     const data = await supabaseOrderService.createOrdersFromProductsBatch(req.body);
     for (const order of data) {
+      const parts = groupOrderJobsByPart(order.boms);
       const readiness = assessBomReadiness({
         productName: order.productLine,
         productHasAttachments: (order.attachments?.length ?? 0) > 0,
-        lines: order.boms.map((b) => ({
-          name: b.partName,
-          code: b.partCode,
-          hasAttachments: (b.attachments?.length ?? 0) > 0,
+        lines: parts.map((p) => ({
+          name: p.partName,
+          code: p.partCode,
+          hasAttachments: p.jobs.some((b) => (b.attachments?.length ?? 0) > 0),
         })),
       });
       await notifyRoles(
         ["supervisor"],
         `Lệnh mới chờ phê duyệt ${order.orderNo}`,
-        `${order.productLine} · ${order.boms.length} BTP · ${readiness.summary}${
+        `${order.productLine} · ${parts.length} linh kiện · ${readiness.summary}${
           readiness.warnings.length ? ` — ${readiness.warnings.join("; ")}` : ""
         }`,
         { refId: order.id, type: "order", refType: "production_order" },

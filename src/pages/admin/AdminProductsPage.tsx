@@ -592,17 +592,21 @@ export default function AdminProductsPage() {
                   {line.boms?.some((b) => (b.processes?.length ?? 0) > 0) ? (
                     <div className="text-[11px] text-muted pl-1 space-y-0.5">
                       <div className="font-semibold text-foreground">
-                        {line.boms.reduce((n, b) => n + (b.processes?.length ?? 0), 0)} quy trình (tuần tự)
+                        {line.boms.length} quy trình
+                        {line.boms.length > 1 ? " (chọn 1 — khác máy)" : ""}
                       </div>
-                      {line.boms.flatMap((b) =>
-                        [...(b.processes ?? [])]
-                          .sort((a, c) => a.sortOrder - c.sortOrder)
-                          .map((p) => (
-                            <div key={p.id}>
-                              QT {p.sortOrder}: {p.name}
-                            </div>
-                          )),
-                      )}
+                      {line.boms.map((b) => (
+                        <div key={b.id} className="pl-1">
+                          <div className="font-medium text-foreground">{b.name}</div>
+                          {[...(b.processes ?? [])]
+                            .sort((a, c) => a.sortOrder - c.sortOrder)
+                            .map((p) => (
+                              <div key={p.id} className="pl-3">
+                                Bước {p.sortOrder}: {p.name}
+                              </div>
+                            ))}
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>
@@ -856,7 +860,7 @@ export default function AdminProductsPage() {
                     <div className="flex items-center gap-2">
                       <input
                         className="flex-1 border border-border rounded-lg px-3 py-2 text-sm font-semibold"
-                        placeholder="Tên BOM"
+                        placeholder="Tên quy trình"
                         value={bom.name}
                         onChange={(e) =>
                           setBomDrafts((prev) =>
@@ -870,7 +874,7 @@ export default function AdminProductsPage() {
                           className="text-red-500 text-sm border-0 bg-transparent cursor-pointer shrink-0"
                           onClick={() => setBomDrafts((prev) => prev.filter((_, i) => i !== bomIdx))}
                         >
-                          Xóa BOM
+                          Xóa quy trình
                         </button>
                       ) : null}
                     </div>
@@ -880,10 +884,10 @@ export default function AdminProductsPage() {
                           key={row.id || `${bom.key}-p-${idx}`}
                           className="grid sm:grid-cols-12 gap-2 items-center rounded-xl border border-border p-2.5"
                         >
-                          <div className="sm:col-span-1 text-xs text-muted font-mono">QT {idx + 1}</div>
+                          <div className="sm:col-span-1 text-xs text-muted font-mono">Bước {idx + 1}</div>
                           <input
                             className="sm:col-span-5 border border-border rounded-lg px-3 py-2 text-sm"
-                            placeholder="Tên quy trình"
+                            placeholder="Tên bước"
                             value={row.name}
                             onChange={(e) =>
                               setBomDrafts((prev) =>
@@ -981,13 +985,13 @@ export default function AdminProductsPage() {
                         )
                       }
                     >
-                      + Quy trình
+                      + Bước
                     </Btn>
                   </div>
                 ))}
                 <div className="flex flex-wrap gap-2">
                   <Btn variant="secondary" onClick={() => setBomDrafts((prev) => [...prev, emptyBomDraft()])}>
-                    + BOM
+                    + Quy trình
                   </Btn>
                   <Btn onClick={() => void saveProcessBom()} disabled={bomSaving}>
                     {bomSaving ? "Đang lưu…" : "Lưu"}

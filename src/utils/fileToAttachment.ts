@@ -21,15 +21,24 @@ function splitDataUrl(dataUrl: string): { mimeType: string; contentBase64: strin
   return { mimeType: m[1], contentBase64: m[2] };
 }
 
+const MAX_EDGE = 1600;
+
 /** Ảnh → WebP base64 (canvas). File khác giữ nguyên base64. */
 async function encodeImageToWebp(file: File, quality = 0.82): Promise<{ mimeType: string; contentBase64: string; name: string }> {
   const bitmap = await createImageBitmap(file);
+  let width = bitmap.width;
+  let height = bitmap.height;
+  if (width > MAX_EDGE || height > MAX_EDGE) {
+    const scale = Math.min(MAX_EDGE / width, MAX_EDGE / height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
   const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Không tạo được canvas");
-  ctx.drawImage(bitmap, 0, 0);
+  ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
   const dataUrl = canvas.toDataURL("image/webp", quality);
@@ -76,7 +85,12 @@ export async function fileToAttachment(
   let name = file.name;
 
   if (isImage && preferWebp) {
-    const enc = await encodeImageToWebp(file);
+    let enc = await encodeImageToWebp(file, 0.82);
+    let approx = Math.ceil((enc.contentBase64.length * 3) / 4);
+    if (approx > MAX_BYTES) {
+      enc = await encodeImageToWebp(file, 0.65);
+      approx = Math.ceil((enc.contentBase64.length * 3) / 4);
+    }
     mimeType = enc.mimeType;
     contentBase64 = enc.contentBase64;
     name = enc.name;

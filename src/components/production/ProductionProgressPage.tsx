@@ -1,13 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { BOM_STATUS_LABEL, STATUS_LABEL } from "@shared/constants/labels";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
-import {
-  estimateFinishedQty,
-  orderPartProgress,
-} from "@shared/utils/productionProgress";
+import { bomDoneQty, bomProgressPct, estimateFinishedQty } from "@shared/utils/productionProgress";
+import { bomStepLabel, groupOrderJobsByPart } from "@shared/utils/orderParts";
 import { resolveBomTeamId, resolveUserTeamId, teamIdsMatch } from "@shared/constants/teams";
-import type { ProductionOrder, ShiftClose } from "@shared/types";
+import type { BOMItem, ProductionOrder, ShiftClose } from "@shared/types";
 import { Btn, Card, PaginationBar } from "../ui";
 import { useOrders } from "../../hooks/useOrders";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
@@ -42,12 +40,18 @@ function RedDot({ title }: { title: string }) {
   );
 }
 
+function jobPath(base: string, orderId: string, bomId: string) {
+  return `${base}/${encodeURIComponent(orderId)}/${encodeURIComponent(bomId)}`;
+}
+
+function primaryJob(jobs: BOMItem[]): BOMItem | undefined {
+  return jobs.find((b) => b.status === "in_progress") ?? jobs[0];
+}
+
 function PartRow({
-  name,
+  title,
+  subtitle,
   code,
-  process,
-  processSeq,
-  bomName,
   done,
   target,
   fail,
@@ -59,11 +63,9 @@ function PartRow({
   detailPath,
   mine,
 }: {
-  name: string;
+  title: string;
+  subtitle?: string;
   code: string;
-  process?: string;
-  processSeq?: number;
-  bomName?: string;
   done: number;
   target: number;
   fail: number;
@@ -75,10 +77,16 @@ function PartRow({
   detailPath: string;
   mine?: boolean;
 }) {
+  const navigate = useNavigate();
   return (
-    <Link
-      to={detailPath}
-      className={`block rounded-xl border p-3 sm:p-4 relative no-underline text-inherit hover:border-primary/50 hover:bg-surface transition-colors ${
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(detailPath);
+      }}
+      className={`w-full text-left rounded-xl border p-3 sm:p-4 relative cursor-pointer hover:border-primary/50 hover:bg-surface transition-colors ${
         mine === false ? "border-border bg-card/70 opacity-80" : "border-border bg-card"
       }`}
     >
@@ -90,18 +98,17 @@ function PartRow({
       <div className="flex flex-wrap items-start justify-between gap-2 mb-2 pr-4">
         <div className="min-w-0">
           <div className="font-semibold text-foreground text-sm sm:text-base flex items-center gap-2 flex-wrap">
-            {name}
+            {title}
             {mine ? (
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                 Tổ bạn
               </span>
             ) : null}
-            <i className="fas fa-chevron-right text-[10px] text-muted" />
+            <span className="text-[11px] font-semibold text-primary">Chi tiết</span>
+            <i className="fas fa-chevron-right text-[10px] text-primary" />
           </div>
-          {process ? (
-            <div className="text-xs text-primary font-medium mt-0.5">
-              {bomName ? `${bomName} · ` : ""}QT {processSeq ?? ""}: {process}
-            </div>
+          {subtitle ? (
+            <div className="text-xs text-primary font-medium mt-0.5">{subtitle}</div>
           ) : null}
           <div className="text-[11px] text-muted-foreground font-mono">{code}</div>
         </div>
@@ -124,7 +131,7 @@ function PartRow({
           <span className="text-red-600 font-medium">Có chốt ca chờ duyệt</span>
         ) : null}
       </div>
-    </Link>
+    </button>
   );
 }
 
@@ -152,10 +159,16 @@ function ProductCard({
   /** Tổ trưởng: đánh dấu việc của tổ, vẫn hiện đủ BOM như GĐ */
   teamIdFilter?: string;
 }) {
-  const parts = orderPartProgress(order);
+  const navigate = useNavigate();
+  const partGroups = groupOrderJobsByPart(order.boms ?? []);
   const finishedEst = estimateFinishedQty(order);
+  const partAvgs = partGroups.map((g) => {
+    const steps = g.recipes.flatMap((r) => r.steps);
+    if (!steps.length) return 0;
+    return Math.round(steps.reduce((s, b) => s + bomProgressPct(b), 0) / steps.length);
+  });
   const partDoneAvg =
-    parts.length > 0 ? Math.round(parts.reduce((s, p) => s + p.pct, 0) / parts.length) : 0;
+    partAvgs.length > 0 ? Math.round(partAvgs.reduce((s, n) => s + n, 0) / partAvgs.length) : 0;
   const [completing, setCompleting] = useState(false);
   const [msg, setMsg] = useState("");
   const isDone = order.status === "completed";
@@ -227,7 +240,7 @@ function ProductCard({
             </div>
             <div className="rounded-lg bg-surface px-2.5 py-2">
               <div className="text-muted-foreground">Linh kiện</div>
-              <div className="font-bold text-primary">{parts.length} chi tiết</div>
+              <div className="font-bold text-primary">{partGroups.length} chi tiết</div>
             </div>
             <div className="rounded-lg bg-surface px-2.5 py-2 col-span-2 sm:col-span-1">
               <div className="text-muted-foreground">Tiến độ TB</div>
@@ -269,34 +282,81 @@ function ProductCard({
             </div>
           )}
 
-          {parts.map((p) => {
+          {partGroups.map((g) => {
+            const steps = g.recipes.flatMap((r) => r.steps);
+            const lead = primaryJob(steps);
+            const avg =
+              steps.length > 0
+                ? Math.round(steps.reduce((s, b) => s + bomProgressPct(b), 0) / steps.length)
+                : 0;
             const mine = teamIdFilter
-              ? teamIdsMatch(resolveBomTeamId(p.bom), teamIdFilter)
+              ? steps.some((b) => teamIdsMatch(resolveBomTeamId(b), teamIdFilter))
               : undefined;
             return (
-              <PartRow
-                key={p.bom.id}
-                name={p.bom.partName}
-                code={p.bom.partCode || p.bom.bomCode}
-                process={p.bom.process}
-                processSeq={p.bom.processSeq}
-                bomName={p.bom.catalogBomName}
-                done={p.done}
-                target={p.target}
-                fail={p.fail}
-                pct={p.pct}
-                status={BOM_STATUS_LABEL[p.bom.status] ?? p.bom.status}
-                team={p.bom.assignedTeamName}
-                workersOnMachine={
-                  p.bom.workerAssignments?.length || p.bom.assignedWorkers?.length || 0
-                }
-                shiftClosePending={pendingBomIds.has(p.bom.id)}
-                detailPath={`${detailBase}/${order.id}/${p.bom.id}`}
-                mine={mine}
-              />
+              <div key={g.key} className="rounded-xl border border-border bg-card p-2 sm:p-3 space-y-2">
+                {lead ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      navigate(jobPath(detailBase, order.id, lead.id));
+                    }}
+                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-surface cursor-pointer border-0 bg-transparent"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-sm sm:text-base text-foreground flex items-center gap-2 flex-wrap">
+                          {g.partName}
+                          {mine ? (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                              Tổ bạn
+                            </span>
+                          ) : null}
+                          <span className="text-[11px] font-semibold text-primary">Chi tiết</span>
+                          <i className="fas fa-chevron-right text-[10px] text-primary" />
+                        </div>
+                        <div className="text-[11px] text-muted-foreground font-mono">
+                          {g.partCode} · {steps.length} bước
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-bold text-primary tabular-nums">{avg}%</div>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <ProgressBar pct={avg} tone={avg >= 100 ? "green" : avg >= 60 ? "blue" : "amber"} />
+                    </div>
+                  </button>
+                ) : null}
+                {steps.map((b) => (
+                  <PartRow
+                    key={b.id}
+                    title={`Bước ${b.processSeq ?? ""}: ${bomStepLabel(b)}`}
+                    subtitle={b.catalogBomName}
+                    code={b.partCode || b.bomCode}
+                    done={bomDoneQty(b)}
+                    target={b.targetQty || 0}
+                    fail={b.failQty || 0}
+                    pct={bomProgressPct(b)}
+                    status={BOM_STATUS_LABEL[b.status] ?? b.status}
+                    team={b.assignedTeamName}
+                    workersOnMachine={
+                      b.workerAssignments?.length || b.assignedWorkers?.length || 0
+                    }
+                    shiftClosePending={pendingBomIds.has(b.id)}
+                    detailPath={jobPath(detailBase, order.id, b.id)}
+                    mine={
+                      teamIdFilter
+                        ? teamIdsMatch(resolveBomTeamId(b), teamIdFilter)
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
             );
           })}
-          {parts.length === 0 && (
+          {partGroups.length === 0 && (
             <div className="text-sm text-muted">Lệnh chưa có linh kiện BOM.</div>
           )}
         </div>
@@ -323,10 +383,14 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
     loading,
     refresh,
   } = usePagedList({ fetchPage: fetchOrders, pageSize: LIST_UI_PAGE_SIZE });
-  const [selectedId, setSelectedId] = useState<string>("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const deepOrderId = searchParams.get("orderId") || "";
+  const [selectedId, setSelectedId] = useState<string>(deepOrderId);
+  const [expandedId, setExpandedId] = useState<string | null>(deepOrderId || null);
   const [hideCompleted, setHideCompleted] = useState(true);
   const [shiftCloses, setShiftCloses] = useState<ShiftClose[]>([]);
+  const [pinnedOrder, setPinnedOrder] = useState<ProductionOrder | null>(null);
+  const appliedDeep = useRef("");
 
   const canComplete = mode === "director";
   const showShiftDots = mode === "supervisor" || mode === "teamlead";
@@ -371,24 +435,55 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
     return map;
   }, [shiftCloses, showShiftDots, mode]);
 
-  const activeOrders = useMemo(
-    () =>
-      pagedOrders.filter((o) => {
-        // Lệnh từ GĐ giao xuống: approved / đang làm / chờ duyệt — chưa phải "đã hoàn thành"
-        if (!["approved", "in_progress", "pending_approval", "completed"].includes(o.status)) {
-          return false;
-        }
-        if (hideCompleted && o.status === "completed") return false;
-        if (
-          teamIdFilter &&
-          !o.boms.some((b) => teamIdsMatch(resolveBomTeamId(b), teamIdFilter))
-        ) {
-          return false;
-        }
-        return true;
-      }),
-    [pagedOrders, hideCompleted, teamIdFilter],
-  );
+  useEffect(() => {
+    if (!deepOrderId) {
+      setPinnedOrder(null);
+      appliedDeep.current = "";
+      return;
+    }
+    if (appliedDeep.current !== deepOrderId) {
+      appliedDeep.current = deepOrderId;
+      setSelectedId(deepOrderId);
+      setExpandedId(deepOrderId);
+    }
+    if (pagedOrders.some((o) => o.id === deepOrderId)) {
+      setPinnedOrder(null);
+      return;
+    }
+    let cancelled = false;
+    void orderApi
+      .getById(deepOrderId)
+      .then((o) => {
+        if (!cancelled) setPinnedOrder(o);
+      })
+      .catch(() => {
+        if (!cancelled) setPinnedOrder(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deepOrderId, pagedOrders]);
+
+  const activeOrders = useMemo(() => {
+    const base = pagedOrders.filter((o) => {
+      // Lệnh từ GĐ giao xuống: approved / đang làm / chờ duyệt — chưa phải "đã hoàn thành"
+      if (!["approved", "in_progress", "pending_approval", "completed"].includes(o.status)) {
+        return false;
+      }
+      if (hideCompleted && o.status === "completed") return false;
+      if (
+        teamIdFilter &&
+        !o.boms.some((b) => teamIdsMatch(resolveBomTeamId(b), teamIdFilter))
+      ) {
+        return false;
+      }
+      return true;
+    });
+    if (pinnedOrder && !base.some((o) => o.id === pinnedOrder.id)) {
+      return [pinnedOrder, ...base];
+    }
+    return base;
+  }, [pagedOrders, hideCompleted, teamIdFilter, pinnedOrder]);
 
   const visible = useMemo(() => {
     if (!selectedId) return activeOrders;

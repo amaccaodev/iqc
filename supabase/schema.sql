@@ -211,6 +211,7 @@ create table if not exists public.measurement_results (
   semi_product_id       uuid not null references public.semi_products(id) on delete restrict,
   entered_by_id         text not null,
   machine_id            uuid references public.machines(id) on delete set null,
+  drawing_id            uuid references public.drawings(id) on delete set null,
   measurements          jsonb not null default '{}'::jsonb,
   appearance            text not null default '',
   created_at            timestamptz not null default now(),
@@ -218,16 +219,19 @@ create table if not exists public.measurement_results (
     check (jsonb_typeof(measurements) = 'object')
 );
 
--- ── Activity log ──────────────────────────────────────────────────────────────
+-- Nhật ký đa hình (entity_type + entity_id không FK một cột vào nhiều bảng).
+-- drawing_id / measurement_result_id: FK tường minh khi log hai loại đó.
 
 create table if not exists public.activities (
-  id            uuid primary key default gen_random_uuid(),
-  actor_id      text,
-  action        text not null,                 -- created, updated, measured, stock_adjusted…
-  entity_type   public.activity_entity_type not null,
-  entity_id     uuid,
-  metadata      jsonb not null default '{}'::jsonb,
-  created_at    timestamptz not null default now()
+  id                     uuid primary key default gen_random_uuid(),
+  actor_id               text,
+  action                 text not null,
+  entity_type            public.activity_entity_type not null,
+  entity_id              uuid,
+  drawing_id             uuid references public.drawings(id) on delete set null,
+  measurement_result_id  uuid references public.measurement_results(id) on delete set null,
+  metadata               jsonb not null default '{}'::jsonb,
+  created_at             timestamptz not null default now()
 );
 
 -- ── Machine rate quotas (định mức giá tiền) ───────────────────────────────────

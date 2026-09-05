@@ -14,8 +14,27 @@ function isViewable(file: Attachment): boolean {
   return file.type === "image" || file.type === "pdf";
 }
 
+const DEMO_SHEET_SRC = new URL(
+  "../../../public/sheets/bang-kiem-tra-chi-tiet.jpg",
+  import.meta.url,
+).href;
+
+function resolvePublicSrc(src: string): string {
+  if (src.startsWith("data:") || src.startsWith("blob:") || src.startsWith("http")) return src;
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  if (src.startsWith("/") && base !== "/" && !src.startsWith(base)) {
+    return `${base}${src.replace(/^\//, "")}`;
+  }
+  return src;
+}
+
 function viewSrc(file: Attachment): string | undefined {
-  return attachmentDataUrl(file);
+  const src = attachmentDataUrl(file);
+  if (!src) return undefined;
+  if (src.includes("bang-kiem-tra-chi-tiet") || file.name.includes("BangKiemTraChiTiet")) {
+    return DEMO_SHEET_SRC;
+  }
+  return resolvePublicSrc(src);
 }
 
 export default function FileSlideshow({ files, title = "Tài liệu đính kèm", className = "" }: FileSlideshowProps) {
@@ -235,17 +254,6 @@ export default function FileSlideshow({ files, title = "Tài liệu đính kèm"
                     Không xem được file này
                   </div>
                 )}
-
-                <button
-                  type="button"
-                  className="absolute top-3 right-3 z-30 h-11 px-4 rounded-full bg-white text-black font-semibold text-sm border-0 cursor-pointer shadow-lg inline-flex items-center gap-2"
-                  aria-label="Đóng ảnh"
-                  onClick={() => setOpen(false)}
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <i className="fas fa-xmark" />
-                  Đóng
-                </button>
               </div>
             </div>,
             document.body,

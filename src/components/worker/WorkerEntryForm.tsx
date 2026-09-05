@@ -346,7 +346,7 @@ export default function WorkerEntryForm({ user, order, bom, mode = "info" }: Wor
           <div className="font-display font-700 text-base truncate">Linh kiện: {bom.partName}</div>
           <div className="text-xs text-primary font-semibold truncate">
             Quy trình: {bom.process || "—"}
-            {bom.processSeq != null ? ` (QT ${bom.processSeq})` : ""}
+            {bom.processSeq != null ? ` (Bước ${bom.processSeq})` : ""}
           </div>
           <code className="text-[11px] text-muted font-mono">{bom.partCode || order.productCode || bom.bomCode}</code>
         </div>
@@ -846,11 +846,11 @@ function InfoPanel({
 
       {siblingSteps.length > 0 && (
         <Card cls="p-4">
-          <div className="font-semibold text-sm mb-2">Quy trình cùng linh kiện (tuần tự)</div>
+          <div className="font-semibold text-sm mb-2">Bước trong cùng quy trình (tuần tự)</div>
           <ul className="text-sm space-y-1 text-muted">
             {siblingSteps.map((b) => (
               <li key={b.id}>
-                · QT {b.processSeq ?? "—"}: {b.process || b.partName}
+                · Bước {b.processSeq ?? "—"}: {b.process || b.partName}
                 <span className="text-muted-foreground text-xs ml-1">({b.status})</span>
               </li>
             ))}

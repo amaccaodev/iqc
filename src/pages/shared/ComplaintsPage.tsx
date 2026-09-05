@@ -5,6 +5,7 @@
  * - Supervisor: đóng khiếu nại
  */
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { QCComplaint } from "@shared/types";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
 import { workflowApi } from "../../services/api/WorkflowApiService";
@@ -28,6 +29,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function ComplaintsPage() {
   const user = useRoleUser();
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get("id") || "";
   const { orders } = useOrders();
   const isQC = user.role === "qc";
   const isTeamlead = user.role === "teamlead";
@@ -70,6 +73,27 @@ export default function ComplaintsPage() {
   }, [refresh]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!focusId) return;
+    const local = complaints.find((c) => c.id === focusId);
+    if (local) {
+      setSelected(local);
+      return;
+    }
+    let cancelled = false;
+    void workflowApi
+      .getComplaintById(focusId)
+      .then((c) => {
+        if (!cancelled) setSelected(c);
+      })
+      .catch(() => {
+        /* missing */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [focusId, complaints]);
 
   const create = async () => {
     if (!createForm.bomId || !createForm.defectType.trim() || !createForm.defectDescription.trim()) {

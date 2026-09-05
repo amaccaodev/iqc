@@ -19,6 +19,7 @@ export default function ZoomableImage({
   const [scale, setScale] = useState(1);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
+  const [broken, setBroken] = useState(false);
 
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchStart = useRef<{ dist: number; scale: number } | null>(null);
@@ -46,6 +47,7 @@ export default function ZoomableImage({
 
   useEffect(() => {
     reset();
+    setBroken(false);
   }, [src, reset]);
 
   const clampPan = (s: number, x: number, y: number) => {
@@ -157,17 +159,25 @@ export default function ZoomableImage({
       onPointerCancel={onPointerUp}
       onWheel={onWheel}
     >
-      <img
-        src={src}
-        alt={alt}
-        draggable={false}
-        className="absolute inset-0 m-auto max-h-full max-w-full object-contain pointer-events-none"
-        style={{
-          transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
-          transformOrigin: "center center",
-          transition: pointers.current.size ? "none" : "transform 0.12s ease-out",
-        }}
-      />
+      {broken ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/70 text-sm px-6 text-center">
+          <i className="fas fa-image text-3xl mb-2 opacity-50" />
+          Không tải được ảnh. Thử lại hoặc tải file nhỏ hơn.
+        </div>
+      ) : (
+        <img
+          src={src}
+          alt={alt}
+          draggable={false}
+          className="absolute inset-0 m-auto max-h-full max-w-full object-contain pointer-events-none"
+          style={{
+            transform: `translate3d(${tx}px, ${ty}px, 0) scale(${scale})`,
+            transformOrigin: "center center",
+            transition: pointers.current.size ? "none" : "transform 0.12s ease-out",
+          }}
+          onError={() => setBroken(true)}
+        />
+      )}
       {scale > 1.05 ? (
         <button
           type="button"

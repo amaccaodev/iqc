@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useParams } from "react-router-dom";
-import type { Attachment, Machine } from "@shared/types";
+import { Link, useParams } from "react-router-dom";
+import type { Attachment, Machine, ProductionOrder } from "@shared/types";
 import { BOM_STATUS_LABEL, STATUS_LABEL } from "@shared/constants/labels";
 import { PROCESS_STAGE_LABEL, resolveBomTeamId, teamDisplayName } from "@shared/constants/teams";
 import {
@@ -12,6 +12,16 @@ import { Card } from "../../components/ui";
 import FileSlideshow from "../../components/files/FileSlideshow";
 import { useOrders } from "../../hooks/useOrders";
 import { catalogApi } from "../../services/api/CatalogApiService";
+import { orderApi } from "../../services/api/OrderApiService";
+
+function decodeParam(value: string | undefined): string {
+  if (!value) return "";
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
 
 export default function PartDetailPage({
   backBase,
@@ -19,12 +29,44 @@ export default function PartDetailPage({
   /** vd /director/production hoặc /supervisor/production */
   backBase: string;
 }) {
-  const { orderId, bomId } = useParams<{ orderId: string; bomId: string }>();
-  const { orders, loading } = useOrders();
+  const { orderId: rawOrderId, bomId: rawBomId } = useParams<{ orderId: string; bomId: string }>();
+  const orderId = decodeParam(rawOrderId);
+  const bomId = decodeParam(rawBomId);
+  const { orders, loading: listLoading } = useOrders();
+  const [fetched, setFetched] = useState<ProductionOrder | null>(null);
+  const [fetching, setFetching] = useState(Boolean(orderId));
+  const [fetchErr, setFetchErr] = useState("");
   const [catalogDrawings, setCatalogDrawings] = useState<Attachment[]>([]);
   const [machineCatalog, setMachineCatalog] = useState<Machine[]>([]);
 
-  const order = orders.find((o) => o.id === orderId);
+  useEffect(() => {
+    if (!orderId) {
+      setFetching(false);
+      return;
+    }
+    let cancelled = false;
+    setFetching(true);
+    void orderApi
+      .getById(orderId)
+      .then((o) => {
+        if (cancelled) return;
+        setFetched(o);
+        setFetchErr("");
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setFetched(null);
+        setFetchErr((e as Error).message || "Không tải được lệnh sản xuất");
+      })
+      .finally(() => {
+        if (!cancelled) setFetching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId]);
+
+  const order = fetched ?? orders.find((o) => o.id === orderId);
   const bom = order?.boms.find((b) => b.id === bomId);
 
   useEffect(() => {
@@ -62,6 +104,8 @@ export default function PartDetailPage({
     [bom, machineCatalog],
   );
 
+  const loading = fetching || (listLoading && !order);
+
   if (loading) {
     return (
       <div className="text-center py-16 text-muted text-sm">
@@ -72,7 +116,16 @@ export default function PartDetailPage({
   }
 
   if (!order || !bom) {
-    return <Navigate to={backBase} replace />;
+    return (
+      <div className="max-w-lg mx-auto py-12 px-4 text-center space-y-3">
+        <p className="text-sm text-muted">
+          {fetchErr || "Không tìm thấy linh kiện / bước quy trình này."}
+        </p>
+        <Link to={backBase} className="text-sm font-medium text-primary">
+          Quay lại theo dõi SX
+        </Link>
+      </div>
+    );
   }
 
   const done = bomDoneQty(bom);
