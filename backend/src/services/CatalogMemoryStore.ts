@@ -335,13 +335,7 @@ export const catalogStore = {
       productDescription: string;
       partCode: string;
       partName: string;
-      processes: Array<{
-        seq: number;
-        name: string;
-        teamId?: string;
-        machineGroupId?: string;
-        quota: number;
-      }>;
+      processes: Array<{ seq: number; name: string; teamId?: string; quota: number }>;
     };
     const byProduct = new Map<string, Map<string, Acc>>();
 
@@ -384,22 +378,10 @@ export const catalogStore = {
           : blob.includes("lap rap") || blob.includes("assembly") || blob.includes("asm")
             ? "t_asm"
             : "t_hot";
-      const machineRaw = String(r.machine ?? "")
-        .trim()
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-      const machineGroupId =
-        machineGroups.find((g) => {
-          const code = g.code.trim().toLowerCase();
-          const name = g.name.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-          return machineRaw && (machineRaw === code || machineRaw === name || machineRaw.includes(code));
-        })?.id ?? undefined;
       part.processes.push({
         seq: Math.max(1, Number(r.processSeq) || part.processes.length + 1),
         name: processName,
         teamId,
-        machineGroupId,
         quota: Number.parseFloat(String(r.quota ?? "0")) || 0,
       });
       stepCount += 1;
@@ -449,7 +431,6 @@ export const catalogStore = {
           procs.map((p) => ({
             name: p.name,
             productionTeamId: p.teamId,
-            machineGroupId: p.machineGroupId,
             quotaPerShift: p.quota,
             sortOrder: p.seq,
           })),
