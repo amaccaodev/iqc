@@ -23,6 +23,8 @@ interface ResponsiveDataListProps<T> {
   /** Optional row click (desktop table + mobile cards) */
   onRowClick?: (row: T) => void;
   isRowActive?: (row: T) => boolean;
+  /** Skip the white panel when a parent Card already provides it */
+  plain?: boolean;
 }
 
 /**
@@ -41,10 +43,10 @@ export default function ResponsiveDataList<T>({
   emptyText = "Không có dữ liệu",
   onRowClick,
   isRowActive,
+  plain = false,
 }: ResponsiveDataListProps<T>) {
   return (
-    <div className="space-y-3">
-      {/* Mobile / tablet: cards */}
+    <div className={plain ? "" : "panel px-4 py-3"}>
       <div className="space-y-2 lg:hidden">
         {items.map((row) => (
           <div
@@ -59,27 +61,22 @@ export default function ResponsiveDataList<T>({
                 onRowClick(row);
               }
             }}
-            className={`${onRowClick ? "cursor-pointer" : ""} ${
-              isRowActive?.(row) ? "ring-2 ring-primary/40 rounded-2xl" : ""
-            }`}
+            className={onRowClick ? "cursor-pointer" : ""}
           >
             {renderCard(row)}
           </div>
         ))}
         {items.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            {emptyText}
-          </div>
+          <div className="py-8 text-center text-sm text-muted-foreground">{emptyText}</div>
         )}
       </div>
 
-      {/* Desktop: table */}
-      <div className="hidden lg:block overflow-x-auto rounded-xl border border-border bg-card">
+      <div className="hidden overflow-x-auto lg:block">
         <table className="w-full text-sm">
-          <thead className="bg-surface text-muted text-xs uppercase tracking-wide">
+          <thead className="text-[11px] uppercase tracking-wide text-muted">
             <tr>
               {columns.map((c) => (
-                <th key={c.key} className={`text-left font-semibold px-4 py-3 ${c.className ?? ""}`}>
+                <th key={c.key} className={`px-3 py-2.5 text-left font-semibold ${c.className ?? ""}`}>
                   {c.header}
                 </th>
               ))}
@@ -89,13 +86,13 @@ export default function ResponsiveDataList<T>({
             {items.map((row) => (
               <tr
                 key={getKey(row)}
-                className={`border-t border-border ${
-                  onRowClick ? "hover:bg-surface cursor-pointer" : ""
-                } ${isRowActive?.(row) ? "bg-secondary/60" : ""}`}
+                className={`${onRowClick ? "cursor-pointer hover:bg-surface/70" : ""} ${
+                  isRowActive?.(row) ? "bg-secondary/30" : ""
+                }`}
                 onClick={() => onRowClick?.(row)}
               >
                 {columns.map((c) => (
-                  <td key={c.key} className={`px-4 py-3 align-middle ${c.className ?? ""}`}>
+                  <td key={c.key} className={`px-3 py-2.5 align-middle ${c.className ?? ""}`}>
                     {c.render(row)}
                   </td>
                 ))}

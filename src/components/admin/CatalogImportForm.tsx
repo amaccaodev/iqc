@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { Btn, Card } from "../ui";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Btn, Card, PaginationBar } from "../ui";
 import { catalogApi } from "../../services/api/CatalogApiService";
 import { toast } from "../../hooks/useToast";
 import { PROCESS_STAGE_LABEL } from "@shared/constants/teams";
@@ -14,7 +14,7 @@ import {
 } from "../../utils/productBomImport";
 
 const inputCls =
-  "w-full min-w-[7rem] border border-border rounded-lg px-2.5 py-2 text-sm bg-input text-foreground";
+  "w-full min-w-[7rem] rounded-xl border border-border/60 bg-input px-2.5 py-2 text-sm text-foreground shadow-sm shadow-slate-950/5";
 
 type ImportResult = {
   products: number;
@@ -29,11 +29,30 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
   const [rows, setRows] = useState<ProductBomImportRow[]>(() =>
     CATALOG_IMPORT_SAMPLE_ROWS.map((r) => ({ ...r })),
   );
+  const [machineGroups, setMachineGroups] = useState<Array<{ id: string; code: string; name: string }>>([]);
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const summary = useMemo(() => summarizeCatalogImport(rows), [rows]);
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return rows.slice(start, start + pageSize);
+  }, [page, pageSize, rows]);
+
+  useEffect(() => {
+    void catalogApi
+      .listMachineGroups()
+      .then((list) => setMachineGroups(list.map((g) => ({ id: g.id, code: g.code, name: g.name }))))
+      .catch(() => setMachineGroups([]));
+  }, []);
+
+  useEffect(() => {
+    setPage((cur) => Math.min(cur, Math.max(1, Math.ceil(rows.length / pageSize))));
+  }, [rows.length, pageSize]);
 
   const patch = (idx: number, patchRow: Partial<ProductBomImportRow>) => {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patchRow } : r)));
@@ -77,7 +96,7 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-border bg-card p-5 lg:p-6 shadow-sm">
+      <div className="panel p-5 lg:p-6">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
           <div>
             <div className="text-lg font-semibold font-display">Nhập danh mục sản xuất</div>
@@ -111,6 +130,16 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
           <Stat label="Linh kiện" value={summary.parts} icon="fa-puzzle-piece" />
           <Stat label="Quy trình" value={summary.steps} icon="fa-list-ol" />
         </div>
+        <div className="mb-4 rounded-2xl border border-border/50 bg-surface/70 px-4 py-3 text-sm text-muted space-y-1">
+          <div>
+            Mỗi dòng là <span className="font-semibold text-foreground">1 bước quy trình</span> của 1 linh
+            kiện.
+          </div>
+          <div>
+            `SL trên SP` = số linh kiện cần cho 1 thành phẩm. `Nhóm máy` = nhóm/khu vực máy, không phải mã máy
+            cụ thể.
+          </div>
+        </div>
 
         {fileName ? (
           <p className="text-xs text-muted mb-3">
@@ -119,20 +148,20 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
         ) : null}
 
         {/* Desktop table editor */}
-        <div className="hidden lg:block overflow-x-auto rounded-xl border border-border">
+        <div className="hidden overflow-x-auto lg:block">
           <table className="w-full text-sm min-w-[1100px]">
-            <thead className="bg-surface text-[11px] uppercase tracking-wide text-muted">
+            <thead className="text-[11px] uppercase tracking-wide text-muted">
               <tr>
                 {[
                   "Mã TP",
                   "Tên thành phẩm",
                   "Mã LK",
                   "Tên linh kiện",
-                  "SL",
-                  "STT",
-                  "Quy trình",
-                  "Công đoạn",
-                  "Máy",
+                  "SL trên SP",
+                  "Bước",
+                  "Tên bước",
+                  "Tổ phụ trách",
+                  "Nhóm máy",
                   "ĐM/ca",
                   "",
                 ].map((h) => (
@@ -142,9 +171,11 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {rows.map((r, idx) => (
-                <tr key={idx} className="border-t border-border align-top">
+            <tbody className="divide-y divide-border/35">
+              {pageRows.map((r, rowIdx) => {
+                const idx = (page - 1) * pageSize + rowIdx;
+                return (
+                <tr key={idx} className="align-top">
                   <td className="p-1.5">
                     <input
                       className={inputCls}
@@ -212,6 +243,8 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
                   <td className="p-1.5">
                     <input
                       className={inputCls}
+                      list="catalog-import-machine-groups"
+                      placeholder="VD: HOT, AUTO, ASM"
                       value={r.machine ?? ""}
                       onChange={(e) => patch(idx, { machine: e.target.value })}
                     />
@@ -233,17 +266,20 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {/* Mobile cards */}
         <div className="lg:hidden space-y-3">
-          {rows.map((r, idx) => (
+          {pageRows.map((r, rowIdx) => {
+            const idx = (page - 1) * pageSize + rowIdx;
+            return (
             <Card key={idx} cls="p-3 space-y-2">
               <div className="flex justify-between text-xs text-muted">
-                <span>Dòng {idx + 1}</span>
+                <span>Dòng {idx + 1} / Bước {r.processSeq || 1}</span>
                 <button
                   type="button"
                   className="text-red-500 border-0 bg-transparent cursor-pointer"
@@ -282,6 +318,20 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
                 value={r.processName}
                 onChange={(e) => patch(idx, { processName: e.target.value })}
               />
+              <input
+                type="number"
+                className={inputCls}
+                placeholder="SL trên SP"
+                value={String(r.qtyPerUnit ?? 1)}
+                onChange={(e) => patch(idx, { qtyPerUnit: Number(e.target.value) || 1 })}
+              />
+              <input
+                type="number"
+                className={inputCls}
+                placeholder="Bước"
+                value={String(r.processSeq || 1)}
+                onChange={(e) => patch(idx, { processSeq: Number(e.target.value) || 1 })}
+              />
               <select
                 className={inputCls}
                 value={r.teamCode || "Dập nóng"}
@@ -293,9 +343,24 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
                   </option>
                 ))}
               </select>
+              <input
+                className={inputCls}
+                list="catalog-import-machine-groups"
+                placeholder="Nhóm máy"
+                value={r.machine ?? ""}
+                onChange={(e) => patch(idx, { machine: e.target.value })}
+              />
             </Card>
-          ))}
+            );
+          })}
         </div>
+        <datalist id="catalog-import-machine-groups">
+          {machineGroups.map((g) => (
+            <option key={g.id} value={g.code}>
+              {g.name}
+            </option>
+          ))}
+        </datalist>
 
         <div className="flex flex-wrap gap-2 mt-4">
           <Btn
@@ -318,6 +383,13 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
             {busy ? "Đang nhập…" : "Xác nhận nhập dữ liệu"}
           </Btn>
         </div>
+        <PaginationBar
+          page={page}
+          pageSize={pageSize}
+          total={rows.length}
+          onPage={setPage}
+          onPageSize={setPageSize}
+        />
       </div>
 
       {result ? (
@@ -350,7 +422,7 @@ export default function CatalogImportForm({ onImported }: { onImported?: () => v
 
 function Stat({ label, value, icon }: { label: string; value: number; icon: string }) {
   return (
-    <div className="rounded-xl border border-border bg-surface px-4 py-3">
+    <div className="rounded-2xl border border-border/50 bg-surface/70 px-4 py-3 shadow-sm shadow-slate-950/5">
       <div className="text-[11px] uppercase tracking-wide text-muted font-semibold">{label}</div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-2xl font-display font-bold tabular-nums">{value}</span>

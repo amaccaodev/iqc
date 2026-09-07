@@ -28,80 +28,108 @@ export default function PartChecklistEditor({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {rows.map((row, idx) => (
         <div
           key={idx}
-          className="grid grid-cols-12 gap-1.5 items-start rounded-lg border border-border bg-surface p-2"
+          className="rounded-2xl border border-border/50 bg-surface/70 p-3 space-y-3 sm:p-4 shadow-sm shadow-slate-950/5"
         >
-          <div className="col-span-12 sm:col-span-1 text-[11px] font-bold text-primary pt-2">
-            ({idx + 1})
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm font-semibold text-primary">Điểm đo ({idx + 1})</div>
+            <button
+              type="button"
+              className="text-red-600 text-xs border-0 bg-transparent cursor-pointer"
+              onClick={() => remove(idx)}
+            >
+              Xóa
+            </button>
           </div>
-          <input
-            className="col-span-12 sm:col-span-4 border border-border rounded-lg px-2 py-1.5 text-sm"
-            placeholder="Tên thông số *"
-            value={row.name}
-            onChange={(e) => update(idx, { name: e.target.value })}
-          />
-          <select
-            className="col-span-6 sm:col-span-2 border border-border rounded-lg px-2 py-1.5 text-sm"
-            value={row.type ?? "numeric"}
-            onChange={(e) =>
-              update(idx, { type: e.target.value as PartChecklistItem["type"] })
-            }
-          >
-            <option value="numeric">Số</option>
-            <option value="qualitative">Đạt/KQ</option>
-            <option value="text">Chữ</option>
-          </select>
-          <input
-            className="col-span-6 sm:col-span-1 border border-border rounded-lg px-2 py-1.5 text-sm"
-            placeholder="ĐV"
-            value={row.unit ?? ""}
-            onChange={(e) => update(idx, { unit: e.target.value })}
-          />
-          <input
-            className="col-span-4 sm:col-span-1 border border-border rounded-lg px-2 py-1.5 text-sm"
-            placeholder="Chuẩn"
-            type="number"
-            value={row.target ?? ""}
-            onChange={(e) =>
-              update(idx, {
-                target: e.target.value === "" ? undefined : Number(e.target.value),
-              })
-            }
-          />
-          <input
-            className="col-span-4 sm:col-span-1 border border-border rounded-lg px-2 py-1.5 text-sm"
-            placeholder="Min"
-            type="number"
-            value={row.min ?? ""}
-            onChange={(e) =>
-              update(idx, { min: e.target.value === "" ? undefined : Number(e.target.value) })
-            }
-          />
-          <input
-            className="col-span-4 sm:col-span-1 border border-border rounded-lg px-2 py-1.5 text-sm"
-            placeholder="Max"
-            type="number"
-            value={row.max ?? ""}
-            onChange={(e) =>
-              update(idx, { max: e.target.value === "" ? undefined : Number(e.target.value) })
-            }
-          />
-          <button
-            type="button"
-            className="col-span-12 sm:col-span-1 text-red-600 text-xs border-0 bg-transparent cursor-pointer py-2"
-            onClick={() => remove(idx)}
-          >
-            Xóa
-          </button>
-          <input
-            className="col-span-12 border border-border rounded-lg px-2 py-1.5 text-xs"
-            placeholder="Vị trí bản vẽ"
-            value={row.hint ?? ""}
-            onChange={(e) => update(idx, { hint: e.target.value })}
-          />
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+            <label className="lg:col-span-6 block">
+              <span className="block text-[11px] font-semibold text-muted mb-1">Tên thông số</span>
+              <input
+                className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                placeholder="VD: Ø3, chiều dài, ren M6..."
+                value={row.name}
+                onChange={(e) => update(idx, { name: e.target.value })}
+              />
+            </label>
+            <label className="lg:col-span-3 block">
+              <span className="block text-[11px] font-semibold text-muted mb-1">Loại nhập</span>
+              <select
+                className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                value={row.type ?? "numeric"}
+                onChange={(e) =>
+                  update(idx, { type: e.target.value as PartChecklistItem["type"] })
+                }
+              >
+                <option value="numeric">Số</option>
+                <option value="qualitative">Đạt/KQ</option>
+                <option value="text">Chữ</option>
+              </select>
+            </label>
+            <label className="lg:col-span-3 block">
+              <span className="block text-[11px] font-semibold text-muted mb-1">Đơn vị</span>
+              <input
+                className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                placeholder="mm"
+                value={row.unit ?? ""}
+                onChange={(e) => update(idx, { unit: e.target.value })}
+              />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="block text-[11px] font-semibold text-muted mb-1">Giá trị chuẩn</span>
+              <input
+                className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                placeholder="Chuẩn"
+                type="number"
+                value={row.target ?? ""}
+                onChange={(e) =>
+                  update(idx, {
+                    target: e.target.value === "" ? undefined : Number(e.target.value),
+                  })
+                }
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-semibold text-muted mb-1">Min</span>
+              <input
+                className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                placeholder="Min"
+                type="number"
+                value={row.min ?? ""}
+                onChange={(e) =>
+                  update(idx, { min: e.target.value === "" ? undefined : Number(e.target.value) })
+                }
+              />
+            </label>
+            <label className="block">
+              <span className="block text-[11px] font-semibold text-muted mb-1">Max</span>
+              <input
+                className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                placeholder="Max"
+                type="number"
+                value={row.max ?? ""}
+                onChange={(e) =>
+                  update(idx, { max: e.target.value === "" ? undefined : Number(e.target.value) })
+                }
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="block text-[11px] font-semibold text-muted mb-1">Vị trí trên bản vẽ / ghi chú</span>
+            <input
+              className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+              placeholder="VD: Điểm (3) trên bản vẽ mặt cắt"
+              value={row.hint ?? ""}
+              onChange={(e) => update(idx, { hint: e.target.value })}
+            />
+          </label>
         </div>
       ))}
       <button

@@ -195,9 +195,9 @@ export default function PayrollRatesPage() {
             />
           </div>
           {importPreview.length > 0 && (
-            <div className="overflow-x-auto border border-border rounded-xl">
+            <div className="overflow-x-auto rounded-xl bg-card shadow-sm shadow-slate-950/5">
               <table className="w-full text-xs min-w-[640px]">
-                <thead className="bg-surface text-muted">
+                <thead className="border-b border-border/40 bg-surface/60 text-muted">
                   <tr>
                     <th className="text-left p-2">Mã NV</th>
                     <th className="text-left p-2">Họ tên</th>
@@ -207,9 +207,9 @@ export default function PayrollRatesPage() {
                     <th className="text-right p-2">Đơn giá</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/35">
                   {importPreview.slice(0, 12).map((r, i) => (
-                    <tr key={i} className="border-t border-border">
+                    <tr key={i}>
                       <td className="p-2 font-mono">{r.employeeId}</td>
                       <td className="p-2">{r.name ?? "—"}</td>
                       <td className="p-2">{r.roleLabel ?? "—"}</td>

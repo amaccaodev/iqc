@@ -867,7 +867,7 @@ function InfoPanel({
         {myRows.length === 0 ? (
           <div className="text-sm text-muted">Chưa nộp số đo</div>
         ) : (
-          <table className="w-full text-xs border-collapse">
+          <table className="w-full border-collapse text-xs">
             <thead>
               <tr className="text-left text-muted border-b border-border">
                 <th className="py-1 pr-2">TT</th>
@@ -882,7 +882,7 @@ function InfoPanel({
               {myRows.map((r, ri) => {
                 const rowResults = enteredValidation.results[ri] ?? [];
                 return (
-                  <tr key={r.tt} className="border-b border-border">
+                  <tr key={r.tt} className="border-b border-border/35">
                     <td className="py-1.5 pr-2 font-semibold">{r.tt}</td>
                     {cols.map((c) => {
                       const cell = rowResults.find((v) => v.index === c.i);

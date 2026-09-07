@@ -113,10 +113,10 @@ export default function StatsRecordPage() {
           Chưa có dữ liệu nào được ghi
         </div>
       ) : (
-        <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+        <div className="panel overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-background">
+              <tr className="border-b border-border/40 bg-background">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted">Ngày / Ca</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-muted">BOM</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-muted">SX</th>
@@ -126,9 +126,9 @@ export default function StatsRecordPage() {
                 <th className="text-right px-4 py-3 text-xs font-semibold text-muted">Dừng (p)</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border/35">
               {stats.map((s, i) => (
-                <tr key={s.id} className={i % 2 === 0 ? "bg-card" : "bg-surface"}>
+                <tr key={s.id} className={i % 2 === 0 ? "bg-card" : "bg-surface/35"}>
                   <td className="px-4 py-2.5">
                     <div className="font-semibold text-xs">{s.statDate}</div>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${s.shift === "day" ? "bg-yellow-100 text-yellow-700" : "bg-indigo-100 text-indigo-700"}`}>

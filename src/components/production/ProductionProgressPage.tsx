@@ -86,8 +86,8 @@ function PartRow({
         e.stopPropagation();
         navigate(detailPath);
       }}
-      className={`w-full text-left rounded-xl border p-3 sm:p-4 relative cursor-pointer hover:border-primary/50 hover:bg-surface transition-colors ${
-        mine === false ? "border-border bg-card/70 opacity-80" : "border-border bg-card"
+      className={`relative w-full cursor-pointer rounded-2xl border p-3 text-left transition-colors hover:border-primary/40 hover:bg-surface/70 sm:p-4 ${
+        mine === false ? "border-border/50 bg-card/70 opacity-80" : "border-border/50 bg-card shadow-sm shadow-slate-950/5"
       }`}
     >
       {shiftClosePending ? (
@@ -293,7 +293,7 @@ function ProductCard({
               ? steps.some((b) => teamIdsMatch(resolveBomTeamId(b), teamIdFilter))
               : undefined;
             return (
-              <div key={g.key} className="rounded-xl border border-border bg-card p-2 sm:p-3 space-y-2">
+              <div key={g.key} className="space-y-2 rounded-2xl border border-border/50 bg-card p-2 shadow-sm shadow-slate-950/5 sm:p-3">
                 {lead ? (
                   <button
                     type="button"
@@ -526,7 +526,7 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
       </div>
 
       <input
-        className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-input focus:outline-none focus:border-primary"
+        className="w-full rounded-xl border border-border/60 bg-input px-3 py-2.5 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40"
         placeholder="Tìm số lệnh, sản phẩm, khách hàng…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -536,7 +536,7 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
         <label className="block text-sm">
           <span className="text-muted font-medium">Sản phẩm / lệnh đã giao</span>
           <select
-            className="mt-1.5 w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-card focus:outline-none focus:border-ring"
+            className="mt-1.5 w-full rounded-xl border border-border/60 bg-card px-3 py-2.5 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-ring"
             value={selectedId}
             onChange={(e) => {
               const id = e.target.value;

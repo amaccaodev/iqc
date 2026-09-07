@@ -39,7 +39,7 @@ html[data-theme="gold"] {
 }
 
 html[data-theme="light"] {
-  --background: #EFF2F7;
+  --background: #D5DCE8;
   --foreground: #0F172A;
   --card: #FFFFFF;
   --card-foreground: #0F172A;
@@ -160,6 +160,40 @@ select:focus {
   html.keyboard-open .fixed.bottom-0 {
     display: none;
   }
+}
+
+/* One list/content panel — clearly different from page background */
+.panel {
+  background: var(--card);
+  color: var(--card-foreground);
+  border-radius: 1rem;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.16);
+}
+
+html[data-theme="gold"] .panel,
+html[data-theme="dark"] .panel,
+.dark .panel {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* List tables: only horizontal row rules, never a cell grid */
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  border: none;
+}
+table th,
+table td {
+  border-left: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 42%, transparent);
+}
+table thead th {
+  border-bottom-color: color-mix(in srgb, var(--border) 62%, transparent);
+}
+table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 @theme inline {
