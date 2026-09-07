@@ -200,7 +200,7 @@ export default function AdminMachinesPage() {
       </Card>
       ) : null}
 
-      <Card cls="p-4">
+      <Card cls="p-3">
         <input
           className={`${field} mb-3`}
           placeholder="Tìm mã / tên máy…"
@@ -217,7 +217,6 @@ export default function AdminMachinesPage() {
           onPage={setPage}
           onPageSize={setPageSize}
           emptyText="Chưa có máy"
-          plain
           columns={[
             {
               key: "code",
@@ -260,9 +259,9 @@ export default function AdminMachinesPage() {
             },
           ]}
           renderCard={(m) => (
-            <div className="py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
+            <Card cls="p-3">
+              <div className="flex justify-between gap-2">
+                <div>
                   <code className="text-xs text-muted">{m.accountingCode || m.code}</code>
                   <div className="font-semibold">{m.name}</div>
                   <div className="text-xs text-muted mt-0.5">
@@ -274,7 +273,7 @@ export default function AdminMachinesPage() {
                   <IconAction icon="fa-trash" label="Ngưng / xóa" tone="danger" onClick={() => void remove(m.id)} />
                 </div>
               </div>
-            </div>
+            </Card>
           )}
         />
       </Card>

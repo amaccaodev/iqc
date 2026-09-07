@@ -176,7 +176,7 @@ export default function ComplaintsPage() {
       {/* Stats */}
       <div className="grid grid-cols-5 gap-2 mb-5">
         {Object.entries(STATUS_LABEL).map(([s, label]) => (
-          <div key={s} className={`rounded-2xl p-2 text-center shadow-sm shadow-slate-950/5 ${STATUS_COLOR[s]}`}>
+          <div key={s} className={`rounded-xl p-2 text-center ${STATUS_COLOR[s]}`}>
             <div className="text-xl font-bold">{statusCounts[s] ?? 0}</div>
             <div className="text-[10px] font-medium">{label}</div>
           </div>
@@ -184,7 +184,7 @@ export default function ComplaintsPage() {
       </div>
 
       <input
-        className="mb-4 w-full rounded-xl border border-border/60 bg-input px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+        className="w-full border border-border rounded-lg px-3 py-2 text-sm mb-4 bg-input"
         placeholder="Tìm khiếu nại…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -200,7 +200,7 @@ export default function ComplaintsPage() {
       ) : (
         <div className="space-y-3">
           {complaints.map(c => (
-            <div key={c.id} className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm shadow-slate-950/5">
+            <div key={c.id} className="bg-card rounded-2xl p-4 shadow-sm border border-border">
               <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -285,7 +285,7 @@ export default function ComplaintsPage() {
                 <select value={createForm.bomId} onChange={e => {
                   const bom = allBoms.find(b => b.id === e.target.value);
                   setCreateForm({ ...createForm, bomId: e.target.value, orderId: bom?.orderId ?? "" });
-                }} className="w-full rounded-xl border border-border/60 bg-card px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40">
+                }} className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary bg-card">
                   <option value="">— Chọn BOM —</option>
                   {allBoms.filter(b => b.status === "team_reported" || b.status === "qc_failed").map(b => (
                     <option key={b.id} value={b.id}>{b.orderNo} · {b.bomCode} — {b.partName}</option>
@@ -295,7 +295,7 @@ export default function ComplaintsPage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Loại lỗi <span className="text-red-500">*</span></label>
                 <select value={createForm.defectType} onChange={e => setCreateForm({ ...createForm, defectType: e.target.value })}
-                  className="w-full rounded-xl border border-border/60 bg-card px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40">
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary bg-card">
                   <option value="">— Chọn loại lỗi —</option>
                   <option>Kích thước ngoài thông số</option>
                   <option>Ngoại quan (xước, lõm, vết nứt)</option>
@@ -308,19 +308,19 @@ export default function ComplaintsPage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Mô tả chi tiết lỗi <span className="text-red-500">*</span></label>
                 <textarea value={createForm.defectDescription} onChange={e => setCreateForm({ ...createForm, defectDescription: e.target.value })} rows={2}
-                  className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40 resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Mô tả cụ thể lỗi, vị trí, biểu hiện..." />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Số lượng lỗi</label>
                   <input type="number" min="1" value={createForm.defectQty} onChange={e => setCreateForm({ ...createForm, defectQty: e.target.value })}
-                    className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">TT sản phẩm lỗi</label>
                   <input value={createForm.sampleTt} onChange={e => setCreateForm({ ...createForm, sampleTt: e.target.value })}
-                    className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40"
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary"
                     placeholder="TT lỗi" />
                 </div>
               </div>
@@ -363,20 +363,20 @@ export default function ComplaintsPage() {
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Số lượng làm lại</label>
                   <input type="number" value={respondForm.reworkQty} onChange={e => setRespondForm({ ...respondForm, reworkQty: e.target.value })}
-                    className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
               )}
               {respondForm.actionType === "scrap" && (
                 <div>
                   <label className="block text-xs font-semibold text-muted mb-1">Số lượng loại bỏ</label>
                   <input type="number" value={respondForm.scrapQty} onChange={e => setRespondForm({ ...respondForm, scrapQty: e.target.value })}
-                    className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40" />
+                    className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary" />
                 </div>
               )}
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Ghi chú xử lý <span className="text-red-500">*</span></label>
                 <textarea value={respondForm.actionNote} onChange={e => setRespondForm({ ...respondForm, actionNote: e.target.value })} rows={2}
-                  className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40 resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Mô tả cách xử lý cụ thể..." />
               </div>
               <div className="flex gap-3">
@@ -415,7 +415,7 @@ export default function ComplaintsPage() {
               <div>
                 <label className="block text-xs font-semibold text-muted mb-1">Ghi chú kiểm tra</label>
                 <textarea value={recheckForm.note} onChange={e => setRecheckForm({ ...recheckForm, note: e.target.value })} rows={2}
-                  className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40 resize-none"
+                  className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none"
                   placeholder="Kết quả kiểm tra lại..." />
               </div>
               <div className="flex gap-3">

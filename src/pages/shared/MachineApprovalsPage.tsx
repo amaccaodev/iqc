@@ -43,7 +43,7 @@ export default function MachineApprovalsPage() {
       <h2 className="font-display font-800 text-xl mb-5">Duyệt đề xuất máy</h2>
 
       <input
-        className="mb-4 w-full rounded-xl border border-border/60 bg-input px-3 py-2 text-sm shadow-sm shadow-slate-950/5 focus:outline-none focus:border-primary/40"
+        className="w-full border border-border rounded-xl px-3 py-2 text-sm mb-4 bg-input focus:outline-none focus:border-primary"
         placeholder="Tìm người gửi, lý do, máy…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -61,7 +61,7 @@ export default function MachineApprovalsPage() {
               <div id={`req-${r.id}`}>
               <Card
                 key={r.id}
-                cls={`p-4 ${requestId === r.id ? "ring-2 ring-primary/30 border-primary/60" : ""}`}
+                cls={`p-4 ${requestId === r.id ? "ring-2 ring-primary/40 border-primary" : ""}`}
               >
                 <div className="flex justify-between gap-2 mb-2">
                   <div>

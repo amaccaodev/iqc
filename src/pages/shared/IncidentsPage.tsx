@@ -370,7 +370,7 @@ export default function IncidentsPage() {
         )}
       </div>
 
-      <div className="mb-5 flex gap-1 rounded-2xl border border-border/50 bg-surface/70 p-1 shadow-sm shadow-slate-950/5">
+      <div className="flex gap-1 mb-5 p-1 rounded-xl bg-surface border border-border">
         {(
           [
             ["incidents", "Báo hỏng", null as number | null],
@@ -410,7 +410,7 @@ export default function IncidentsPage() {
                 ["resolved", "Xong"],
               ] as const
             ).map(([st, label]) => (
-              <div key={st} className="rounded-2xl border border-border/50 bg-card p-3 text-center shadow-sm shadow-slate-950/5">
+              <div key={st} className="bg-card rounded-xl border border-border p-3 text-center">
                 <div className="text-lg font-bold text-primary">{statusCounts[st] ?? 0}</div>
                 <div className="text-[11px] text-muted">{label}</div>
               </div>
@@ -419,7 +419,7 @@ export default function IncidentsPage() {
 
           <div className="mb-4">
             <input
-              className="w-full rounded-xl border border-border/60 bg-input px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm"
               placeholder="Tìm máy, mã, mô tả sự cố…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -490,8 +490,8 @@ export default function IncidentsPage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") openIncident(inc);
                   }}
-                  className={`rounded-2xl border p-4 cursor-pointer shadow-sm shadow-slate-950/5 ${
-                    focusId === inc.id ? "border-primary/60 ring-2 ring-primary/25 bg-secondary/20" : "border-border/50 bg-card"
+                  className={`bg-card rounded-xl border p-4 cursor-pointer ${
+                    focusId === inc.id ? "border-primary ring-2 ring-primary/30" : "border-border"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
@@ -537,7 +537,7 @@ export default function IncidentsPage() {
           {approvalsLoading ? (
             <div className="text-center text-muted py-10">Đang tải...</div>
           ) : approvals.length === 0 ? (
-            <div className="rounded-2xl border border-border/50 bg-card p-8 text-center text-muted text-sm shadow-sm shadow-slate-950/5">
+            <div className="rounded-xl border border-border bg-card p-8 text-center text-muted text-sm">
               Chưa có đơn duyệt
             </div>
           ) : (
@@ -563,8 +563,8 @@ export default function IncidentsPage() {
                   <div
                     key={r.id}
                     id={`req-${r.id}`}
-                    className={`rounded-2xl border p-4 shadow-sm shadow-slate-950/5 ${
-                      requestId === r.id ? "border-primary/60 ring-2 ring-primary/25 bg-secondary/20" : "border-border/50 bg-card"
+                    className={`bg-card rounded-xl border p-4 ${
+                      requestId === r.id ? "border-primary ring-2 ring-primary/30" : "border-border"
                     }`}
                   >
                     <div className="flex justify-between gap-2 mb-2">
@@ -629,7 +629,7 @@ export default function IncidentsPage() {
               </label>
             )}
             <input
-              className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm"
               placeholder="Tên máy"
               value={form.machineName}
               onChange={(e) =>
@@ -642,7 +642,7 @@ export default function IncidentsPage() {
               }
             />
             <select
-              className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm"
               value={form.severity}
               onChange={(e) => setForm({ ...form, severity: e.target.value as MachineIncident["severity"] })}
             >
@@ -653,7 +653,7 @@ export default function IncidentsPage() {
               ))}
             </select>
             <textarea
-              className="w-full min-h-[80px] rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm min-h-[80px]"
               placeholder="Mô tả sự cố…"
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -661,7 +661,7 @@ export default function IncidentsPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                className="flex-1 rounded-xl border border-border/60 bg-card py-2 shadow-sm shadow-slate-950/5 cursor-pointer"
+                className="flex-1 py-2 rounded-xl border border-border bg-card cursor-pointer"
                 onClick={() => setShowCreate(false)}
               >
                 Huỷ
@@ -719,7 +719,7 @@ export default function IncidentsPage() {
             <div onClick={(e) => e.stopPropagation()}>{renderActions(focusIncident)}</div>
             <button
               type="button"
-              className="w-full rounded-xl border border-border/60 bg-card py-2 text-sm shadow-sm shadow-slate-950/5 cursor-pointer"
+              className="w-full py-2 rounded-xl border border-border bg-card cursor-pointer text-sm"
               onClick={closeFocus}
             >
               Đóng
@@ -734,13 +734,13 @@ export default function IncidentsPage() {
             <div className="font-bold text-lg">Hoàn thành sửa máy</div>
             <div className="text-sm text-muted">{formatIncidentTitle(resolveModal)}</div>
             <textarea
-              className="w-full min-h-[80px] rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm min-h-[80px]"
               placeholder="Ghi chú xử lý"
               value={resolveForm.resolutionNote}
               onChange={(e) => setResolveForm({ ...resolveForm, resolutionNote: e.target.value })}
             />
             <input
-              className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+              className="w-full border border-border rounded-lg px-3 py-2 text-sm"
               type="number"
               placeholder="Downtime (phút)"
               value={resolveForm.downtimeMinutes}
@@ -749,7 +749,7 @@ export default function IncidentsPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                className="flex-1 rounded-xl border border-border/60 bg-card py-2 shadow-sm shadow-slate-950/5 cursor-pointer"
+                className="flex-1 py-2 rounded-xl border border-border bg-card cursor-pointer"
                 onClick={() => setResolveModal(null)}
               >
                 Huỷ

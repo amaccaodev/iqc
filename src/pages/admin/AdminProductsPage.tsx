@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Attachment, MeasurementSpecMap, ProductStructureLine } from "@shared/types";
 import { TEAMS } from "@shared/constants/teams";
 import { ACTIVE_STATUS_LABEL } from "@shared/constants/labels";
 import type { PartChecklistItem } from "@shared/types/spec";
 import { LIST_UI_PAGE_SIZE } from "@shared/constants/pagination";
-import { Btn, Card, Modal, ResponsiveDataList, SearchPicker } from "../../components/ui";
+import { Btn, Card, ResponsiveDataList, SearchPicker } from "../../components/ui";
 import AttachmentUploader from "../../components/files/AttachmentUploader";
 import PartChecklistEditor from "../../components/admin/PartChecklistEditor";
 import CatalogImportForm from "../../components/admin/CatalogImportForm";
@@ -16,7 +16,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { toast } from "../../hooks/useToast";
 
 const field =
-  "w-full rounded-xl border border-border/60 bg-input px-3 py-2.5 text-sm text-foreground shadow-sm shadow-slate-950/5";
+  "w-full border border-border rounded-lg px-3 py-2.5 text-sm bg-input text-foreground";
 
 type ProcessDraft = {
   id?: string;
@@ -38,7 +38,7 @@ function emptyBomDraft(): BomDraft {
 function ActiveBadge({ active }: { active?: boolean }) {
   return (
     <span
-      className={`inline-flex h-fit shrink-0 self-start items-center whitespace-nowrap px-2 py-0.5 rounded-full text-[11px] font-semibold leading-none ${
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
         active
           ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
           : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
@@ -70,7 +70,6 @@ function checklistToSpecs(items: PartChecklistItem[]): MeasurementSpecMap {
 export default function AdminProductsPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<"products" | "semi" | "bom" | "import">("products");
-  const [machineGroups, setMachineGroups] = useState<Array<{ id: string; code: string; name: string }>>([]);
 
   const fetchProducts = useStableFetch((query) => catalogApi.searchProducts(query));
   const {
@@ -111,13 +110,11 @@ export default function AdminProductsPage() {
   const [selectedProductLabel, setSelectedProductLabel] = useState("");
   const [bomLines, setBomLines] = useState<ProductStructureLine[]>([]);
   const [productFiles, setProductFiles] = useState<Attachment[]>([]);
-  const [showProductDetail, setShowProductDetail] = useState(false);
   const [selectedSemiId, setSelectedSemiId] = useState("");
   const [selectedSemiLabel, setSelectedSemiLabel] = useState("");
   const [semiFiles, setSemiFiles] = useState<Attachment[]>([]);
   const [semiChecklist, setSemiChecklist] = useState<PartChecklistItem[]>([]);
   const [checklistSaving, setChecklistSaving] = useState(false);
-  const [showSemiDetail, setShowSemiDetail] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showAddSemi, setShowAddSemi] = useState(false);
   const [newProduct, setNewProduct] = useState({ code: "", name: "", description: "" });
@@ -131,25 +128,24 @@ export default function AdminProductsPage() {
   const [bomSemiLabel, setBomSemiLabel] = useState("");
   const [bomDrafts, setBomDrafts] = useState<BomDraft[]>([]);
   const [bomSaving, setBomSaving] = useState(false);
+  const productDetailRef = useRef<HTMLDivElement>(null);
+  const semiDetailRef = useRef<HTMLDivElement>(null);
 
   const openProduct = (p: { id: string; code: string; name: string }) => {
     setSelectedProductId(p.id);
     setSelectedProductLabel(`${p.code} — ${p.name}`);
-    setShowProductDetail(true);
+    requestAnimationFrame(() => {
+      productDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   const openSemi = (s: { id: string; code: string; name: string }) => {
     setSelectedSemiId(s.id);
     setSelectedSemiLabel(`${s.code} — ${s.name}`);
-    setShowSemiDetail(true);
+    requestAnimationFrame(() => {
+      semiDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
-
-  useEffect(() => {
-    void catalogApi
-      .listMachineGroups()
-      .then((list) => setMachineGroups(list.map((g) => ({ id: g.id, code: g.code, name: g.name }))))
-      .catch(() => setMachineGroups([]));
-  }, []);
 
   useEffect(() => {
     if (!selectedProductId) {
@@ -378,7 +374,7 @@ export default function AdminProductsPage() {
         </Link>
       </div>
 
-      <div className="mb-6 flex w-full overflow-x-auto rounded-2xl border border-border/60 bg-card p-1 shadow-sm shadow-slate-950/5 lg:w-fit">
+      <div className="flex gap-1 mb-6 p-1 rounded-2xl bg-card border border-border w-full lg:w-fit overflow-x-auto">
         {(
           [
             ["products", "Thành phẩm", "fa-box"],
@@ -391,7 +387,7 @@ export default function AdminProductsPage() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border-0 cursor-pointer whitespace-nowrap transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border-0 cursor-pointer whitespace-nowrap ${
               tab === t ? "bg-primary text-white shadow-sm" : "bg-transparent text-muted hover:bg-surface"
             }`}
           >
@@ -401,9 +397,10 @@ export default function AdminProductsPage() {
       </div>
 
       {tab === "products" && (
-        <div className="space-y-4 min-w-0">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] lg:gap-5 lg:items-start space-y-4 lg:space-y-0">
+          <div className="space-y-4 min-w-0">
           {showAddProduct ? (
-          <Card cls="border-0 shadow-none p-4 lg:p-5">
+          <Card cls="p-4 lg:p-5">
             <div className="flex items-start justify-between gap-3 mb-1">
               <div className="font-semibold">Thêm thành phẩm</div>
               <button
@@ -480,8 +477,7 @@ export default function AdminProductsPage() {
               onPageSize={setProductPageSize}
               emptyText="Không có sản phẩm"
               onRowClick={(p) => openProduct(p)}
-              isRowActive={(p) => p.id === selectedProductId && showProductDetail}
-              plain
+              isRowActive={(p) => p.id === selectedProductId}
               columns={[
                 {
                   key: "code",
@@ -505,23 +501,158 @@ export default function AdminProductsPage() {
                 },
               ]}
               renderCard={(p) => (
-                <div className="py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
+                <Card cls="p-3">
+                  <div className="flex justify-between gap-2">
+                    <div>
                       <code className="text-xs text-muted">{p.code}</code>
-                      <div className="font-semibold break-words">{p.name}</div>
+                      <div className="font-semibold">{p.name}</div>
                     </div>
                     <ActiveBadge active={p.active} />
                   </div>
-                </div>
+                </Card>
               )}
             />
           </Card>
+          </div>
+
+          <div ref={productDetailRef} className="space-y-4 lg:sticky lg:top-4 min-w-0">
+          <Card cls="p-4 lg:p-5">
+            <div className="font-semibold mb-3">
+              {selectedProductId ? `Chi tiết — ${selectedProductLabel}` : "Định mức linh kiện"}
+            </div>
+            <SearchPicker
+              className="mb-3"
+              value={selectedProductId}
+              displayValue={selectedProductLabel}
+              placeholder="Tìm thành phẩm…"
+              onSearch={searchProductsPicker}
+              onChange={(id, item) => {
+                setSelectedProductId(id);
+                setSelectedProductLabel(item?.label ?? "");
+              }}
+            />
+            <div className="space-y-2 mb-3">
+              {bomLines.map((line, idx) => (
+                <div key={line.semiProductId || `new-${idx}`} className="rounded-xl border border-border p-2.5 space-y-2">
+                  <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                  <SearchPicker
+                    className="flex-1"
+                    value={line.semiProductId}
+                    displayValue={
+                      line.semiProduct
+                        ? `${line.semiProduct.code} — ${line.semiProduct.name}`
+                        : line.semiProductId
+                          ? line.semiProductId
+                          : ""
+                    }
+                    placeholder="Tìm BTP / linh kiện…"
+                    onSearch={searchSemisPicker}
+                    onChange={(id, item) => {
+                      setBomLines((prev) =>
+                        prev.map((b, i) =>
+                          i === idx
+                            ? {
+                                ...b,
+                                semiProductId: id,
+                                semiProduct: item
+                                  ? {
+                                      id,
+                                      code: item.label.split(" — ")[0] ?? "",
+                                      name: item.label.split(" — ")[1] ?? item.label,
+                                      productId: selectedProductId,
+                                      measurementSpecs: {},
+                                      active: true,
+                                    }
+                                  : undefined,
+                              }
+                            : b,
+                        ),
+                      );
+                    }}
+                  />
+                  <input
+                    type="number"
+                    className="w-full sm:w-24 border border-border rounded-lg px-3 py-2 text-sm"
+                    value={String(line.qtyPerUnit)}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setBomLines((prev) =>
+                        prev.map((b, i) => (i === idx ? { ...b, qtyPerUnit: v } : b)),
+                      );
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="text-red-500 text-sm border-0 bg-transparent cursor-pointer"
+                    onClick={() => setBomLines((prev) => prev.filter((_, i) => i !== idx))}
+                  >
+                    Xóa
+                  </button>
+                  </div>
+                  {line.boms?.some((b) => (b.processes?.length ?? 0) > 0) ? (
+                    <div className="text-[11px] text-muted pl-1 space-y-0.5">
+                      <div className="font-semibold text-foreground">
+                        {line.boms.length} quy trình
+                        {line.boms.length > 1 ? " (chọn 1 — khác máy)" : ""}
+                      </div>
+                      {line.boms.map((b) => (
+                        <div key={b.id} className="pl-1">
+                          <div className="font-medium text-foreground">{b.name}</div>
+                          {[...(b.processes ?? [])]
+                            .sort((a, c) => a.sortOrder - c.sortOrder)
+                            .map((p) => (
+                              <div key={p.id} className="pl-3">
+                                Bước {p.sortOrder}: {p.name}
+                              </div>
+                            ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Btn
+                cls={`bg-slate-600 ${!selectedProductId ? "opacity-50 pointer-events-none" : ""}`}
+                onClick={addBomLine}
+              >
+                + BTP
+              </Btn>
+              <Btn
+                cls={!selectedProductId || saving ? "opacity-50 pointer-events-none" : ""}
+                onClick={() => void saveBom()}
+              >
+                Lưu định mức
+              </Btn>
+            </div>
+          </Card>
+
+          {selectedProductId ? (
+            <Card cls="p-4">
+              <div className="font-semibold mb-3">Bản vẽ / thông số thành phẩm</div>
+              <AttachmentUploader
+                files={productFiles}
+                uploadedBy={user?.name || "admin"}
+                kind="drawing"
+                onUploaded={async (att) => {
+                  const saved = await catalogApi.addProductAttachment(selectedProductId, att);
+                  setProductFiles((prev) => [...prev, saved]);
+                }}
+                onRemove={async (attId) => {
+                  await catalogApi.removeProductAttachment(selectedProductId, attId);
+                  setProductFiles((prev) => prev.filter((a) => a.id !== attId));
+                }}
+              />
+            </Card>
+          ) : null}
+          </div>
         </div>
       )}
 
       {tab === "semi" && (
-        <div className="space-y-4 min-w-0">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] lg:gap-5 lg:items-start space-y-4 lg:space-y-0">
+          <div className="space-y-4 min-w-0">
           {showAddSemi ? (
           <Card cls="p-4 lg:p-5">
             <div className="flex items-start justify-between gap-3 mb-1">
@@ -604,8 +735,7 @@ export default function AdminProductsPage() {
               onPageSize={setSemiPageSize}
               emptyText="Không có BTP"
               onRowClick={(s) => openSemi(s)}
-              isRowActive={(s) => s.id === selectedSemiId && showSemiDetail}
-              plain
+              isRowActive={(s) => s.id === selectedSemiId}
               columns={[
                 {
                   key: "code",
@@ -639,7 +769,7 @@ export default function AdminProductsPage() {
                 },
               ]}
               renderCard={(s) => (
-                <div className="py-3">
+                <Card cls="p-3">
                   <code className="text-xs text-muted">{s.code}</code>
                   <div className="font-semibold">{s.name}</div>
                   <div className="text-sm text-muted">
@@ -648,10 +778,63 @@ export default function AdminProductsPage() {
                       ? ` · ${Object.keys(s.measurementSpecs).length} thông số đo`
                       : " · thiếu thông số đo"}
                   </div>
-                </div>
+                </Card>
               )}
             />
           </Card>
+          </div>
+
+          <div ref={semiDetailRef} className="space-y-4 lg:sticky lg:top-4 min-w-0">
+          <Card cls="p-4 lg:p-5">
+            <div className="font-semibold mb-3">
+              {selectedSemiId ? `Chi tiết — ${selectedSemiLabel}` : "Checklist đo & bản vẽ"}
+            </div>
+            <SearchPicker
+              className="mb-3"
+              value={selectedSemiId}
+              displayValue={selectedSemiLabel}
+              placeholder="Tìm linh kiện…"
+              onSearch={searchSemisPicker}
+              onChange={(id, item) => {
+                setSelectedSemiId(id);
+                setSelectedSemiLabel(item?.label ?? "");
+              }}
+            />
+            {selectedSemiId ? (
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm font-semibold mb-2">Checklist đo kiểm</div>
+                  <PartChecklistEditor items={semiChecklist} onChange={setSemiChecklist} />
+                  <Btn
+                    cls="mt-3"
+                    onClick={() => void saveChecklist()}
+                    disabled={checklistSaving}
+                  >
+                    {checklistSaving ? "Đang lưu…" : "Lưu checklist"}
+                  </Btn>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold mb-2">Bản vẽ / file đính kèm</div>
+                  <AttachmentUploader
+                    files={semiFiles}
+                    uploadedBy={user?.name || "admin"}
+                    kind="drawing"
+                    onUploaded={async (att) => {
+                      const saved = await catalogApi.addSemiAttachment(selectedSemiId, att);
+                      setSemiFiles((prev) => [...prev, saved]);
+                    }}
+                    onRemove={async (attId) => {
+                      await catalogApi.removeSemiAttachment(selectedSemiId, attId);
+                      setSemiFiles((prev) => prev.filter((a) => a.id !== attId));
+                    }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Chưa chọn linh kiện.</p>
+            )}
+          </Card>
+          </div>
         </div>
       )}
 
@@ -672,21 +855,11 @@ export default function AdminProductsPage() {
             />
             {bomSemiId ? (
               <div className="space-y-4">
-                <div className="rounded-2xl border border-border/50 bg-surface/70 px-4 py-3 text-sm text-muted space-y-1">
-                  <div>
-                    Mỗi <span className="font-semibold text-foreground">BOM</span> là 1 phương án làm của linh
-                    kiện. Bên trong BOM là các <span className="font-semibold text-foreground">bước</span>.
-                  </div>
-                  <div>
-                    `Tổ` = tổ phụ trách bước đó. `ĐM/ca` = sản lượng mục tiêu mỗi ca. `Nhóm máy` = nhóm/khu vực
-                    máy, không phải mã máy cụ thể.
-                  </div>
-                </div>
                 {bomDrafts.map((bom, bomIdx) => (
-                  <div key={bom.key} className="rounded-2xl border border-border/50 bg-card p-3 space-y-2 shadow-sm shadow-slate-950/5">
+                  <div key={bom.key} className="rounded-2xl border border-border p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <input
-                        className="flex-1 rounded-xl border border-border/60 px-3 py-2 text-sm font-semibold shadow-sm shadow-slate-950/5"
+                        className="flex-1 border border-border rounded-lg px-3 py-2 text-sm font-semibold"
                         placeholder="Tên quy trình"
                         value={bom.name}
                         onChange={(e) =>
@@ -709,11 +882,11 @@ export default function AdminProductsPage() {
                       {bom.processes.map((row, idx) => (
                         <div
                           key={row.id || `${bom.key}-p-${idx}`}
-                          className="grid items-center gap-2 rounded-2xl border border-border/50 bg-surface/50 p-2.5 sm:grid-cols-12"
+                          className="grid sm:grid-cols-12 gap-2 items-center rounded-xl border border-border p-2.5"
                         >
                           <div className="sm:col-span-1 text-xs text-muted font-mono">Bước {idx + 1}</div>
                           <input
-                            className="sm:col-span-4 rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                            className="sm:col-span-5 border border-border rounded-lg px-3 py-2 text-sm"
                             placeholder="Tên bước"
                             value={row.name}
                             onChange={(e) =>
@@ -732,7 +905,7 @@ export default function AdminProductsPage() {
                             }
                           />
                           <select
-                            className="sm:col-span-2 rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                            className="sm:col-span-3 border border-border rounded-lg px-3 py-2 text-sm"
                             value={row.productionTeamId}
                             onChange={(e) =>
                               setBomDrafts((prev) =>
@@ -756,34 +929,9 @@ export default function AdminProductsPage() {
                               </option>
                             ))}
                           </select>
-                          <select
-                            className="sm:col-span-2 rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
-                            value={row.machineGroupId}
-                            onChange={(e) =>
-                              setBomDrafts((prev) =>
-                                prev.map((b, i) =>
-                                  i === bomIdx
-                                    ? {
-                                        ...b,
-                                        processes: b.processes.map((p, pi) =>
-                                          pi === idx ? { ...p, machineGroupId: e.target.value } : p,
-                                        ),
-                                      }
-                                    : b,
-                                ),
-                              )
-                            }
-                          >
-                            <option value="">— Nhóm máy —</option>
-                            {machineGroups.map((g) => (
-                              <option key={g.id} value={g.id}>
-                                {g.code} - {g.name}
-                              </option>
-                            ))}
-                          </select>
                           <input
                             type="number"
-                            className="sm:col-span-2 rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+                            className="sm:col-span-2 border border-border rounded-lg px-3 py-2 text-sm"
                             placeholder="ĐM/ca"
                             value={String(row.quotaPerShift || "")}
                             onChange={(e) =>
@@ -868,203 +1016,6 @@ export default function AdminProductsPage() {
           }}
         />
       )}
-
-      {showSemiDetail && selectedSemiId ? (
-        <Modal
-          title={`Checklist đo & bản vẽ — ${selectedSemiLabel || selectedSemiId}`}
-          onClose={() => setShowSemiDetail(false)}
-          size="lg"
-        >
-          <div className="space-y-4">
-            <SearchPicker
-              className="mb-3"
-              value={selectedSemiId}
-              displayValue={selectedSemiLabel}
-              placeholder="Tìm linh kiện…"
-              onSearch={searchSemisPicker}
-              onChange={(id, item) => {
-                setSelectedSemiId(id);
-                setSelectedSemiLabel(item?.label ?? "");
-              }}
-            />
-            <div>
-              <div className="text-sm font-semibold mb-2">Checklist đo kiểm</div>
-              <p className="text-xs text-muted-foreground mb-3">
-                Form full màn hình để nhìn rõ tên thông số, loại nhập, đơn vị, chuẩn, min, max và vị trí trên bản vẽ.
-              </p>
-              <PartChecklistEditor items={semiChecklist} onChange={setSemiChecklist} />
-              <Btn
-                cls="mt-3"
-                onClick={() => void saveChecklist()}
-                disabled={checklistSaving}
-              >
-                {checklistSaving ? "Đang lưu…" : "Lưu checklist"}
-              </Btn>
-            </div>
-            <div>
-              <div className="text-sm font-semibold mb-2">Bản vẽ / file đính kèm</div>
-              <AttachmentUploader
-                files={semiFiles}
-                uploadedBy={user?.name || "admin"}
-                kind="drawing"
-                onUploaded={async (att) => {
-                  const saved = await catalogApi.addSemiAttachment(selectedSemiId, att);
-                  setSemiFiles((prev) => [...prev, saved]);
-                }}
-                onRemove={async (attId) => {
-                  await catalogApi.removeSemiAttachment(selectedSemiId, attId);
-                  setSemiFiles((prev) => prev.filter((a) => a.id !== attId));
-                }}
-              />
-            </div>
-          </div>
-        </Modal>
-      ) : null}
-
-      {showProductDetail && selectedProductId ? (
-        <Modal
-          title={`Định mức & bản vẽ — ${selectedProductLabel || selectedProductId}`}
-          onClose={() => setShowProductDetail(false)}
-          size="lg"
-        >
-          <div className="space-y-4">
-            <SearchPicker
-              className="mb-3"
-              value={selectedProductId}
-              displayValue={selectedProductLabel}
-              placeholder="Tìm thành phẩm…"
-              onSearch={searchProductsPicker}
-              onChange={(id, item) => {
-                setSelectedProductId(id);
-                setSelectedProductLabel(item?.label ?? "");
-              }}
-            />
-            <div>
-              <div className="text-sm font-semibold mb-2">Định mức linh kiện</div>
-              <div className="space-y-2 mb-3">
-                {bomLines.map((line, idx) => (
-                  <div
-                    key={line.semiProductId || `new-${idx}`}
-                    className="rounded-2xl border border-border/50 bg-surface/60 p-2.5 space-y-2 shadow-sm shadow-slate-950/5"
-                  >
-                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-end">
-                      <label className="block">
-                        <span className="mb-1 block text-[11px] font-semibold text-muted">Linh kiện</span>
-                        <SearchPicker
-                          className="flex-1"
-                          value={line.semiProductId}
-                          displayValue={
-                            line.semiProduct
-                              ? `${line.semiProduct.code} — ${line.semiProduct.name}`
-                              : line.semiProductId
-                                ? line.semiProductId
-                                : ""
-                          }
-                          placeholder="Tìm BTP / linh kiện…"
-                          onSearch={searchSemisPicker}
-                          onChange={(id, item) => {
-                            setBomLines((prev) =>
-                              prev.map((b, i) =>
-                                i === idx
-                                  ? {
-                                      ...b,
-                                      semiProductId: id,
-                                      semiProduct: item
-                                        ? {
-                                            id,
-                                            code: item.label.split(" — ")[0] ?? "",
-                                            name: item.label.split(" — ")[1] ?? item.label,
-                                            productId: selectedProductId,
-                                            measurementSpecs: {},
-                                            active: true,
-                                          }
-                                        : undefined,
-                                    }
-                                  : b,
-                              ),
-                            );
-                          }}
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-1 block text-[11px] font-semibold text-muted">Định mức / 1 thành phẩm</span>
-                        <input
-                          type="number"
-                          className="w-full rounded-xl border border-border/60 px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
-                          value={String(line.qtyPerUnit)}
-                          onChange={(e) => {
-                            const v = Number(e.target.value);
-                            setBomLines((prev) =>
-                              prev.map((b, i) => (i === idx ? { ...b, qtyPerUnit: v } : b)),
-                            );
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="h-10 text-red-500 text-sm border-0 bg-transparent cursor-pointer"
-                        onClick={() => setBomLines((prev) => prev.filter((_, i) => i !== idx))}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                    {line.boms?.some((b) => (b.processes?.length ?? 0) > 0) ? (
-                      <div className="text-[11px] text-muted pl-1 space-y-0.5">
-                        <div className="font-semibold text-foreground">
-                          {line.boms.length} quy trình
-                          {line.boms.length > 1 ? " (chọn 1 — khác máy)" : ""}
-                        </div>
-                        {line.boms.map((b) => (
-                          <div key={b.id} className="pl-1">
-                            <div className="font-medium text-foreground">{b.name}</div>
-                            {[...(b.processes ?? [])]
-                              .sort((a, c) => a.sortOrder - c.sortOrder)
-                              .map((p) => (
-                                <div key={p.id} className="pl-3">
-                                  Bước {p.sortOrder}: {p.name}
-                                </div>
-                              ))}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Btn
-                  cls={`bg-slate-600 ${!selectedProductId ? "opacity-50 pointer-events-none" : ""}`}
-                  onClick={addBomLine}
-                >
-                  + BTP
-                </Btn>
-                <Btn
-                  cls={!selectedProductId || saving ? "opacity-50 pointer-events-none" : ""}
-                  onClick={() => void saveBom()}
-                >
-                  Lưu định mức
-                </Btn>
-              </div>
-            </div>
-            <div>
-              <div className="font-semibold mb-3">Bản vẽ / thông số thành phẩm</div>
-              <AttachmentUploader
-                files={productFiles}
-                uploadedBy={user?.name || "admin"}
-                kind="drawing"
-                onUploaded={async (att) => {
-                  const saved = await catalogApi.addProductAttachment(selectedProductId, att);
-                  setProductFiles((prev) => [...prev, saved]);
-                }}
-                onRemove={async (attId) => {
-                  await catalogApi.removeProductAttachment(selectedProductId, attId);
-                  setProductFiles((prev) => prev.filter((a) => a.id !== attId));
-                }}
-              />
-            </div>
-          </div>
-        </Modal>
-      ) : null}
     </div>
   );
 }

@@ -36,8 +36,8 @@ function NotificationBody({
 }) {
   return (
     <div
-      className={`rounded-2xl p-4 border shadow-sm shadow-slate-950/5 ${
-        n.isRead ? "bg-card border-border/60" : "bg-secondary/60 border-primary/25"
+      className={`rounded-2xl p-4 border ${
+        n.isRead ? "bg-card border-border" : "bg-secondary border-[#C7D2FE]"
       }`}
     >
       <button
@@ -77,7 +77,7 @@ function NotificationBody({
               type="button"
               disabled={busyId === n.id}
               onClick={() => onReview(n, false)}
-              className="h-9 px-3 rounded-xl bg-card text-[#DC2626] text-xs font-semibold border border-red-200/70 cursor-pointer disabled:opacity-50"
+              className="h-9 px-3 rounded-lg bg-card text-[#DC2626] text-xs font-semibold border border-[#FECACA] cursor-pointer disabled:opacity-50"
             >
               Từ chối
             </button>
@@ -188,7 +188,7 @@ export default function NotificationsPage() {
 
       <div className="mb-4">
         <input
-          className="w-full rounded-xl border border-border/60 bg-input px-3 py-2 text-sm shadow-sm shadow-slate-950/5"
+          className="w-full border border-border rounded-lg px-3 py-2 text-sm"
           placeholder="Tìm tiêu đề, nội dung…"
           value={q}
           onChange={(e) => setQ(e.target.value)}

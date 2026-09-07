@@ -7,7 +7,6 @@ import FileSlideshow from "./components/files/FileSlideshow"
 import DashboardCharts from "./components/charts/DashboardCharts"
 import DayQtySummary from "./components/dashboard/DayQtySummary"
 import PaginationBar from "./components/ui/PaginationBar"
-import Card from "./components/ui/Card"
 import { toast } from "./hooks/useToast"
 import { countOrderParts, groupOrderJobsByPart, bomStepLabel, partProcessChain } from "@shared/utils/orderParts"
 
@@ -306,6 +305,9 @@ const fileIcon = (t: Attachment["type"]) => ({ pdf:"fa-file-pdf text-red-500", i
 const Badge = ({ children, cls }: { children: React.ReactNode; cls?: string }) => (
   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{children}</span>
 )
+const Card = ({ children, cls }: { children: React.ReactNode; cls?: string }) => (
+  <div className={`bg-card text-card-foreground rounded-xl border border-border shadow-sm ${cls ?? ""}`}>{children}</div>
+)
 const Divider = () => <div className="h-px bg-border my-3" />
 
 function Btn({ children, onClick, variant = "primary", size = "md", cls, type = "button", disabled }: {
@@ -329,7 +331,7 @@ function Input({ label, value, onChange, placeholder, type="text", required, hin
     <div>
       <label className="block text-xs font-semibold text-muted mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/60 focus:border-primary/30 bg-input text-foreground shadow-sm shadow-slate-950/5" />
+        className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-input text-foreground" />
       {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </div>
   )
@@ -342,7 +344,7 @@ function Select({ label, value, onChange, options, required }: {
     <div>
       <label className="block text-xs font-semibold text-muted mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <select value={value} onChange={e => onChange(e.target.value)}
-        className="w-full border border-border/60 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/60 focus:border-primary/30 bg-input text-foreground shadow-sm shadow-slate-950/5">
+        className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-input text-foreground">
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -351,15 +353,15 @@ function Select({ label, value, onChange, options, required }: {
 
 function Modal({ title, children, onClose, size = "md" }: { title: string; children: React.ReactNode; onClose: () => void; size?: "md"|"lg" }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 lg:p-6" onClick={onClose}>
-      <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div onClick={e => e.stopPropagation()}
-        className={`relative bg-card text-card-foreground rounded-t-3xl sm:rounded-3xl w-full ${size === "lg" ? "sm:max-w-5xl lg:w-[min(92vw,1280px)]" : "sm:max-w-xl"} max-h-[92vh] flex flex-col border border-border/50 shadow-2xl shadow-slate-950/15`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border/50">
+        className={`relative bg-card text-card-foreground rounded-t-2xl sm:rounded-2xl w-full ${size === "lg" ? "sm:max-w-3xl" : "sm:max-w-xl"} max-h-[92vh] flex flex-col shadow-2xl`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h3 className="font-display font-700 text-base text-foreground">{title}</h3>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface text-muted cursor-pointer border-0 bg-transparent text-lg">✕</button>
         </div>
-        <div className="overflow-y-auto p-5 sm:p-6 flex-1">{children}</div>
+        <div className="overflow-y-auto p-5 flex-1">{children}</div>
       </div>
     </div>
   )
@@ -750,17 +752,17 @@ function BOMDetail({
                 <span className="font-semibold text-foreground"><i className="fas fa-user mr-1" />{e.workerName}</span>
                 <span>{e.submittedAt}</span>
               </div>
-              <div className="overflow-x-auto rounded-lg bg-card shadow-sm shadow-slate-950/5">
+              <div className="overflow-x-auto rounded-lg border border-border">
                 <table className="w-full text-xs border-collapse">
                   <thead><tr className="bg-surface">
-                    <th className="border-b border-border/40 px-2 py-1.5 text-left font-semibold w-8">TT</th>
-                    {bom.specCols.filter(c => c && c !== "NQ").map((c, i) => <th key={i} className="border-b border-border/40 px-2 py-1.5 font-mono font-semibold">{c}</th>)}
+                    <th className="border-b border-r border-border px-2 py-1.5 text-left font-semibold w-8">TT</th>
+                    {bom.specCols.filter(c => c && c !== "NQ").map((c, i) => <th key={i} className="border-b border-r border-border px-2 py-1.5 font-mono font-semibold">{c}</th>)}
                   </tr></thead>
                   <tbody>{e.rows.map(r => (
                     <tr key={r.tt} className="hover:bg-surface">
-                      <td className="border-b border-border/35 px-2 py-1.5 text-center font-mono font-medium text-muted">{r.tt}</td>
+                      <td className="border-b border-r border-border px-2 py-1.5 text-center font-mono font-medium text-muted">{r.tt}</td>
                       {bom.specCols.filter(c => c && c !== "NQ").map((_, i) => (
-                        <td key={i} className={`border-b border-border/35 px-2 py-1.5 text-center font-mono ${r.dims[i] === "v" || r.dims[i] === "✓" ? "text-green-600 font-bold" : ""}`}>{r.dims[i] || "—"}</td>
+                        <td key={i} className={`border-b border-r border-border px-2 py-1.5 text-center font-mono ${r.dims[i] === "v" || r.dims[i] === "✓" ? "text-green-600 font-bold" : ""}`}>{r.dims[i] || "—"}</td>
                       ))}
                     </tr>
                   ))}</tbody>
