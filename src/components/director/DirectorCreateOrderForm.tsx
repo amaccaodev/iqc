@@ -300,6 +300,26 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
     );
   };
 
+  /** Nhập trực tiếp SL cần SX cho từng linh kiện */
+  const setProduceQty = (rowKey: string, idx: number, qty: number) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.key !== rowKey) return r;
+        const bomLines = r.bomLines.map((l, i) => {
+          if (i !== idx) return l;
+          const need = Math.ceil(r.finishedQty * l.qtyPerUnit);
+          const produceQty = Math.max(0, Number(qty) || 0);
+          if (!l.useFromStock) {
+            return { ...l, produceQty, stockUseQty: 0 };
+          }
+          const stockUseQty = Math.min(l.stockQty, Math.max(0, need - produceQty));
+          return applyStockPlan(l, r.finishedQty, stockUseQty, true);
+        });
+        return { ...r, bomLines };
+      }),
+    );
+  };
+
   const selectBom = (rowKey: string, semiProductId: string, bomId: string) => {
     setRows((prev) =>
       prev.map((r) => {
@@ -613,10 +633,31 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
                           )}
                         </label>
                         <div className="text-[11px] text-muted pl-6">
-                          {l.code} · Cần {plan.need} · Tồn kho {plan.stockQty}
-                          {l.useFromStock
-                            ? ` · Dùng kho ${plan.stockUseQty} · Còn lại ${plan.leftover} · SX ${plan.produceQty}`
-                            : ` · SX ${plan.produceQty}`}
+                          {l.code} · Định mức {l.qtyPerUnit}/SP · Cần {plan.need} · Tồn kho {plan.stockQty}
+                        </div>
+                        <div className="mt-2 ml-6 flex flex-wrap items-end gap-3">
+                          <label className="block">
+                            <span className="text-[11px] font-bold uppercase text-primary">
+                              SL cần SX
+                            </span>
+                            <input
+                              className="mt-1 block w-28 rounded-xl border-2 border-primary/40 bg-primary/5 px-2.5 py-2 text-base font-display font-800 tabular-nums"
+                              type="number"
+                              min={0}
+                              value={String(l.produceQty)}
+                              onChange={(e) =>
+                                setProduceQty(row.key, lineIdx, Number(e.target.value) || 0)
+                              }
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[11px] font-bold uppercase text-amber-800">
+                              SL yêu cầu
+                            </span>
+                            <div className="mt-1 w-28 rounded-xl border-2 border-amber-300 bg-amber-50 px-2.5 py-2 text-base font-display font-800 tabular-nums text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                              {plan.need.toLocaleString("vi-VN")}
+                            </div>
+                          </label>
                         </div>
                         {l.useFromStock ? (
                           <div

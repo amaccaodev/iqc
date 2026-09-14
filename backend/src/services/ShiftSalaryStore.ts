@@ -159,6 +159,18 @@ export const shiftSalaryStore = {
       rateVnd: rate,
       amountVnd: 0,
       createdAt: new Date().toISOString(),
+      history: [
+        {
+          id: id("sch"),
+          stage: "worker",
+          action: "submitted",
+          by: input.workerName,
+          at: new Date().toISOString(),
+          passQtyAfter: Number(input.passQty) || 0,
+          failQtyAfter: Number(input.failQty) || 0,
+          note: input.note,
+        },
+      ],
     };
     closes.unshift(row);
     return row;
@@ -169,9 +181,28 @@ export const shiftSalaryStore = {
     patch: { passQty: number; failQty: number; note: string },
   ) {
     const row = assertCanEditShiftClose(closes, closeId, workerId);
+    const beforePass = row.passQty;
+    const beforeFail = row.failQty;
     row.passQty = Number(patch.passQty) || 0;
     row.failQty = Number(patch.failQty) || 0;
     row.note = patch.note ?? "";
+    if (beforePass !== row.passQty || beforeFail !== row.failQty) {
+      row.history = [
+        ...(row.history ?? []),
+        {
+          id: id("sch"),
+          stage: "worker",
+          action: "qty_adjusted",
+          by: row.workerName,
+          at: new Date().toISOString(),
+          passQtyBefore: beforePass,
+          passQtyAfter: row.passQty,
+          failQtyBefore: beforeFail,
+          failQtyAfter: row.failQty,
+          note: row.note,
+        },
+      ];
+    }
     return row;
   },
   listUnlocks(filter?: { status?: string; workerId?: string; orderId?: string; bomId?: string }) {
@@ -222,6 +253,13 @@ export const shiftSalaryStore = {
     approved: boolean,
     reviewerName: string,
     rejectReason = "",
+    qtyPatch?: {
+      passQty?: number;
+      failQty?: number;
+      evidenceName?: string;
+      evidenceMimeType?: string;
+      evidenceBase64?: string;
+    },
   ) {
     const row = closes.find((c) => c.id === cid);
     if (!row) throw new Error("Không tìm thấy phiếu chốt ca");
@@ -232,6 +270,42 @@ export const shiftSalaryStore = {
     };
     if (row.status !== expected[stage]) throw new Error("Phiếu không ở bước duyệt này");
     const now = new Date().toISOString();
+    const beforePass = row.passQty;
+    const beforeFail = row.failQty;
+    const nextPass =
+      qtyPatch?.passQty != null && Number.isFinite(Number(qtyPatch.passQty))
+        ? Number(qtyPatch.passQty)
+        : row.passQty;
+    const nextFail =
+      qtyPatch?.failQty != null && Number.isFinite(Number(qtyPatch.failQty))
+        ? Number(qtyPatch.failQty)
+        : row.failQty;
+    const qtyChanged = nextPass !== beforePass || nextFail !== beforeFail;
+    if (qtyChanged) {
+      if (!qtyPatch?.evidenceBase64?.trim()) {
+        throw new Error("Sửa số lượng chốt ca bắt buộc đính kèm ảnh bằng chứng.");
+      }
+      row.passQty = nextPass;
+      row.failQty = nextFail;
+      row.history = [
+        ...(row.history ?? []),
+        {
+          id: id("sch"),
+          stage,
+          action: "qty_adjusted",
+          by: reviewerName,
+          at: now,
+          passQtyBefore: beforePass,
+          passQtyAfter: nextPass,
+          failQtyBefore: beforeFail,
+          failQtyAfter: nextFail,
+          note: rejectReason || undefined,
+          evidenceName: qtyPatch.evidenceName,
+          evidenceMimeType: qtyPatch.evidenceMimeType,
+          evidenceBase64: qtyPatch.evidenceBase64,
+        },
+      ];
+    }
     if (!approved) {
       row.status = "rejected";
       row.rejectReason = rejectReason;
@@ -245,6 +319,19 @@ export const shiftSalaryStore = {
         row.supervisorBy = reviewerName;
         row.supervisorAt = now;
       }
+      row.history = [
+        ...(row.history ?? []),
+        {
+          id: id("sch"),
+          stage,
+          action: "rejected",
+          by: reviewerName,
+          at: now,
+          passQtyAfter: row.passQty,
+          failQtyAfter: row.failQty,
+          note: rejectReason,
+        },
+      ];
       return row;
     }
     if (stage === "teamlead") {
@@ -261,6 +348,18 @@ export const shiftSalaryStore = {
       row.status = NEXT.pending_supervisor;
       row.amountVnd = Math.round(row.passQty * row.rateVnd);
     }
+    row.history = [
+      ...(row.history ?? []),
+      {
+        id: id("sch"),
+        stage,
+        action: "approved",
+        by: reviewerName,
+        at: now,
+        passQtyAfter: row.passQty,
+        failQtyAfter: row.failQty,
+      },
+    ];
     return row;
   },
 };

@@ -1475,15 +1475,63 @@ export async function handleDemoApi<T>(
     const id = path.split("/")[2];
     const row = shiftCloses.find((s) => s.id === id);
     if (!row) throw new Error("Không tìm thấy chốt ca");
-    const stage = String(body?.stage ?? "teamlead");
+    const stage = String(body?.stage ?? "teamlead") as "teamlead" | "qc" | "supervisor";
     const now = new Date().toISOString();
+    const reviewer = String(body?.reviewerName ?? "");
+    const beforePass = row.passQty;
+    const beforeFail = row.failQty;
+    if (body?.passQty != null || body?.failQty != null) {
+      const nextPass = body?.passQty != null ? Number(body.passQty) || 0 : row.passQty;
+      const nextFail = body?.failQty != null ? Number(body.failQty) || 0 : row.failQty;
+      if (nextPass !== beforePass || nextFail !== beforeFail) {
+        if (!String(body?.evidenceBase64 ?? "").trim()) {
+          throw new Error("Sửa số lượng chốt ca bắt buộc đính kèm ảnh bằng chứng.");
+        }
+        row.passQty = nextPass;
+        row.failQty = nextFail;
+        row.history = [
+          ...(row.history ?? []),
+          {
+            id: uid("sch"),
+            stage,
+            action: "qty_adjusted",
+            by: reviewer,
+            at: now,
+            passQtyBefore: beforePass,
+            passQtyAfter: nextPass,
+            failQtyBefore: beforeFail,
+            failQtyAfter: nextFail,
+            evidenceName: String(body?.evidenceName ?? ""),
+            evidenceMimeType: String(body?.evidenceMimeType ?? ""),
+            evidenceBase64: String(body?.evidenceBase64 ?? ""),
+          },
+        ];
+      }
+    }
     if (body?.approved === false) {
       row.status = "rejected";
       row.rejectReason = String(body?.rejectReason ?? "");
+      row.history = [
+        ...(row.history ?? []),
+        {
+          id: uid("sch"),
+          stage,
+          action: "rejected",
+          by: reviewer,
+          at: now,
+          passQtyAfter: row.passQty,
+          failQtyAfter: row.failQty,
+          note: row.rejectReason,
+        },
+      ];
     } else if (stage === "teamlead" && row.status === "pending_teamlead") {
       row.status = "pending_qc";
-      row.teamleadBy = String(body?.reviewerName ?? "");
+      row.teamleadBy = reviewer;
       row.teamleadAt = now;
+      row.history = [
+        ...(row.history ?? []),
+        { id: uid("sch"), stage, action: "approved", by: reviewer, at: now, passQtyAfter: row.passQty, failQtyAfter: row.failQty },
+      ];
       notifications.unshift({
         id: uid("n"),
         userId: row.workerId,
@@ -1497,13 +1545,21 @@ export async function handleDemoApi<T>(
       });
     } else if (stage === "qc" && row.status === "pending_qc") {
       row.status = "pending_supervisor";
-      row.qcBy = String(body?.reviewerName ?? "");
+      row.qcBy = reviewer;
       row.qcAt = now;
+      row.history = [
+        ...(row.history ?? []),
+        { id: uid("sch"), stage, action: "approved", by: reviewer, at: now, passQtyAfter: row.passQty, failQtyAfter: row.failQty },
+      ];
     } else if (stage === "supervisor" && row.status === "pending_supervisor") {
       row.status = "approved";
-      row.supervisorBy = String(body?.reviewerName ?? "");
+      row.supervisorBy = reviewer;
       row.supervisorAt = now;
       row.amountVnd = Math.round(row.passQty * row.rateVnd);
+      row.history = [
+        ...(row.history ?? []),
+        { id: uid("sch"), stage, action: "approved", by: reviewer, at: now, passQtyAfter: row.passQty, failQtyAfter: row.failQty },
+      ];
     } else {
       throw new Error("Phiếu không ở bước duyệt này");
     }

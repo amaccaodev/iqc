@@ -146,6 +146,7 @@ function ProductCard({
   pendingBomIds,
   orderHasPendingClose,
   teamIdFilter,
+  shiftCloses,
 }: {
   order: ProductionOrder;
   expanded: boolean;
@@ -158,14 +159,15 @@ function ProductCard({
   orderHasPendingClose: boolean;
   /** Tổ trưởng: đánh dấu việc của tổ, vẫn hiện đủ BOM như GĐ */
   teamIdFilter?: string;
+  shiftCloses: ShiftClose[];
 }) {
   const navigate = useNavigate();
   const partGroups = groupOrderJobsByPart(order.boms ?? []);
-  const finishedEst = estimateFinishedQty(order);
+  const finishedEst = estimateFinishedQty(order, shiftCloses);
   const partAvgs = partGroups.map((g) => {
     const steps = g.recipes.flatMap((r) => r.steps);
     if (!steps.length) return 0;
-    return Math.round(steps.reduce((s, b) => s + bomProgressPct(b), 0) / steps.length);
+    return Math.round(steps.reduce((s, b) => s + bomProgressPct(b, shiftCloses), 0) / steps.length);
   });
   const partDoneAvg =
     partAvgs.length > 0 ? Math.round(partAvgs.reduce((s, n) => s + n, 0) / partAvgs.length) : 0;
@@ -287,7 +289,7 @@ function ProductCard({
             const lead = primaryJob(steps);
             const avg =
               steps.length > 0
-                ? Math.round(steps.reduce((s, b) => s + bomProgressPct(b), 0) / steps.length)
+                ? Math.round(steps.reduce((s, b) => s + bomProgressPct(b, shiftCloses), 0) / steps.length)
                 : 0;
             const mine = teamIdFilter
               ? steps.some((b) => teamIdsMatch(resolveBomTeamId(b), teamIdFilter))
@@ -335,10 +337,10 @@ function ProductCard({
                     title={`Bước ${b.processSeq ?? ""}: ${bomStepLabel(b)}`}
                     subtitle={b.catalogBomName}
                     code={b.partCode || b.bomCode}
-                    done={bomDoneQty(b)}
+                    done={bomDoneQty(b, shiftCloses)}
                     target={b.targetQty || 0}
                     fail={b.failQty || 0}
-                    pct={bomProgressPct(b)}
+                    pct={bomProgressPct(b, shiftCloses)}
                     status={BOM_STATUS_LABEL[b.status] ?? b.status}
                     team={b.assignedTeamName}
                     workersOnMachine={
@@ -409,12 +411,11 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
         : "/teamlead/production";
 
   useEffect(() => {
-    if (!showShiftDots) return;
     void salaryApi
       .listShiftCloses()
       .then(setShiftCloses)
       .catch(() => setShiftCloses([]));
-  }, [showShiftDots, pagedOrders]);
+  }, [pagedOrders]);
 
   const pendingByOrder = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -578,6 +579,7 @@ export default function ProductionProgressPage({ mode }: { mode: ProductionProgr
             teamIdFilter={teamIdFilter}
             pendingBomIds={pendingBomIds}
             orderHasPendingClose={pendingBomIds.size > 0}
+            shiftCloses={shiftCloses}
             onCompleted={(updated) => {
               setOrders(orders.map((o) => (o.id === updated.id ? updated : o)));
               void refreshOrders();

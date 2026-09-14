@@ -30,7 +30,10 @@ import TeamLeadDashboardPage from "../pages/teamlead/TeamLeadDashboardPage";
 import TeamLeadProductionPage from "../pages/teamlead/TeamLeadProductionPage";
 import TeamLeadReportPage from "../pages/teamlead/TeamLeadReportPage";
 import WorkerDashboardPage from "../pages/worker/WorkerDashboardPage";
-import WorkerEntryPage from "../pages/worker/WorkerEntryPage";
+import WorkerEntryPage, {
+  WorkerOrderPartsPage,
+  WorkerPartStepsPage,
+} from "../pages/worker/WorkerEntryPage";
 import WorkerTaskEntryPage from "../pages/worker/WorkerTaskEntryPage";
 import WorkerTaskMeasurePage from "../pages/worker/WorkerTaskMeasurePage";
 import IncidentsPage from "../pages/shared/IncidentsPage";
@@ -110,6 +113,8 @@ export default function AppRouter() {
       <Route path="/worker" element={<RoleLayout role="worker" />}>
         <Route path="dashboard" element={<WorkerDashboardPage />} />
         <Route path="entry" element={<WorkerEntryPage />} />
+        <Route path="entry/:orderId" element={<WorkerOrderPartsPage />} />
+        <Route path="entry/:orderId/part/:partKey" element={<WorkerPartStepsPage />} />
         <Route path="task/:orderId/:bomId" element={<WorkerTaskEntryPage />} />
         <Route path="task/:orderId/:bomId/measure" element={<WorkerTaskMeasurePage />} />
         <Route path="incidents" element={<IncidentsPage />} />

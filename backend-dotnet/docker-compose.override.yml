@@ -1,0 +1,6 @@
+# Dev override — mount source for hot reload (optional, dùng dotnet watch riêng)
+services:
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Database__AutoMigrate: "true"
