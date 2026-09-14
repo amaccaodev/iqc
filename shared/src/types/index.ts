@@ -216,6 +216,24 @@ export type ShiftCloseStatus =
   | "approved"
   | "rejected";
 
+/** Lịch sử duyệt / sửa số lượng chốt ca (kèm ảnh bằng chứng khi chỉnh SL) */
+export interface ShiftCloseHistoryEntry {
+  id: string;
+  stage: "teamlead" | "qc" | "supervisor" | "worker";
+  action: "approved" | "rejected" | "qty_adjusted" | "submitted";
+  by: string;
+  at: string;
+  passQtyBefore?: number;
+  passQtyAfter?: number;
+  failQtyBefore?: number;
+  failQtyAfter?: number;
+  note?: string;
+  /** Ảnh bằng chứng khi sửa số lượng */
+  evidenceName?: string;
+  evidenceMimeType?: string;
+  evidenceBase64?: string;
+}
+
 export interface ShiftClose extends IEntity {
   orderId: string;
   bomId: string;
@@ -238,6 +256,8 @@ export interface ShiftClose extends IEntity {
   supervisorBy?: string;
   supervisorAt?: string;
   rejectReason?: string;
+  /** Nhật ký duyệt / chỉnh SL theo quy trình */
+  history?: ShiftCloseHistoryEntry[];
 }
 
 export type ShiftUnlockStatus = "pending_teamlead" | "approved" | "rejected";

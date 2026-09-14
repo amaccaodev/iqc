@@ -36,6 +36,21 @@ function DrawingThumb({ files }: { files: Attachment[] }) {
   );
 }
 
+function QtyBox({ label, value, tone = "primary" }: { label: string; value: number; tone?: "primary" | "amber" }) {
+  const toneCls =
+    tone === "amber"
+      ? "bg-amber-50 border-amber-300 text-amber-950 dark:bg-amber-950/40 dark:border-amber-700 dark:text-amber-100"
+      : "bg-primary/10 border-primary/40 text-primary";
+  return (
+    <div className={`rounded-xl border-2 px-3 py-2 min-w-[7.5rem] ${toneCls}`}>
+      <div className="text-[11px] font-bold uppercase tracking-wide opacity-80">{label}</div>
+      <div className="text-2xl font-display font-800 tabular-nums leading-tight mt-0.5">
+        {value.toLocaleString("vi-VN")}
+      </div>
+    </div>
+  );
+}
+
 export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsProps) {
   const pending = orders.filter(orderNeedsSupervisorCreateApproval);
   const [detail, setDetail] = useState<{ order: ProductionOrder; part: PartGroup } | null>(null);
@@ -83,7 +98,7 @@ export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsP
     try {
       if (approve) await orderApi.approve(id);
       else await orderApi.reject(id);
-      toast.success(approve ? "Đã phê duyệt lệnh SX" : "Đã từ chối lệnh");
+      toast.success(approve ? "Đã nhận sản xuất" : "Đã từ chối lệnh");
       setDetail(null);
     } catch (e) {
       toast.error((e as Error).message);
@@ -95,7 +110,7 @@ export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsP
   return (
     <div className="mb-5">
       <h3 className="font-display font-700 text-base lg:text-lg mb-3 flex items-center gap-2">
-        <i className="fas fa-clipboard-check text-yellow-500" /> Lệnh chờ phê duyệt BOM / quy trình
+        <i className="fas fa-industry text-yellow-500" /> Nhận sản xuất
       </h3>
       {pending.map((o) => {
         const parts = withDrawings(o);
@@ -103,17 +118,20 @@ export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsP
           <Card key={o.id} cls="p-4 mb-3 border-l-4 border-yellow-400">
             <div className="flex items-start justify-between flex-wrap gap-3 mb-3">
               <div className="min-w-0">
-                <div className="font-semibold text-sm">
+                <div className="font-semibold text-base">
                   {o.orderNo} – {o.productLine}
                 </div>
-                <div className="text-xs text-muted mt-1">
-                  GĐ {o.createdBy} · SL thành phẩm {o.targetQty.toLocaleString("vi-VN")}
+                <div className="text-sm text-muted mt-1">
+                  GĐ {o.createdBy}
                   {o.productCode ? ` · ${o.productCode}` : ""} · hạn {o.deadline || "—"}
+                </div>
+                <div className="mt-2">
+                  <QtyBox label="SL thành phẩm yêu cầu" value={o.targetQty} tone="amber" />
                 </div>
               </div>
               <div className="flex gap-2">
                 <Btn size="sm" variant="success" onClick={() => void review(o.id, true)}>
-                  <i className="fas fa-check" /> Duyệt
+                  <i className="fas fa-check" /> Nhận sản xuất
                 </Btn>
                 <Btn size="sm" variant="ghost" onClick={() => void review(o.id, false)}>
                   <i className="fas fa-times" /> Từ chối
@@ -122,50 +140,54 @@ export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsP
             </div>
 
             <div className="space-y-2">
-              {parts.map((p) => (
-                <button
-                  key={p.key}
-                  type="button"
-                  className="w-full text-left rounded-xl border border-border bg-surface/60 p-2.5 flex gap-3 cursor-pointer hover:bg-surface"
-                  onClick={() => setDetail({ order: o, part: p })}
-                >
-                  <DrawingThumb files={p.drawings} />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-sm">{p.partName}</div>
-                    <div className="text-[11px] text-muted font-mono">{p.partCode}</div>
-                    <div className="text-[11px] mt-1">
-                      <span className="text-muted">Cần {p.needQty.toLocaleString("vi-VN")}</span>
-                      {p.useFromStock ? (
-                        <>
-                          <span className="text-foreground font-semibold ml-2">
-                            · Dùng kho {p.stockUseQty.toLocaleString("vi-VN")}
-                          </span>
-                          <span className="text-foreground font-semibold ml-2">
-                            · Còn lại {p.stockLeftQty.toLocaleString("vi-VN")}
-                          </span>
-                        </>
-                      ) : null}
-                      <span className="text-foreground font-semibold ml-2">
-                        · SX {p.sxQty.toLocaleString("vi-VN")}
-                      </span>
-                      {p.sxQty <= 0 && p.useFromStock ? (
-                        <span className="text-emerald-700 font-semibold ml-2">— đủ kho</span>
-                      ) : null}
-                    </div>
-                    {p.recipes.map((r) => (
-                      <div key={r.id} className="text-[11px] text-primary mt-0.5">
-                        {p.recipes.length > 1 || r.name !== "Quy trình" ? (
-                          <span className="font-semibold">{r.name}: </span>
-                        ) : null}
-                        {r.steps.map(bomStepLabel).join(" → ")}
+              {parts.map((p) => {
+                const bomLabel =
+                  p.recipes.map((r) => r.name).filter((n) => n && n !== "Quy trình").join(" · ") ||
+                  p.partName;
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    className="w-full text-left rounded-xl border border-border bg-surface/60 p-3 flex gap-3 cursor-pointer hover:bg-surface"
+                    onClick={() => setDetail({ order: o, part: p })}
+                  >
+                    <DrawingThumb files={p.drawings} />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div>
+                        <div className="text-[11px] font-bold uppercase tracking-wide text-muted">
+                          Tên BOM / linh kiện
+                        </div>
+                        <div className="font-display font-700 text-base text-foreground leading-snug">
+                          {p.partName}
+                        </div>
+                        <div className="text-sm font-semibold text-primary mt-0.5">{bomLabel}</div>
+                        <div className="text-[11px] text-muted font-mono">{p.partCode}</div>
                       </div>
-                    ))}
-                  </div>
-                  <span className="self-center text-[11px] font-semibold text-primary shrink-0">
-                    Chi tiết
-                  </span>
-                </button>
-              ))}
+                      <div className="flex flex-wrap gap-2">
+                        <QtyBox label="SL yêu cầu" value={p.needQty} tone="amber" />
+                        <QtyBox label="SL cần SX" value={p.sxQty} />
+                      </div>
+                      {p.useFromStock ? (
+                        <div className="text-xs text-muted">
+                          Dùng kho {p.stockUseQty.toLocaleString("vi-VN")} · Còn lại{" "}
+                          {p.stockLeftQty.toLocaleString("vi-VN")}
+                          {p.sxQty <= 0 ? (
+                            <span className="text-emerald-700 font-semibold ml-2">— đủ kho</span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {p.recipes.map((r) => (
+                        <div key={r.id} className="text-[11px] text-muted">
+                          {r.steps.map(bomStepLabel).join(" → ")}
+                        </div>
+                      ))}
+                    </div>
+                    <span className="self-center text-[11px] font-semibold text-primary shrink-0">
+                      Chi tiết
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </Card>
         );
@@ -177,34 +199,21 @@ export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsP
             <div className="text-sm space-y-1">
               <div>
                 <span className="text-muted">Thành phẩm: </span>
-                <span className="font-semibold">{detail.order.productLine}</span>
+                <span className="font-semibold text-base">{detail.order.productLine}</span>
               </div>
               <div className="text-xs text-muted font-mono">
                 {detail.order.orderNo}
                 {detail.order.productCode ? ` · ${detail.order.productCode}` : ""}
                 {detail.part.partCode ? ` · ${detail.part.partCode}` : ""}
               </div>
-              <div className="flex flex-wrap gap-3 text-sm pt-1">
-                <span>
-                  SL thành phẩm{" "}
-                  <strong>{detail.order.targetQty.toLocaleString("vi-VN")}</strong>
-                </span>
-                <span>
-                  Cần <strong>{detail.part.needQty.toLocaleString("vi-VN")}</strong>
-                </span>
-                {detail.part.useFromStock ? (
-                  <>
-                    <span>
-                      Dùng kho <strong>{detail.part.stockUseQty.toLocaleString("vi-VN")}</strong>
-                    </span>
-                    <span>
-                      Còn lại <strong>{detail.part.stockLeftQty.toLocaleString("vi-VN")}</strong>
-                    </span>
-                  </>
-                ) : null}
-                <span>
-                  SX <strong>{detail.part.sxQty.toLocaleString("vi-VN")}</strong>
-                </span>
+              <div className="font-display font-700 text-lg text-primary mt-1">
+                {detail.part.recipes.map((r) => r.name).filter(Boolean).join(" · ") ||
+                  detail.part.partName}
+              </div>
+              <div className="flex flex-wrap gap-3 pt-2">
+                <QtyBox label="SL thành phẩm yêu cầu" value={detail.order.targetQty} tone="amber" />
+                <QtyBox label="SL yêu cầu (linh kiện)" value={detail.part.needQty} tone="amber" />
+                <QtyBox label="SL cần SX" value={detail.part.sxQty} />
               </div>
             </div>
 
@@ -214,7 +223,7 @@ export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsP
               <div className="text-xs font-semibold text-muted mb-2">Công đoạn</div>
               {detail.part.recipes.map((r) => (
                 <div key={r.id} className="mb-3">
-                  <div className="text-sm font-semibold mb-1">{r.name}</div>
+                  <div className="text-base font-semibold mb-1">{r.name}</div>
                   <ol className="list-decimal pl-5 space-y-1 text-sm">
                     {r.steps.map((s) => (
                       <li key={s.id}>
@@ -230,6 +239,19 @@ export default function PendingOrderApprovals({ orders }: PendingOrderApprovalsP
                   </ol>
                 </div>
               ))}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Btn
+                variant="success"
+                cls="flex-1 justify-center"
+                onClick={() => void review(detail.order.id, true)}
+              >
+                <i className="fas fa-check" /> Nhận sản xuất
+              </Btn>
+              <Btn variant="secondary" onClick={() => void review(detail.order.id, false)}>
+                Từ chối
+              </Btn>
             </div>
           </div>
         </Modal>

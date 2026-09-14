@@ -1,0 +1,6 @@
+@IQC.Api_HostAddress = http://localhost:5262
+
+GET {{IQC.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
