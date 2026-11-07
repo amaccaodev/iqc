@@ -1,9 +1,9 @@
 import { useTheme, type ThemeMode } from "../../hooks/useTheme";
 
-const THEMES: Array<{ id: ThemeMode; label: string; icon: string }> = [
-  { id: "gold", label: "Vàng đen", icon: "fa-certificate" },
-  { id: "light", label: "Sáng", icon: "fa-sun" },
-  { id: "dark", label: "Tối", icon: "fa-moon" },
+const THEMES: Array<{ id: ThemeMode; label: string; icon: string; swatch: string }> = [
+  { id: "light", label: "Sáng", icon: "fa-sun", swatch: "from-indigo-500 to-sky-400" },
+  { id: "dark", label: "Tối", icon: "fa-moon", swatch: "from-slate-900 to-indigo-700" },
+  { id: "gold", label: "Vàng đen", icon: "fa-crown", swatch: "from-neutral-950 to-amber-500" },
 ];
 
 export default function ThemeSwitcher({
@@ -12,18 +12,18 @@ export default function ThemeSwitcher({
   variant?: "full" | "compact" | "cycle";
 }) {
   const { theme, setTheme, cycleTheme } = useTheme();
+  const current = THEMES.find((t) => t.id === theme) ?? THEMES[0];
 
   if (variant === "cycle") {
-    const current = THEMES.find((t) => t.id === theme) ?? THEMES[0];
     return (
       <button
         type="button"
         onClick={cycleTheme}
-        className="w-10 h-10 flex items-center justify-center border border-header-foreground/30 bg-header-foreground/10 text-header-foreground cursor-pointer rounded-lg"
+        className="group w-10 h-10 flex items-center justify-center rounded-xl border border-border/70 glass text-foreground shadow-card cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-card-hover"
         aria-label={`Giao diện ${current.label}. Bấm để đổi.`}
         title={current.label}
       >
-        <i className={`fas ${current.icon}`} />
+        <i className={`fas ${current.icon} transition-transform duration-300 group-hover:rotate-12`} />
       </button>
     );
   }
@@ -33,32 +33,45 @@ export default function ThemeSwitcher({
       <button
         type="button"
         onClick={cycleTheme}
-        className="w-9 h-9 flex items-center justify-center rounded-lg border-0 bg-transparent text-header-muted hover:text-header-foreground cursor-pointer"
+        className="group w-9 h-9 flex items-center justify-center rounded-xl border-0 bg-transparent text-header-muted hover:text-header-foreground hover:bg-surface/80 cursor-pointer transition-colors"
         aria-label="Đổi giao diện"
-        title={THEMES.find((t) => t.id === theme)?.label}
+        title={current.label}
       >
-        <i className={`fas ${THEMES.find((t) => t.id === theme)?.icon ?? "fa-certificate"}`} />
+        <i className={`fas ${current.icon} transition-transform duration-300 group-hover:rotate-12`} />
       </button>
     );
   }
 
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {THEMES.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => setTheme(t.id)}
-          className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-xl text-xs font-semibold border cursor-pointer transition-colors ${
-            theme === t.id
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-surface text-muted border-border hover:border-primary/50"
-          }`}
-        >
-          <i className={`fas ${t.icon} text-sm`} />
-          {t.label}
-        </button>
-      ))}
+    <div className="grid grid-cols-3 gap-2.5">
+      {THEMES.map((t) => {
+        const active = theme === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTheme(t.id)}
+            aria-pressed={active}
+            className={`relative flex flex-col items-center gap-2 py-3 px-2 rounded-2xl text-xs font-semibold border cursor-pointer transition-all ${
+              active
+                ? "border-primary bg-secondary text-secondary-foreground shadow-brand"
+                : "bg-surface text-muted border-border hover:border-primary/50 hover:-translate-y-0.5"
+            }`}
+          >
+            <span
+              className={`w-9 h-9 rounded-xl bg-gradient-to-br ${t.swatch} flex items-center justify-center text-white shadow-md`}
+            >
+              <i className={`fas ${t.icon} text-sm`} />
+            </span>
+            {t.label}
+            {active ? (
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                <i className="fas fa-check text-[8px]" />
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
     </div>
   );
 }

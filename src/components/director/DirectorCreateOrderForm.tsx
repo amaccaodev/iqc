@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { BomProcess, ProductStructureLine } from "@shared/types";
 import { assessBomReadiness, type BomReadinessResult } from "@shared/utils/bomReadiness";
 import { planStockUse } from "@shared/utils/stockUse";
@@ -704,7 +704,7 @@ export default function DirectorCreateOrderForm({ onCreated, onCancel }: Directo
         </Card>
       ))}
 
-      <div className="flex gap-2 justify-end sticky bottom-20 sm:bottom-4 bg-background/90 py-2">
+      <div className="flex gap-2.5 justify-end sticky bottom-20 sm:bottom-4 glass-strong border border-border/60 rounded-2xl p-3 shadow-lg z-20">
         {onCancel ? (
           <Btn variant="ghost" onClick={onCancel} disabled={saving}>
             Hủy

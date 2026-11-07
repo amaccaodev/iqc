@@ -95,7 +95,7 @@ export default function SearchPicker({
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
-          className="w-full border border-border rounded-lg px-3 py-2 text-sm min-w-0 disabled:opacity-50"
+          className="w-full border border-border rounded-xl px-3.5 py-2.5 text-sm min-w-0 disabled:opacity-50"
           placeholder={placeholder}
           value={text}
           onChange={(e) => {
@@ -108,7 +108,7 @@ export default function SearchPicker({
         {value ? (
           <button
             type="button"
-            className="shrink-0 px-2 rounded-lg border border-border text-muted-foreground cursor-pointer bg-card"
+            className="shrink-0 w-10 rounded-xl border border-border text-muted-foreground hover:text-rose-500 hover:border-rose-300 cursor-pointer bg-card transition-colors"
             onClick={clear}
             aria-label="Xóa"
           >
@@ -120,7 +120,7 @@ export default function SearchPicker({
         <ul
           id={listId}
           role="listbox"
-          className="absolute z-30 left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card shadow-lg py-1"
+          className="absolute z-30 left-0 right-0 mt-1.5 max-h-60 overflow-y-auto rounded-2xl border border-border/80 bg-popover shadow-2xl p-1.5 animate-fade-up"
         >
           {loading && <li className="px-3 py-2 text-xs text-muted-foreground">Đang tìm…</li>}
           {!loading && items.length === 0 && (
@@ -130,8 +130,8 @@ export default function SearchPicker({
             <li key={item.id} role="option" aria-selected={item.id === value}>
               <button
                 type="button"
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-surface cursor-pointer border-0 bg-transparent text-foreground ${
-                  item.id === value ? "bg-secondary" : ""
+                className={`w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-surface cursor-pointer border-0 bg-transparent text-foreground transition-colors ${
+                  item.id === value ? "!bg-secondary text-secondary-foreground" : ""
                 }`}
                 onClick={() => pick(item)}
               >

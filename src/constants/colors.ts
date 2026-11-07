@@ -3,32 +3,32 @@ import type { BOMStatus, OrderStatus, Priority } from "@shared/types";
 export const sColor = (s: OrderStatus): string =>
   (
     {
-      draft: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
-      pending_approval: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300",
-      approved: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-      in_progress: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
-      completed: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+      draft: "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-300",
+      pending_approval: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300",
+      approved: "bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-300",
+      in_progress: "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-300",
+      completed: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300",
     } satisfies Record<OrderStatus, string>
   )[s];
 
 export const bColor = (s: BOMStatus): string =>
   (
     {
-      unassigned: "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400",
-      assigned: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-      in_progress: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
-      team_reported: "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300",
-      qc_passed: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
-      qc_failed: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+      unassigned: "bg-slate-100 text-slate-500 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400",
+      assigned: "bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-300",
+      in_progress: "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-300",
+      team_reported: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300",
+      qc_passed: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300",
+      qc_failed: "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300",
     } satisfies Record<BOMStatus, string>
   )[s];
 
 export const pColor = (p: Priority): string =>
   (
     {
-      normal: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
-      high: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
-      urgent: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+      normal: "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-300",
+      high: "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-300",
+      urgent: "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300",
     } satisfies Record<Priority, string>
   )[p];
 
@@ -44,10 +44,10 @@ export const fileIcon = (t: string) =>
 
 export const ROLE_COLOR: Record<string, string> = {
   director: "bg-secondary text-primary",
-  supervisor: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300",
-  teamlead: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-  worker: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
-  qc: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
-  stats: "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
-  admin: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+  supervisor: "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300",
+  teamlead: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+  worker: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+  qc: "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300",
+  stats: "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300",
+  admin: "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300",
 };

@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { useOrderDeepLink } from "./hooks/useOrderDeepLink"
 import { orderApi } from "./services/api/OrderApiService"
@@ -295,33 +295,35 @@ const ROLE_LABEL: Record<Role, string> = {
   worker: "Công nhân", qc: "QC", stats: "Thống kê", admin: "Admin", mechanic: "Cơ điện"
 }
 
-const sColor = (s: OrderStatus) => ({ draft:"bg-gray-100 text-gray-600", pending_approval:"bg-yellow-100 text-yellow-700", approved:"bg-blue-100 text-blue-700", in_progress:"bg-indigo-100 text-indigo-700", completed:"bg-green-100 text-green-700" }[s])
-const bColor = (s: BOMStatus) => ({ unassigned:"bg-gray-100 text-gray-500", assigned:"bg-blue-100 text-blue-700", in_progress:"bg-indigo-100 text-indigo-700", team_reported:"bg-yellow-100 text-yellow-700", qc_passed:"bg-green-100 text-green-700", qc_failed:"bg-red-100 text-red-700" }[s])
-const pColor = (p: Priority) => ({ normal:"bg-slate-100 text-slate-600", high:"bg-orange-100 text-orange-700", urgent:"bg-red-100 text-red-700" }[p])
+const sColor = (s: OrderStatus) => ({ draft:"bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-300", pending_approval:"bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300", approved:"bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-300", in_progress:"bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-300", completed:"bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300" }[s])
+const bColor = (s: BOMStatus) => ({ unassigned:"bg-slate-100 text-slate-500 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-400", assigned:"bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-300", in_progress:"bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-300", team_reported:"bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300", qc_passed:"bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300", qc_failed:"bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300" }[s])
+const pColor = (p: Priority) => ({ normal:"bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-300", high:"bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-300", urgent:"bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300" }[p])
 
 const fileIcon = (t: Attachment["type"]) => ({ pdf:"fa-file-pdf text-red-500", image:"fa-file-image text-blue-500", cad:"fa-cube text-teal-600", excel:"fa-file-excel text-green-600", word:"fa-file-word text-blue-600", other:"fa-file text-gray-400" }[t])
 
 // ─── UI atoms ──────────────────────────────────────────────────────────────────
 const Badge = ({ children, cls }: { children: React.ReactNode; cls?: string }) => (
-  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${cls}`}>{children}</span>
+  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset ring-current/15 whitespace-nowrap ${cls}`}>{children}</span>
 )
 const Card = ({ children, cls }: { children: React.ReactNode; cls?: string }) => (
-  <div className={`bg-card text-card-foreground rounded-xl border border-border shadow-sm ${cls ?? ""}`}>{children}</div>
+  <div className={`bg-card text-card-foreground rounded-2xl border border-border/80 shadow-card transition-shadow duration-200 ${cls ?? ""}`}>{children}</div>
 )
-const Divider = () => <div className="h-px bg-border my-3" />
+const Divider = () => <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent my-3" />
 
 function Btn({ children, onClick, variant = "primary", size = "md", cls, type = "button", disabled }: {
   children: React.ReactNode; onClick?: () => void; variant?: "primary"|"secondary"|"danger"|"ghost"|"success"; size?: "sm"|"md"|"lg"; cls?: string; type?: "button"|"submit"; disabled?: boolean
 }) {
-  const s = { sm:"px-3 py-1.5 text-xs gap-1", md:"px-4 py-2 text-sm gap-1.5", lg:"px-5 py-3 text-base gap-2" }[size]
+  const s = { sm:"px-3 py-1.5 text-xs gap-1.5 rounded-lg", md:"px-4 py-2.5 text-sm gap-2 rounded-xl", lg:"px-6 py-3 text-base gap-2 rounded-xl" }[size]
+  // Nếu caller tự truyền màu nền (cls="bg-…") thì bỏ gradient để màu đó có hiệu lực
+  const customBg = /(^|\s)bg-/.test(cls ?? "")
   const v = {
-    primary:"bg-primary text-primary-foreground hover:bg-ring active:opacity-90",
-    secondary:"bg-secondary text-secondary-foreground hover:opacity-90",
-    danger:"bg-accent text-accent-foreground hover:opacity-90",
-    ghost:"bg-transparent text-muted hover:bg-surface",
-    success:"bg-green-600 text-white hover:bg-green-700"
+    primary: customBg ? "text-white shadow-md hover:brightness-110" : "bg-primary bg-brand-gradient text-primary-foreground shadow-brand hover:brightness-110",
+    secondary:"bg-secondary text-secondary-foreground ring-1 ring-inset ring-primary/10 hover:ring-primary/30",
+    danger: customBg ? "text-white shadow-md hover:brightness-110" : "bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-[0_8px_20px_-8px_rgba(225,29,72,0.6)] hover:brightness-110",
+    ghost:"bg-transparent text-muted hover:bg-surface hover:text-foreground",
+    success: customBg ? "text-white shadow-md hover:brightness-110" : "bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-[0_8px_20px_-8px_rgba(5,150,105,0.6)] hover:brightness-110"
   }[variant]
-  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center font-medium rounded-lg transition-all border-0 select-none ${s} ${v} ${cls ?? ""} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}>{children}</button>
+  return <button type={type} onClick={onClick} disabled={disabled} className={`inline-flex items-center font-semibold transition-all duration-200 border-0 select-none ${s} ${v} ${cls ?? ""} ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:-translate-y-px active:translate-y-0 active:scale-[0.98]"}`}>{children}</button>
 }
 
 function Input({ label, value, onChange, placeholder, type="text", required, hint }: {
@@ -329,9 +331,9 @@ function Input({ label, value, onChange, placeholder, type="text", required, hin
 }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-muted mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="block text-xs font-semibold text-muted mb-1.5">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent bg-input text-foreground" />
+        className="w-full border border-border rounded-xl px-3.5 py-2.5 text-sm bg-input text-foreground" />
       {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
     </div>
   )
@@ -342,9 +344,9 @@ function Select({ label, value, onChange, options, required }: {
 }) {
   return (
     <div>
-      <label className="block text-xs font-semibold text-muted mb-1">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
+      <label className="block text-xs font-semibold text-muted mb-1.5">{label}{required && <span className="text-red-500 ml-0.5">*</span>}</label>
       <select value={value} onChange={e => onChange(e.target.value)}
-        className="w-full border border-border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-input text-foreground">
+        className="w-full border border-border rounded-xl px-3.5 py-2.5 text-sm bg-input text-foreground cursor-pointer">
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </div>
@@ -354,14 +356,16 @@ function Select({ label, value, onChange, options, required }: {
 function Modal({ title, children, onClose, size = "md" }: { title: string; children: React.ReactNode; onClose: () => void; size?: "md"|"lg" }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" />
       <div onClick={e => e.stopPropagation()}
-        className={`relative bg-card text-card-foreground rounded-t-2xl sm:rounded-2xl w-full ${size === "lg" ? "sm:max-w-3xl" : "sm:max-w-xl"} max-h-[92vh] flex flex-col shadow-2xl`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h3 className="font-display font-700 text-base text-foreground">{title}</h3>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface text-muted cursor-pointer border-0 bg-transparent text-lg">✕</button>
+        className={`relative bg-card text-card-foreground rounded-t-3xl sm:rounded-3xl w-full ${size === "lg" ? "sm:max-w-3xl" : "sm:max-w-xl"} max-h-[92vh] flex flex-col shadow-2xl ring-1 ring-border/80 overflow-hidden`}>
+        <div className="h-1 w-full bg-brand-gradient-3 shrink-0" />
+        <div className="sm:hidden mx-auto mt-2 h-1 w-10 rounded-full bg-border" />
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-border/70">
+          <h3 className="font-display font-700 text-base sm:text-lg text-foreground">{title}</h3>
+          <button onClick={onClose} aria-label="Đóng" className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-surface text-muted hover:text-foreground cursor-pointer border-0 bg-transparent transition-colors"><i className="fas fa-xmark" /></button>
         </div>
-        <div className="overflow-y-auto p-5 flex-1">{children}</div>
+        <div className="overflow-y-auto p-5 sm:p-6 flex-1">{children}</div>
       </div>
     </div>
   )
@@ -369,15 +373,17 @@ function Modal({ title, children, onClose, size = "md" }: { title: string; child
 
 function StatTile({ label, value, icon, color, sub, onClick }: { label: string; value: string|number; icon: string; color: string; sub?: string; onClick?: () => void }) {
   const inner = (
-    <Card cls={`p-4 ${onClick ? "hover:border-ring transition-all" : ""}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
+    <Card cls={`group relative overflow-hidden p-4 sm:p-5 h-full ${onClick ? "hover:shadow-card-hover hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-300" : ""}`}>
+      <div className={`pointer-events-none absolute -right-8 -top-8 w-28 h-28 rounded-full opacity-40 blur-2xl ${color}`} />
+      <div className="relative flex items-start justify-between mb-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ring-1 ring-inset ring-current/10 ${color}`}>
           <i className={`fas ${icon} text-sm`} />
         </div>
+        {onClick && <i className="fas fa-arrow-right text-xs text-muted-foreground opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" />}
       </div>
-      <div className="font-display font-800 text-2xl text-foreground">{value}</div>
-      <div className="text-xs font-medium text-muted mt-0.5">{label}</div>
-      {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
+      <div className="relative font-display font-800 text-2xl sm:text-[28px] leading-none tracking-tight text-foreground tabular-nums">{value}</div>
+      <div className="relative text-xs font-semibold text-muted mt-1.5">{label}</div>
+      {sub && <div className="relative text-xs text-muted-foreground mt-0.5">{sub}</div>}
     </Card>
   )
   if (!onClick) return inner
@@ -599,6 +605,7 @@ function OrderList({
   onSelect,
   columns = 1,
   paging,
+  defaultView = "table",
 }: {
   orders: ProductionOrder[]
   onSelect: (o: ProductionOrder) => void
@@ -610,43 +617,184 @@ function OrderList({
     onPage: (p: number) => void
     onPageSize?: (n: number) => void
   }
+  defaultView?: "table" | "grid"
 }) {
+  const [view, setView] = useState<"table" | "grid">(defaultView)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  if (!orders.length && !paging?.total) return <Card cls="p-10 text-center text-muted-foreground text-sm"><i className="fas fa-inbox text-3xl block mb-2 opacity-30" />Chưa có lệnh sản xuất nào</Card>
+  if (!orders.length && !paging?.total) {
+    return (
+      <Card cls="p-12 text-center text-muted-foreground text-sm border-dashed">
+        <div className="w-12 h-12 rounded-2xl bg-surface mx-auto mb-3 flex items-center justify-center text-muted">
+          <i className="fas fa-file-contract text-2xl opacity-50" />
+        </div>
+        <div className="font-semibold text-foreground text-sm">Chưa có lệnh sản xuất nào</div>
+        <div className="text-xs text-muted mt-1">Các lệnh sản xuất mới tạo sẽ hiển thị ở đây</div>
+      </Card>
+    )
+  }
   const slice = paging ? orders : orders.slice((page - 1) * pageSize, page * pageSize)
-  const listClass = columns === 2 ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0" : "space-y-2"
+
   return (
-    <div>
-    <div className={listClass}>
-      {slice.map(o => (
-        <button key={o.id} onClick={() => onSelect(o)} className="w-full text-left cursor-pointer bg-transparent border-0 p-0 group">
-          <Card cls="p-4 hover:border-ring hover:shadow-md transition-all group-active:scale-[0.99]">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-display font-700 text-sm text-primary">{o.orderNo}</span>
-                  <Badge cls={pColor(o.priority)}>{PRIORITY_LABEL[o.priority]}</Badge>
-                  {o.pendingApproval && <Badge cls="bg-yellow-100 text-yellow-700"><i className="fas fa-clock text-[10px]" /> Chờ duyệt</Badge>}
+    <div className="space-y-3">
+      {/* View switcher */}
+      <div className="flex items-center justify-between text-xs text-muted px-1">
+        <span className="tabular-nums">
+          Hiển thị <strong className="text-foreground">{slice.length}</strong> lệnh {paging ? `(tổng ${paging.total})` : ""}
+        </span>
+        <div className="flex items-center gap-1 rounded-xl border border-border/70 p-1 bg-card shadow-sm">
+          <button
+            type="button"
+            onClick={() => setView("table")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer border-0 transition-colors flex items-center gap-1.5 ${
+              view === "table"
+                ? "bg-brand-gradient text-primary-foreground shadow-brand"
+                : "bg-transparent text-muted hover:text-foreground"
+            }`}
+            title="Dạng bảng"
+          >
+            <i className="fas fa-table-list text-xs" />
+            <span className="hidden sm:inline">Bảng</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("grid")}
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer border-0 transition-colors flex items-center gap-1.5 ${
+              view === "grid"
+                ? "bg-brand-gradient text-primary-foreground shadow-brand"
+                : "bg-transparent text-muted hover:text-foreground"
+            }`}
+            title="Dạng thẻ"
+          >
+            <i className="fas fa-table-cells-large text-xs" />
+            <span className="hidden sm:inline">Thẻ</span>
+          </button>
+        </div>
+      </div>
+
+      {view === "table" ? (
+        <div className="overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-card">
+          <table className="w-full text-sm border-collapse min-w-[760px]">
+            <thead className="bg-surface/80 text-muted text-[11px] uppercase tracking-wider border-b border-border/80">
+              <tr>
+                <th className="text-left font-semibold px-4 py-3.5 whitespace-nowrap">Mã lệnh</th>
+                <th className="text-left font-semibold px-4 py-3.5">Sản phẩm / Dòng SP</th>
+                <th className="text-right font-semibold px-4 py-3.5 whitespace-nowrap">Số lượng</th>
+                <th className="text-left font-semibold px-4 py-3.5 whitespace-nowrap">Hạn HT</th>
+                <th className="text-center font-semibold px-4 py-3.5 whitespace-nowrap">Linh kiện</th>
+                <th className="text-left font-semibold px-4 py-3.5 whitespace-nowrap">Người tạo</th>
+                <th className="text-center font-semibold px-4 py-3.5 whitespace-nowrap">Trạng thái</th>
+                <th className="text-right font-semibold px-4 py-3.5 whitespace-nowrap"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {slice.map((o) => (
+                <tr
+                  key={o.id}
+                  onClick={() => onSelect(o)}
+                  className="group border-t border-border/60 first:border-t-0 hover:bg-surface/70 cursor-pointer transition-colors"
+                >
+                  <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-display font-700 text-sm text-primary tracking-tight">
+                        {o.orderNo}
+                      </span>
+                      <Badge cls={pColor(o.priority)}>{PRIORITY_LABEL[o.priority]}</Badge>
+                      {o.pendingApproval && (
+                        <Badge cls="bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300">
+                          <i className="fas fa-clock text-[9px]" /> Chờ duyệt
+                        </Badge>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 align-middle">
+                    <div className="font-semibold text-foreground text-sm leading-snug group-hover:text-primary transition-colors">
+                      {o.productLine || o.productCode || "—"}
+                    </div>
+                    {o.customer ? (
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
+                        KH: {o.customer}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
+                    <span className="font-bold text-foreground tabular-nums">
+                      {(o.targetQty ?? 0).toLocaleString()}
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-1">cái</span>
+                  </td>
+                  <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                    <span className="text-xs text-muted flex items-center gap-1">
+                      <i className="fas fa-calendar text-[10px] opacity-70" />
+                      {formatDeadline(o.deadline)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 align-middle text-center whitespace-nowrap">
+                    <div className="inline-flex items-center gap-1 text-xs text-muted">
+                      <span className="font-semibold text-foreground">
+                        {countOrderParts(o)}
+                      </span>
+                      <span>LK</span>
+                      {o.attachments.length > 0 ? (
+                        <span className="text-[11px] text-muted-foreground ml-1 flex items-center gap-0.5" title={`${o.attachments.length} tệp đính kèm`}>
+                          <i className="fas fa-paperclip text-[10px]" /> {o.attachments.length}
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5 align-middle whitespace-nowrap text-xs text-muted">
+                    <span className="truncate max-w-[120px] block" title={o.createdBy}>
+                      {o.createdBy || "—"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 align-middle text-center whitespace-nowrap">
+                    <Badge cls={sColor(o.status)}>{STATUS_LABEL[o.status]}</Badge>
+                  </td>
+                  <td className="px-4 py-3.5 align-middle text-right whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 text-xs text-primary font-semibold group-hover:translate-x-0.5 transition-transform">
+                      Chi tiết <i className="fas fa-chevron-right text-[10px]" />
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className={columns === 2 ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0" : "space-y-2"}>
+          {slice.map((o) => (
+            <button key={o.id} onClick={() => onSelect(o)} className="w-full text-left cursor-pointer bg-transparent border-0 p-0 group">
+              <Card cls="p-4 hover:border-primary/50 hover:shadow-card transition-all group-active:scale-[0.99]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-display font-700 text-sm text-primary">{o.orderNo}</span>
+                      <Badge cls={pColor(o.priority)}>{PRIORITY_LABEL[o.priority]}</Badge>
+                      {o.pendingApproval && (
+                        <Badge cls="bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300">
+                          <i className="fas fa-clock text-[10px]" /> Chờ duyệt
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="text-sm text-foreground font-semibold truncate group-hover:text-primary transition-colors">{o.productLine}</div>
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                      <span><i className="fas fa-user-tie mr-1" />{o.createdBy}</span>
+                      <span><i className="fas fa-boxes-stacked mr-1" />SL: {(o.targetQty ?? 0).toLocaleString()} cái</span>
+                      <span><i className="fas fa-calendar mr-1" />Hạn: {formatDeadline(o.deadline)}</span>
+                      <span><i className="fas fa-layer-group mr-1" />{countOrderParts(o)} linh kiện</span>
+                      {o.attachments.length > 0 && <span><i className="fas fa-paperclip mr-1" />{o.attachments.length} tệp</span>}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5">
+                    <Badge cls={sColor(o.status)}>{STATUS_LABEL[o.status]}</Badge>
+                    <i className="fas fa-chevron-right text-muted-foreground text-xs group-hover:translate-x-0.5 transition-transform" />
+                  </div>
                 </div>
-                <div className="text-sm text-foreground font-medium truncate">{o.productLine}</div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                  <span><i className="fas fa-user-tie mr-1" />{o.createdBy}</span>
-                  <span><i className="fas fa-boxes-stacked mr-1" />SL: {(o.targetQty ?? 0).toLocaleString()} cái</span>
-                  <span><i className="fas fa-calendar mr-1" />Hạn: {formatDeadline(o.deadline)}</span>
-                  <span><i className="fas fa-layer-group mr-1" />{countOrderParts(o)} linh kiện</span>
-                  {o.attachments.length > 0 && <span><i className="fas fa-paperclip mr-1" />{o.attachments.length} tệp</span>}
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <Badge cls={sColor(o.status)}>{STATUS_LABEL[o.status]}</Badge>
-                <i className="fas fa-chevron-right text-[#CBD5E1] text-xs" />
-              </div>
-            </div>
-          </Card>
-        </button>
-      ))}
-    </div>
+              </Card>
+            </button>
+          ))}
+        </div>
+      )}
       <PaginationBar
         page={paging?.page ?? page}
         pageSize={paging?.pageSize ?? pageSize}
@@ -2114,20 +2262,20 @@ function AdminView({
         <Btn onClick={openCreate}><i className="fas fa-user-plus" /> Thêm</Btn>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <StatTile label="Tổng TK" value={listQuery?.total ?? users.length} icon="fa-users" color="bg-[#EFF6FF] text-[#2563EB]" />
-        <StatTile label="Đang HĐ" value={users.filter(u => u.active).length} icon="fa-circle-dot" color="bg-[#F0FDF4] text-[#16A34A]" />
-        <StatTile label="Vô hiệu" value={users.filter(u => !u.active).length} icon="fa-ban" color="bg-[#FFF1F2] text-[#DC2626]" />
-        <StatTile label="Công nhân" value={users.filter(u => u.role === "worker").length} icon="fa-gear" color="bg-[#FFFBEB] text-[#D97706]" />
+        <StatTile label="Tổng TK" value={listQuery?.total ?? users.length} icon="fa-users" color="bg-sky-500/15 text-sky-600 dark:text-sky-400" />
+        <StatTile label="Đang HĐ" value={users.filter(u => u.active).length} icon="fa-circle-dot" color="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" />
+        <StatTile label="Vô hiệu" value={users.filter(u => !u.active).length} icon="fa-ban" color="bg-rose-500/15 text-rose-600 dark:text-rose-400" />
+        <StatTile label="Công nhân" value={users.filter(u => u.role === "worker").length} icon="fa-gear" color="bg-amber-500/15 text-amber-600 dark:text-amber-400" />
       </div>
       <div className="flex gap-2 mb-4">
         <div className="relative flex-1">
-          <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
+          <i className="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
           <input value={q} onChange={e => (listQuery ? listQuery.onSearch(e.target.value) : setSearch(e.target.value))} placeholder="Tìm tên, mã NV..."
-            className="w-full pl-9 pr-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            className="w-full pl-10 pr-3 py-2.5 border border-border rounded-xl text-sm bg-input focus:outline-none focus:ring-2 focus:ring-ring" />
         </div>
         <select value={roleF} onChange={e => (listQuery ? listQuery.onFilterRole(e.target.value) : setFilterRole(e.target.value))}
-          className="border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-card">
-          <option value="all">Tất cả</option>
+          className="border border-border rounded-xl px-3.5 py-2.5 text-sm bg-card cursor-pointer focus:outline-none focus:ring-2 focus:ring-ring">
+          <option value="all">Tất cả vai trò</option>
           {(["director","supervisor","teamlead","worker","qc","stats","admin"] as Role[]).map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
         </select>
       </div>

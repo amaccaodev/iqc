@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { BOMItem, DimensionRow, MachineChangeKind, ProductionOrder, ShiftClose, ShiftUnlockRequest, UserPublic } from "@shared/types";
 import type { MaterialSpec, SpecValidationResult } from "@shared/types/spec";
@@ -646,31 +646,40 @@ function EntryPanel({
       </div>
 
       {lastSavedTt !== null && (
-        <div className="mb-3 flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700">
-          <i className="fas fa-circle-check" />
-          Đã lưu SP #{lastSavedTt}
+        <div className="mb-3 flex items-center gap-2.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl p-3 text-sm text-emerald-700 dark:text-emerald-300 shadow-sm animate-fade-up">
+          <span className="w-6 h-6 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+            <i className="fas fa-circle-check text-xs text-emerald-600 dark:text-emerald-400" />
+          </span>
+          <span>Đã lưu thành công sản phẩm <strong className="font-bold">#{lastSavedTt}</strong></span>
         </div>
       )}
 
       {rowWarnings > 0 && (
-        <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-300 rounded-xl p-3 text-sm text-red-700">
-          <i className="fas fa-triangle-exclamation mt-0.5" />
-          {rowWarnings} thông số ngoài chuẩn / ngoài khoảng — ô đỏ; vẫn nộp được
+        <div className="mb-3 flex items-start gap-2.5 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl p-3 text-sm text-rose-700 dark:text-rose-300 shadow-sm animate-fade-up">
+          <span className="w-6 h-6 rounded-lg bg-rose-500/15 flex items-center justify-center shrink-0 mt-0.5">
+            <i className="fas fa-triangle-exclamation text-xs text-rose-600 dark:text-rose-400" />
+          </span>
+          <div className="text-xs sm:text-sm">
+            <strong className="font-semibold">{rowWarnings} thông số</strong> ngoài chuẩn / khoảng cho phép (ô viền đỏ). Bạn vẫn có thể nộp kết quả.
+          </div>
         </div>
       )}
 
       <div className="mb-4 flex justify-between text-xs font-medium">
         <span className="text-muted">
-          Đã đo: <span className="text-primary font-bold">{totalCount}</span> / {targetQty.toLocaleString()}
+          Đã đo: <span className="text-primary font-bold tabular-nums">{totalCount}</span> / {targetQty.toLocaleString()}
         </span>
         <span className="text-muted">
-          Bạn đã nộp: <span className="text-green-600 font-bold">{myCount}</span>
+          Bạn đã nộp: <span className="text-emerald-600 dark:text-emerald-400 font-bold tabular-nums">{myCount}</span>
         </span>
       </div>
 
-      <Card cls="overflow-hidden mb-4">
-        <div className="bg-primary text-white px-4 py-3">
+      <Card cls="overflow-hidden mb-4 shadow-card">
+        <div className="bg-brand-gradient text-primary-foreground px-4 py-3.5 flex items-center justify-between">
           <span className="font-display font-700 text-base">SP #{spNo} — {partName}</span>
+          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white/20 text-white backdrop-blur">
+            Điểm kiểm tra
+          </span>
         </div>
         <div className="p-4 space-y-4">
           {activeSpecs.map((spec) => {

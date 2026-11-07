@@ -88,7 +88,7 @@ test.describe("IQC Production Management", () => {
       await page.getByTestId("login-password").fill(a.pwd);
       await page.getByTestId("login-submit").click();
       await expect(page).not.toHaveURL(/\/login/);
-      const tablet = page.getByRole("navigation", { name: "Điều hướng tablet" });
+      const tablet = page.getByRole("navigation", { name: "Điều hướng chính" });
       await expect(tablet).toBeVisible();
       await expect(tablet.getByRole("button", { name: a.item })).toBeVisible();
       await tablet.getByRole("button", { name: a.item }).click();

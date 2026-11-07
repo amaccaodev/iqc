@@ -15,10 +15,10 @@ import { MACHINE_PROPOSAL_KIND_LABEL } from "../../components/worker/ProposalAct
 import { toast } from "../../hooks/useToast";
 
 const SEVERITY_COLOR: Record<string, string> = {
-  low: "bg-blue-100 text-blue-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
+  low: "bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-300",
+  medium: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300",
+  high: "bg-orange-50 text-orange-700 ring-orange-600/20 dark:bg-orange-500/10 dark:text-orange-300",
+  critical: "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300",
 };
 const SEVERITY_LABEL: Record<string, string> = {
   low: "Thấp",
@@ -27,11 +27,11 @@ const SEVERITY_LABEL: Record<string, string> = {
   critical: "Nghiêm trọng",
 };
 const STATUS_COLOR: Record<string, string> = {
-  open: "bg-red-100 text-red-700",
-  assigned: "bg-yellow-100 text-yellow-700",
-  in_progress: "bg-blue-100 text-blue-700",
-  resolved: "bg-green-100 text-green-700",
-  closed: "bg-gray-100 text-gray-600",
+  open: "bg-rose-50 text-rose-700 ring-rose-600/20 dark:bg-rose-500/10 dark:text-rose-300",
+  assigned: "bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-300",
+  in_progress: "bg-indigo-50 text-indigo-700 ring-indigo-600/20 dark:bg-indigo-500/10 dark:text-indigo-300",
+  resolved: "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300",
+  closed: "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-500/10 dark:text-slate-300",
 };
 const STATUS_LABEL: Record<string, string> = {
   open: "Mới",
@@ -381,15 +381,15 @@ export default function IncidentsPage() {
             key={id}
             type="button"
             onClick={() => setTab(id)}
-            className={`flex-1 min-h-10 rounded-lg text-sm font-bold border-0 cursor-pointer transition-colors ${
-              tab === id ? "bg-primary text-white shadow-sm" : "bg-transparent text-muted hover:text-foreground"
+            className={`flex-1 min-h-10 rounded-xl text-sm font-bold border-0 cursor-pointer transition-all duration-200 ${
+              tab === id ? "bg-brand-gradient text-primary-foreground shadow-brand" : "bg-transparent text-muted hover:text-foreground"
             }`}
           >
             {label}
             {badge != null && badge > 0 ? (
               <span
-                className={`ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-[10px] font-bold ${
-                  tab === id ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                className={`ml-1.5 inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full text-[10px] font-bold ${
+                  tab === id ? "bg-white/20 text-white" : "bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300"
                 }`}
               >
                 {badge}
@@ -401,7 +401,7 @@ export default function IncidentsPage() {
 
       {tab === "incidents" ? (
         <>
-          <div className="grid grid-cols-4 gap-3 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
             {(
               [
                 ["open", "Mới"],
@@ -410,21 +410,21 @@ export default function IncidentsPage() {
                 ["resolved", "Xong"],
               ] as const
             ).map(([st, label]) => (
-              <div key={st} className="bg-card rounded-xl border border-border p-3 text-center">
-                <div className="text-lg font-bold text-primary">{statusCounts[st] ?? 0}</div>
-                <div className="text-[11px] text-muted">{label}</div>
+              <div key={st} className="bg-card rounded-2xl border border-border/80 p-3.5 text-center shadow-card">
+                <div className="text-xl font-display font-800 text-primary tabular-nums">{statusCounts[st] ?? 0}</div>
+                <div className="text-[11px] font-semibold text-muted mt-0.5">{label}</div>
               </div>
             ))}
           </div>
 
           <div className="mb-4">
             <input
-              className="w-full border border-border rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-border rounded-xl px-3.5 py-2.5 text-sm bg-input focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Tìm máy, mã, mô tả sự cố…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1.5">
               {total} sự cố · trang {page}
             </p>
           </div>

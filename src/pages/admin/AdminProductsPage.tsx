@@ -16,7 +16,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { toast } from "../../hooks/useToast";
 
 const field =
-  "w-full border border-border rounded-lg px-3 py-2.5 text-sm bg-input text-foreground";
+  "w-full border border-border rounded-xl px-3.5 py-2.5 text-sm bg-input text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-ring";
 
 type ProcessDraft = {
   id?: string;
@@ -387,8 +387,10 @@ export default function AdminProductsPage() {
             key={t}
             type="button"
             onClick={() => setTab(t)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border-0 cursor-pointer whitespace-nowrap ${
-              tab === t ? "bg-primary text-white shadow-sm" : "bg-transparent text-muted hover:bg-surface"
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border-0 cursor-pointer whitespace-nowrap transition-all duration-200 ${
+              tab === t
+                ? "bg-brand-gradient text-primary-foreground shadow-brand"
+                : "bg-card text-muted border border-border/60 hover:text-foreground hover:bg-surface"
             }`}
           >
             <i className={`fas ${icon} text-xs`} /> {label}

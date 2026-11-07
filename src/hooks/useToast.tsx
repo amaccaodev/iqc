@@ -1,4 +1,4 @@
-﻿import {
+import {
   createContext,
   useCallback,
   useContext,
@@ -39,10 +39,10 @@ type ToastContextValue = {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const KIND_STYLE: Record<ToastKind, { bar: string; icon: string; iconClass: string }> = {
-  success: { bar: "border-l-emerald-500", icon: "fa-circle-check", iconClass: "text-emerald-600" },
-  error: { bar: "border-l-red-500", icon: "fa-circle-xmark", iconClass: "text-red-600" },
-  info: { bar: "border-l-primary", icon: "fa-circle-info", iconClass: "text-primary" },
-  warning: { bar: "border-l-amber-500", icon: "fa-triangle-exclamation", iconClass: "text-amber-600" },
+  success: { bar: "bg-emerald-500", icon: "fa-circle-check", iconClass: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400" },
+  error: { bar: "bg-rose-500", icon: "fa-circle-xmark", iconClass: "bg-rose-500/12 text-rose-600 dark:text-rose-400" },
+  info: { bar: "bg-primary", icon: "fa-circle-info", iconClass: "bg-primary/12 text-primary" },
+  warning: { bar: "bg-amber-500", icon: "fa-triangle-exclamation", iconClass: "bg-amber-500/12 text-amber-600 dark:text-amber-400" },
 };
 
 /** API toàn cục — dùng được cả ngoài hook (sau khi ToastProvider mount) */
@@ -139,14 +139,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           return (
             <div
               key={t.id}
-              className={`pointer-events-auto flex items-start gap-3 rounded-xl border border-border bg-card shadow-lg border-l-4 ${style.bar} px-3.5 py-3`}
+              className="relative overflow-hidden pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/70 glass-strong shadow-[0_18px_50px_-18px_rgba(15,23,42,0.45)] pl-4 pr-3 py-3"
               role="status"
             >
-              <i className={`fas ${style.icon} ${style.iconClass} mt-0.5`} />
-              <p className="flex-1 text-sm text-foreground leading-snug">{t.message}</p>
+              <span className={`absolute left-0 inset-y-0 w-1 ${style.bar}`} />
+              <span className={`w-8 h-8 shrink-0 rounded-xl flex items-center justify-center ${style.iconClass}`}>
+                <i className={`fas ${style.icon} text-sm`} />
+              </span>
+              <p className="flex-1 text-sm text-foreground leading-snug self-center">{t.message}</p>
               <button
                 type="button"
-                className="text-muted hover:text-foreground border-0 bg-transparent cursor-pointer p-0.5"
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted hover:text-foreground hover:bg-surface border-0 bg-transparent cursor-pointer transition-colors"
                 aria-label="Đóng"
                 onClick={() => dismiss(t.id)}
               >
@@ -166,27 +169,40 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         >
           <button
             type="button"
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm border-0 cursor-pointer"
+            className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm border-0 cursor-pointer"
             aria-label="Đóng"
             onClick={() => closeConfirm(false)}
           />
-          <div className="relative bg-card text-card-foreground rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl p-5 space-y-4">
-            <h3 id="iqc-confirm-title" className="font-display font-700 text-base">
-              {confirmState.opts.title || "Xác nhận"}
-            </h3>
+          <div className="relative bg-card text-card-foreground rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md shadow-2xl ring-1 ring-border/80 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <span
+                className={`w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center ${
+                  confirmState.opts.danger
+                    ? "bg-rose-500/12 text-rose-600 dark:text-rose-400"
+                    : "bg-primary/12 text-primary"
+                }`}
+              >
+                <i className={`fas ${confirmState.opts.danger ? "fa-triangle-exclamation" : "fa-circle-question"} text-lg`} />
+              </span>
+              <h3 id="iqc-confirm-title" className="font-display font-700 text-lg">
+                {confirmState.opts.title || "Xác nhận"}
+              </h3>
+            </div>
             <p className="text-sm text-muted leading-relaxed whitespace-pre-line">{confirmState.opts.message}</p>
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                className="flex-1 min-h-11 rounded-xl border border-border bg-card text-sm font-semibold cursor-pointer"
+                className="flex-1 min-h-11 rounded-xl border border-border bg-card text-sm font-semibold cursor-pointer hover:bg-surface transition-colors"
                 onClick={() => closeConfirm(false)}
               >
                 {confirmState.opts.cancelLabel || "Huỷ"}
               </button>
               <button
                 type="button"
-                className={`flex-1 min-h-11 rounded-xl border-0 text-white text-sm font-semibold cursor-pointer ${
-                  confirmState.opts.danger ? "bg-red-600" : "bg-primary"
+                className={`flex-1 min-h-11 rounded-xl border-0 text-white text-sm font-semibold cursor-pointer transition-all hover:brightness-110 ${
+                  confirmState.opts.danger
+                    ? "bg-gradient-to-br from-rose-500 to-red-600 shadow-[0_8px_20px_-8px_rgba(225,29,72,0.6)]"
+                    : "bg-primary bg-brand-gradient shadow-brand"
                 }`}
                 onClick={() => closeConfirm(true)}
               >

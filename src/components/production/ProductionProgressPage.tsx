@@ -22,10 +22,14 @@ const PENDING_SHIFT: ReadonlySet<string> = new Set([
 
 function ProgressBar({ pct, tone = "blue" }: { pct: number; tone?: "blue" | "green" | "amber" }) {
   const color =
-    tone === "green" ? "bg-emerald-500" : tone === "amber" ? "bg-amber-500" : "bg-primary";
+    tone === "green"
+      ? "bg-gradient-to-r from-emerald-500 to-green-500"
+      : tone === "amber"
+        ? "bg-gradient-to-r from-amber-500 to-yellow-500"
+        : "bg-brand-gradient";
   return (
-    <div className="h-2 rounded-full bg-border overflow-hidden">
-      <div className={`h-full ${color} transition-all`} style={{ width: `${Math.min(100, pct)}%` }} />
+    <div className="h-2 rounded-full bg-surface overflow-hidden ring-1 ring-inset ring-border/50">
+      <div className={`h-full ${color} transition-all duration-300 rounded-full`} style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
     </div>
   );
 }
@@ -33,7 +37,7 @@ function ProgressBar({ pct, tone = "blue" }: { pct: number; tone?: "blue" | "gre
 function RedDot({ title }: { title: string }) {
   return (
     <span
-      className="inline-block w-2.5 h-2.5 rounded-full bg-red-500 shrink-0"
+      className="inline-flex w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-card animate-pulse shrink-0"
       title={title}
       aria-label={title}
     />
@@ -86,8 +90,8 @@ function PartRow({
         e.stopPropagation();
         navigate(detailPath);
       }}
-      className={`w-full text-left rounded-xl border p-3 sm:p-4 relative cursor-pointer hover:border-primary/50 hover:bg-surface transition-colors ${
-        mine === false ? "border-border bg-card/70 opacity-80" : "border-border bg-card"
+      className={`w-full text-left rounded-2xl border p-3.5 sm:p-4 relative cursor-pointer hover:border-primary hover:shadow-card transition-all ${
+        mine === false ? "border-border/70 bg-card/70 opacity-80" : "border-border/80 bg-card"
       }`}
     >
       {shiftClosePending ? (
@@ -220,8 +224,10 @@ function ProductCard({
             </span>
             {orderHasPendingClose ? <RedDot title="Có chốt ca chờ duyệt trên lệnh này" /> : null}
             <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                isDone ? "bg-emerald-100 text-emerald-800" : "bg-secondary text-primary"
+              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ring-1 ring-inset ${
+                isDone
+                  ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                  : "bg-secondary text-primary ring-primary/20"
               }`}
             >
               {STATUS_LABEL[order.status]}
@@ -232,19 +238,19 @@ function ProductCard({
             {order.productCode ? ` · ${order.productCode}` : ""}
           </div>
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-            <div className="rounded-lg bg-surface px-2.5 py-2">
-              <div className="text-muted-foreground">Thành phẩm ước tính</div>
-              <div className="font-bold text-primary tabular-nums">
+            <div className="rounded-xl bg-surface/80 border border-border/60 px-3 py-2.5">
+              <div className="text-[11px] text-muted-foreground">Thành phẩm ước tính</div>
+              <div className="font-bold text-primary tabular-nums mt-0.5">
                 {finishedEst.toLocaleString()} / {order.targetQty.toLocaleString()}
               </div>
             </div>
-            <div className="rounded-lg bg-surface px-2.5 py-2">
-              <div className="text-muted-foreground">Linh kiện</div>
-              <div className="font-bold text-primary">{partGroups.length} chi tiết</div>
+            <div className="rounded-xl bg-surface/80 border border-border/60 px-3 py-2.5">
+              <div className="text-[11px] text-muted-foreground">Linh kiện</div>
+              <div className="font-bold text-primary mt-0.5">{partGroups.length} chi tiết</div>
             </div>
-            <div className="rounded-lg bg-surface px-2.5 py-2 col-span-2 sm:col-span-1">
-              <div className="text-muted-foreground">Tiến độ TB</div>
-              <div className="font-bold text-primary">{partDoneAvg}%</div>
+            <div className="rounded-xl bg-surface/80 border border-border/60 px-3 py-2.5 col-span-2 sm:col-span-1">
+              <div className="text-[11px] text-muted-foreground">Tiến độ TB</div>
+              <div className="font-bold text-primary mt-0.5">{partDoneAvg}%</div>
             </div>
           </div>
           <div className="mt-2">

@@ -7,7 +7,8 @@ import { catalogApi } from "../../services/api/CatalogApiService";
 import { usePagedList, useStableFetch } from "../../hooks/usePagedList";
 import { toast } from "../../hooks/useToast";
 
-const field = "w-full border border-border rounded-lg px-3 py-2 text-sm";
+const field =
+  "w-full border border-border rounded-xl px-3.5 py-2.5 text-sm bg-input text-foreground transition-all focus:outline-none focus:ring-2 focus:ring-ring";
 
 const emptyForm = {
   code: "",

@@ -10,8 +10,10 @@ import {
 
 export type ThemeMode = "gold" | "light" | "dark";
 
-const STORAGE_KEY = "iqc-theme";
-const ORDER: ThemeMode[] = ["gold", "light", "dark"];
+/** v2: đổi theme mặc định sang "light" — key mới để người dùng cũ cũng nhận mặc định mới */
+const STORAGE_KEY = "iqc-theme-v2";
+const ORDER: ThemeMode[] = ["light", "dark", "gold"];
+const DEFAULT_THEME: ThemeMode = "light";
 
 function isTheme(v: string | null): v is ThemeMode {
   return v === "gold" || v === "light" || v === "dark";
@@ -24,7 +26,7 @@ function readStored(): ThemeMode {
   } catch {
     /* ignore */
   }
-  return "gold";
+  return DEFAULT_THEME;
 }
 
 function applyDom(theme: ThemeMode) {
@@ -46,7 +48,7 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>(() => {
-    if (typeof document === "undefined") return "gold";
+    if (typeof document === "undefined") return DEFAULT_THEME;
     return readStored();
   });
 

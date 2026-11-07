@@ -45,7 +45,7 @@ export default function ResponsiveDataList<T>({
   return (
     <div className="space-y-3">
       {/* Mobile / tablet: cards */}
-      <div className="space-y-2 lg:hidden">
+      <div className="space-y-2.5 lg:hidden">
         {items.map((row) => (
           <div
             key={getKey(row)}
@@ -67,19 +67,20 @@ export default function ResponsiveDataList<T>({
           </div>
         ))}
         {items.length === 0 && (
-          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          <div className="rounded-2xl border border-dashed border-border bg-card/60 p-10 text-center text-sm text-muted-foreground">
+            <i className="fas fa-inbox text-2xl mb-2 block opacity-50" />
             {emptyText}
           </div>
         )}
       </div>
 
       {/* Desktop: table */}
-      <div className="hidden lg:block overflow-x-auto rounded-xl border border-border bg-card">
+      <div className="hidden lg:block overflow-x-auto rounded-2xl border border-border/80 bg-card shadow-card">
         <table className="w-full text-sm">
-          <thead className="bg-surface text-muted text-xs uppercase tracking-wide">
+          <thead className="bg-surface/80 text-muted text-[11px] uppercase tracking-wider border-b border-border/80">
             <tr>
               {columns.map((c) => (
-                <th key={c.key} className={`text-left font-semibold px-4 py-3 ${c.className ?? ""}`}>
+                <th key={c.key} className={`text-left font-semibold px-5 py-3.5 ${c.className ?? ""}`}>
                   {c.header}
                 </th>
               ))}
@@ -89,13 +90,13 @@ export default function ResponsiveDataList<T>({
             {items.map((row) => (
               <tr
                 key={getKey(row)}
-                className={`border-t border-border ${
-                  onRowClick ? "hover:bg-surface cursor-pointer" : ""
-                } ${isRowActive?.(row) ? "bg-secondary/60" : ""}`}
+                className={`border-t border-border/60 first:border-t-0 hover:bg-surface/70 ${
+                  onRowClick ? "cursor-pointer" : ""
+                } ${isRowActive?.(row) ? "bg-secondary/60 shadow-[inset_3px_0_0_var(--primary)]" : ""}`}
                 onClick={() => onRowClick?.(row)}
               >
                 {columns.map((c) => (
-                  <td key={c.key} className={`px-4 py-3 align-middle ${c.className ?? ""}`}>
+                  <td key={c.key} className={`px-5 py-3.5 align-middle ${c.className ?? ""}`}>
                     {c.render(row)}
                   </td>
                 ))}
@@ -103,7 +104,8 @@ export default function ResponsiveDataList<T>({
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={columns.length} className="p-8 text-center text-muted-foreground">
+                <td colSpan={columns.length} className="p-12 text-center text-muted-foreground">
+                  <i className="fas fa-inbox text-2xl mb-2 block opacity-50" />
                   {emptyText}
                 </td>
               </tr>

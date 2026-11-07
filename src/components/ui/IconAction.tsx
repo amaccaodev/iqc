@@ -18,10 +18,10 @@ export default function IconAction({
         e.stopPropagation();
         onClick();
       }}
-      className={`w-9 h-9 inline-flex items-center justify-center rounded-lg border cursor-pointer ${
+      className={`w-9 h-9 inline-flex items-center justify-center rounded-xl border cursor-pointer transition-all hover:-translate-y-px ${
         tone === "danger"
-          ? "border-red-200 bg-card text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950"
-          : "border-border bg-card text-primary hover:border-primary hover:bg-secondary"
+          ? "border-rose-200 bg-card text-rose-600 hover:bg-rose-50 hover:border-rose-300 dark:border-rose-500/30 dark:text-rose-400 dark:hover:bg-rose-500/10"
+          : "border-border/80 bg-card text-primary hover:border-primary/40 hover:bg-secondary hover:shadow-card"
       }`}
     >
       <i className={`fas ${icon} text-sm`} />

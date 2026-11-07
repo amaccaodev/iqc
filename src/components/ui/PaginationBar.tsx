@@ -29,10 +29,10 @@ export default function PaginationBar({
   const to = Math.min(page * pageSize, safeTotal);
   const nums = pageWindow(page, pages);
   const btn =
-    "h-9 min-w-9 px-2 rounded-lg border border-border bg-card text-sm disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed hover:border-primary";
+    "h-9 min-w-9 px-2.5 rounded-xl border border-border/80 bg-card text-sm font-medium text-muted transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed enabled:hover:border-primary/50 enabled:hover:text-primary enabled:hover:-translate-y-px";
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 border-t border-border mt-2">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-3 mt-2">
       <div className="text-[11px] text-muted tabular-nums">
         {from}–{to} / {safeTotal} mục · Trang {page}/{pages}
       </div>
@@ -41,7 +41,7 @@ export default function PaginationBar({
           <label className="flex items-center gap-1 text-[11px] text-muted mr-2">
             <span>Mỗi trang</span>
             <select
-              className="h-9 rounded-lg border border-border bg-card text-sm px-2 cursor-pointer"
+              className="h-9 rounded-xl border border-border bg-card text-sm px-2 cursor-pointer"
               value={pageSize}
               onChange={(e) => onPageSize(Number(e.target.value))}
               aria-label="Số dòng mỗi trang"
@@ -72,7 +72,7 @@ export default function PaginationBar({
             key={n}
             type="button"
             onClick={() => onPage(n)}
-            className={`${btn} ${n === page ? "bg-primary text-primary-foreground border-primary font-semibold" : ""}`}
+            className={`${btn} ${n === page ? "!bg-brand-gradient !text-primary-foreground !border-transparent font-semibold shadow-brand" : ""}`}
             aria-current={n === page ? "page" : undefined}
             aria-label={`Trang ${n}`}
           >

@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { BOMItem, BOMStatus, ProductionOrder } from "@shared/types";
 import { BOM_STATUS_LABEL } from "@shared/constants/labels";
 import PaginationBar from "../ui/PaginationBar";
@@ -37,11 +37,11 @@ interface LinePoint {
 
 const STATUS_COLOR: Record<string, string> = {
   unassigned: "#94A3B8",
-  assigned: "#2563EB",
-  in_progress: "#7C3AED",
-  team_reported: "#D97706",
-  qc_passed: "#16A34A",
-  qc_failed: "#DC2626",
+  assigned: "#0EA5E9",
+  in_progress: "#6366F1",
+  team_reported: "#F59E0B",
+  qc_passed: "#10B981",
+  qc_failed: "#F43F5E",
 };
 
 const BOM_STATUSES: BOMStatus[] = ["unassigned", "assigned", "in_progress", "team_reported", "qc_passed", "qc_failed"];
@@ -130,17 +130,27 @@ export default function DashboardCharts({
 
   return (
     <div className="mb-6 space-y-3">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
-          <h3 className="font-display font-700 text-sm mb-3">BOM theo trạng thái</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-card rounded-2xl border border-border/80 p-5 shadow-card hover:shadow-card-hover transition-all duration-300">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display font-700 text-sm sm:text-base text-foreground">BOM theo trạng thái</h3>
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <i className="fas fa-chart-pie text-xs" /> Phân bố
+            </span>
+          </div>
           <PieChart
             slices={slices}
             onSelect={(s) => openSheet(`${s.label} · ${s.value} BOM (${s.percent}%)`, s.items)}
             onCenterClick={openAllBoms}
           />
         </div>
-        <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
-          <h3 className="font-display font-700 text-sm mb-3">Sản lượng theo lệnh</h3>
+        <div className="bg-card rounded-2xl border border-border/80 p-5 shadow-card hover:shadow-card-hover transition-all duration-300">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display font-700 text-sm sm:text-base text-foreground">Sản lượng theo lệnh</h3>
+            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <i className="fas fa-chart-line text-xs" /> Đạt chuẩn
+            </span>
+          </div>
           <LineChart
             points={pagedPoints}
             onSelect={(p) => openSheet(`LSX-${p.label} · ${p.pass.toLocaleString()} đạt`, p.items)}
@@ -150,28 +160,31 @@ export default function DashboardCharts({
       </div>
 
       {selected && (
-        <div className="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center keyboard-aware-overlay" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm flex items-end sm:items-center justify-center keyboard-aware-overlay animate-fade-up" onClick={() => setSelected(null)}>
           <div
-            className="bg-card rounded-t-3xl sm:rounded-2xl w-full max-w-md shadow-xl flex flex-col"
+            className="bg-card text-card-foreground rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-2xl ring-1 ring-border/80 flex flex-col overflow-hidden"
             style={{ minHeight: "58vh", maxHeight: "min(88vh, calc(100dvh - var(--keyboard-inset, 0px) - 1rem))" }}
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="h-1 w-full bg-brand-gradient-3 shrink-0" />
             <div className="px-5 pt-3 pb-2 flex-shrink-0">
               <div className="sm:hidden w-10 h-1 bg-border rounded-full mx-auto mb-3" />
               <div className="flex items-start justify-between gap-3">
-                <h4 className="font-display font-700 text-base pr-2">{selected.title}</h4>
-                <button type="button" onClick={() => setSelected(null)} className="w-9 h-9 rounded-full bg-surface border-0 cursor-pointer text-lg flex-shrink-0">×</button>
+                <h4 className="font-display font-700 text-base sm:text-lg pr-2">{selected.title}</h4>
+                <button type="button" onClick={() => setSelected(null)} className="w-8 h-8 rounded-xl bg-surface hover:bg-border/60 text-muted hover:text-foreground border-0 cursor-pointer text-sm flex items-center justify-center shrink-0 transition-colors">
+                  <i className="fas fa-xmark" />
+                </button>
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">{sheetItems.length} mục · bấm dòng để xem chi tiết</p>
             </div>
             <div className="px-5 overflow-y-auto flex-1" style={{ minHeight: sheetListH }}>
-              <div className="space-y-2 pb-2">
+              <div className="space-y-2 pb-3">
                 {pagedSheet.map((item) => (
                   <button
                     key={item.key}
                     type="button"
                     onClick={() => openDetail(item)}
-                    className="w-full text-left bg-surface rounded-xl px-3 py-3 border border-transparent hover:border-ring cursor-pointer min-h-[64px]"
+                    className="w-full text-left bg-surface/70 hover:bg-surface rounded-xl px-3.5 py-3 border border-border/50 hover:border-primary/50 cursor-pointer min-h-[64px] transition-all"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
