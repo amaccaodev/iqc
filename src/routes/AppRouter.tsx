@@ -14,6 +14,8 @@ import DirectorDashboardPage from "../pages/director/DirectorDashboardPage";
 import DirectorOrdersPage from "../pages/director/DirectorOrdersPage";
 import DirectorProductionPage from "../pages/director/DirectorProductionPage";
 import DirectorWarehousePage from "../pages/director/DirectorWarehousePage";
+import DirectorMachinesPage from "../pages/director/DirectorMachinesPage";
+import WarehousePage from "../pages/shared/WarehousePage";
 import PartDetailPage from "../pages/shared/PartDetailPage";
 import QCDashboardPage from "../pages/qc/QCDashboardPage";
 import QCInspectPage from "../pages/qc/QCInspectPage";
@@ -67,6 +69,22 @@ export default function AppRouter() {
           </div>
         }
       />
+      <Route
+        path="/warehouse"
+        element={
+          <div className="min-h-screen bg-background text-foreground">
+            <WarehousePage />
+          </div>
+        }
+      />
+      <Route
+        path="/machines"
+        element={
+          <div className="min-h-screen bg-background text-foreground">
+            <DirectorMachinesPage />
+          </div>
+        }
+      />
 
       <Route path="/director" element={<RoleLayout role="director" />}>
         <Route path="dashboard" element={<DirectorDashboardPage />} />
@@ -79,7 +97,7 @@ export default function AppRouter() {
         <Route path="approvals" element={<DirectorApprovalsPage />} />
         <Route path="payroll" element={<PayrollRatesPage />} />
         <Route path="warehouse" element={<DirectorWarehousePage />} />
-        <Route path="machines" element={<AdminMachinesPage />} />
+        <Route path="machines" element={<DirectorMachinesPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="incidents" element={<IncidentsPage />} />
         <Route path="profile" element={<ProfilePage />} />
