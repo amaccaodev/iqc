@@ -1,79 +1,79 @@
-import { useState } from "react";
-import { Navigate } from "react-router-dom";
-import type { LoginResponse } from "@shared/types";
-import { roleHomePath } from "@shared/constants/labels";
-import { useAuth } from "../../hooks/useAuth";
-import { enableDemoMode, isDemoMode } from "../../lib/demoMode";
-import ThemeSwitcher from "../../components/ui/ThemeSwitcher";
+import { useState } from "react"
+import { Navigate } from "react-router-dom"
+import type { LoginResponse } from "@shared/types"
+import { roleHomePath } from "@shared/constants/labels"
+import { useAuth } from "../../hooks/useAuth"
+import { enableDemoMode, isDemoMode } from "../../lib/demoMode"
+import ThemeSwitcher from "../../components/ui/ThemeSwitcher"
 
 export default function LoginPage() {
-  const { user, login, loading } = useAuth();
+  const { user, login, loading } = useAuth()
 
   if (user) {
-    return <Navigate to={roleHomePath(user.role)} replace />;
+    return <Navigate to={roleHomePath(user.role)} replace />
   }
 
-  return <LoginForm onLogin={login} loading={loading} />;
+  return <LoginForm onLogin={login} loading={loading} />
 }
 
 function LoginForm({
   onLogin,
   loading,
 }: {
-  onLogin: (employeeId: string, password: string) => Promise<LoginResponse>;
-  loading: boolean;
+  onLogin: (employeeId: string, password: string) => Promise<LoginResponse>
+  loading: boolean
 }) {
-  const [empId, setEmpId] = useState("");
-  const [pwd, setPwd] = useState("");
-  const [err, setErr] = useState("");
-  const [pendingMsg, setPendingMsg] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
-  const [empIdError, setEmpIdError] = useState("");
-  const [pwdError, setPwdError] = useState("");
-  const demo = isDemoMode();
+  const [empId, setEmpId] = useState("")
+  const [pwd, setPwd] = useState("")
+  const [err, setErr] = useState("")
+  const [pendingMsg, setPendingMsg] = useState("")
+  const [showPwd, setShowPwd] = useState(false)
+  const [empIdError, setEmpIdError] = useState("")
+  const [pwdError, setPwdError] = useState("")
+  const demo = isDemoMode()
 
   const submit = async () => {
-    const trimmedId = empId.trim();
-    let hasValidationError = false;
+    const trimmedId = empId.trim()
+    let hasValidationError = false
 
     if (!trimmedId) {
-      setEmpIdError("Vui lòng nhập mã nhân viên.");
-      hasValidationError = true;
+      setEmpIdError("Vui lòng nhập mã nhân viên.")
+      hasValidationError = true
     } else {
-      setEmpIdError("");
+      setEmpIdError("")
     }
 
     if (!pwd) {
-      setPwdError("Vui lòng nhập mật khẩu.");
-      hasValidationError = true;
+      setPwdError("Vui lòng nhập mật khẩu.")
+      hasValidationError = true
     } else {
-      setPwdError("");
+      setPwdError("")
     }
 
     if (hasValidationError) {
-      setErr("Vui lòng điền đầy đủ mã nhân viên và mật khẩu.");
-      return;
+      setErr("Vui lòng điền đầy đủ mã nhân viên và mật khẩu.")
+      return
     }
 
     try {
-      setErr("");
-      setPendingMsg("");
-      const result = await onLogin(trimmedId, pwd);
+      setErr("")
+      setPendingMsg("")
+      const result = await onLogin(trimmedId, pwd)
       if (result.status === "pending_device") {
-        setPendingMsg(result.message ?? "Thiết bị mới đang chờ phê duyệt.");
+        setPendingMsg(result.message ?? "Thiết bị mới đang chờ phê duyệt.")
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Đăng nhập thất bại");
+      setErr(e instanceof Error ? e.message : "Đăng nhập thất bại")
     }
-  };
+  }
 
   const handleSelectDemo = (id: string) => {
-    setEmpId(id);
-    setPwd(id === "NV000" ? "admin123" : "123456");
-    setEmpIdError("");
-    setPwdError("");
-    setErr("");
-  };
+    setEmpId(id)
+    setPwd(id === "NV000" ? "admin123" : "123456")
+    setEmpIdError("")
+    setPwdError("")
+    setErr("")
+  }
 
   const demoAccounts: Array<[string, string, string]> = [
     ["NV001", "GĐ", "fa-star"],
@@ -82,7 +82,7 @@ function LoginForm({
     ["NV030", "Công nhân", "fa-gear"],
     ["NV040", "QC", "fa-magnifying-glass"],
     ["NV000", "Admin", "fa-shield"],
-  ];
+  ]
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col justify-between lg:grid lg:grid-cols-12 relative overflow-hidden">
@@ -131,12 +131,15 @@ function LoginForm({
 
           <h2 className="font-display font-extrabold text-3xl xl:text-4xl 2xl:text-5xl leading-[1.18] tracking-tight text-foreground">
             Quản lý sản xuất &amp; đo kiểm
-            <span className="block text-gradient mt-1">thông minh, theo thời gian thực.</span>
+            <span className="block text-gradient mt-1">
+              thông minh, theo thời gian thực.
+            </span>
           </h2>
 
           <p className="mt-5 text-muted text-sm xl:text-base leading-relaxed">
-            Số hóa toàn diện chu trình sản xuất công nghiệp: từ điều phối lệnh sản xuất, phân bổ công đoạn,
-            đo kiểm IQC dung sai milimet đến xuất nhập kho và chốt ca tức thời.
+            Số hóa toàn diện chu trình sản xuất công nghiệp: từ điều phối lệnh
+            sản xuất, phân bổ công đoạn, đo kiểm IQC dung sai milimet đến xuất
+            nhập kho và chốt ca tức thời.
           </p>
 
           {/* Feature Highlights Grid */}
@@ -174,7 +177,10 @@ function LoginForm({
           {/* Metric preview pills */}
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface border border-border/70 text-[11px] font-medium text-muted">
-              <i className="fas fa-check-double text-emerald-500" aria-hidden="true" />
+              <i
+                className="fas fa-check-double text-emerald-500"
+                aria-hidden="true"
+              />
               Độ chính xác đo kiểm 99.8%
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface border border-border/70 text-[11px] font-medium text-muted">
@@ -182,7 +188,10 @@ function LoginForm({
               Độ trễ đồng bộ &lt; 200ms
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-surface border border-border/70 text-[11px] font-medium text-muted">
-              <i className="fas fa-shield-halved text-primary" aria-hidden="true" />
+              <i
+                className="fas fa-shield-halved text-primary"
+                aria-hidden="true"
+              />
               Bảo mật thiết bị đa tầng
             </span>
           </div>
@@ -190,9 +199,14 @@ function LoginForm({
 
         {/* Hero Footer */}
         <div className="relative z-10 flex items-center justify-between pt-6 border-t border-border/60 text-xs text-muted">
-          <span>© {new Date().getFullYear()} COPEX · IQC Industrial Platform</span>
+          <span>
+            © {new Date().getFullYear()} COPEX · IQC Industrial Platform
+          </span>
           <span className="inline-flex items-center gap-1.5 font-medium">
-            <i className="fas fa-circle-check text-emerald-500" aria-hidden="true" />
+            <i
+              className="fas fa-circle-check text-emerald-500"
+              aria-hidden="true"
+            />
             Hệ thống an toàn
           </span>
         </div>
@@ -209,7 +223,10 @@ function LoginForm({
           {/* Mobile & Tablet Header */}
           <div className="text-center mb-6 sm:mb-8 lg:hidden">
             <div className="relative w-16 h-16 rounded-2xl bg-brand-gradient flex items-center justify-center mx-auto mb-3 shadow-brand ring-1 ring-inset ring-foreground/10">
-              <i className="fas fa-industry text-primary-foreground text-2xl" aria-hidden="true" />
+              <i
+                className="fas fa-industry text-primary-foreground text-2xl"
+                aria-hidden="true"
+              />
             </div>
             <div className="text-muted text-[11px] uppercase tracking-[0.2em] font-semibold mb-1">
               CTCP Công nghệ Đồng
@@ -217,7 +234,9 @@ function LoginForm({
             <h1 className="font-display font-extrabold text-2xl sm:text-3xl tracking-tight text-foreground">
               COPEX <span className="text-gradient">IQC</span>
             </h1>
-            <p className="text-muted text-xs sm:text-sm mt-1">Hệ thống Quản lý Sản xuất &amp; Đo kiểm</p>
+            <p className="text-muted text-xs sm:text-sm mt-1">
+              Hệ thống Quản lý Sản xuất &amp; Đo kiểm
+            </p>
           </div>
 
           {/* Demo Alert if demo mode is enabled */}
@@ -226,10 +245,14 @@ function LoginForm({
               role="status"
               className="mb-4 flex items-start gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-800 dark:text-amber-200 animate-fade-up"
             >
-              <i className="fas fa-flask text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
+              <i
+                className="fas fa-flask text-amber-500 mt-0.5 shrink-0"
+                aria-hidden="true"
+              />
               <div className="leading-relaxed">
-                <strong className="font-semibold">DEMO UI:</strong> Chạy dữ liệu giả lập (mock data), không cần backend.
-                Chọn tài khoản demo bên dưới rồi nhấn Đăng nhập.
+                <strong className="font-semibold">DEMO UI:</strong> Chạy dữ liệu
+                giả lập (mock data), không cần backend. Chọn tài khoản demo bên
+                dưới rồi nhấn Đăng nhập.
               </div>
             </div>
           )}
@@ -248,8 +271,8 @@ function LoginForm({
             {/* Native accessible form */}
             <form
               onSubmit={(e) => {
-                e.preventDefault();
-                void submit();
+                e.preventDefault()
+                void submit()
               }}
               noValidate
               className="space-y-4"
@@ -260,7 +283,10 @@ function LoginForm({
                   htmlFor="login-employee-id"
                   className="block text-xs font-semibold text-foreground/90 mb-1.5"
                 >
-                  Mã nhân viên <span className="text-rose-500" aria-hidden="true">*</span>
+                  Mã nhân viên{" "}
+                  <span className="text-rose-500" aria-hidden="true">
+                    *
+                  </span>
                 </label>
                 <div className="relative group">
                   <i
@@ -274,15 +300,17 @@ function LoginForm({
                     autoComplete="username"
                     value={empId}
                     onChange={(e) => {
-                      setEmpId(e.target.value);
-                      if (empIdError) setEmpIdError("");
-                      if (err) setErr("");
+                      setEmpId(e.target.value)
+                      if (empIdError) setEmpIdError("")
+                      if (err) setErr("")
                     }}
                     placeholder="VD: NV001, NV010, NV030..."
                     disabled={loading}
                     aria-required="true"
                     aria-invalid={!!empIdError || (!!err && !empId.trim())}
-                    aria-describedby={empIdError ? "employee-id-error" : undefined}
+                    aria-describedby={
+                      empIdError ? "employee-id-error" : undefined
+                    }
                     className={`w-full pl-10 pr-4 py-3 bg-input text-foreground border rounded-xl text-sm transition-all focus:outline-none focus:ring-4 placeholder:text-muted-foreground/60 disabled:opacity-50 disabled:cursor-not-allowed ${
                       empIdError
                         ? "border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/20"
@@ -296,7 +324,10 @@ function LoginForm({
                     className="mt-1.5 text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1.5 animate-fade-up font-medium"
                     role="alert"
                   >
-                    <i className="fas fa-circle-exclamation text-[11px]" aria-hidden="true" />
+                    <i
+                      className="fas fa-circle-exclamation text-[11px]"
+                      aria-hidden="true"
+                    />
                     <span>{empIdError}</span>
                   </p>
                 )}
@@ -309,9 +340,14 @@ function LoginForm({
                     htmlFor="login-password"
                     className="block text-xs font-semibold text-foreground/90"
                   >
-                    Mật khẩu <span className="text-rose-500" aria-hidden="true">*</span>
+                    Mật khẩu{" "}
+                    <span className="text-rose-500" aria-hidden="true">
+                      *
+                    </span>
                   </label>
-                  <span className="text-[11px] text-muted-foreground">Tối thiểu 6 ký tự</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Tối thiểu 6 ký tự
+                  </span>
                 </div>
                 <div className="relative group">
                   <i
@@ -325,9 +361,9 @@ function LoginForm({
                     autoComplete="current-password"
                     value={pwd}
                     onChange={(e) => {
-                      setPwd(e.target.value);
-                      if (pwdError) setPwdError("");
-                      if (err) setErr("");
+                      setPwd(e.target.value)
+                      if (pwdError) setPwdError("")
+                      if (err) setErr("")
                     }}
                     placeholder="Nhập mật khẩu"
                     disabled={loading}
@@ -350,7 +386,9 @@ function LoginForm({
                     className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-surface/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer transition-colors"
                   >
                     <i
-                      className={`fas ${showPwd ? "fa-eye-slash" : "fa-eye"} text-sm transition-transform duration-200`}
+                      className={`fas ${
+                        showPwd ? "fa-eye-slash" : "fa-eye"
+                      } text-sm transition-transform duration-200`}
                       aria-hidden="true"
                     />
                   </button>
@@ -361,7 +399,10 @@ function LoginForm({
                     className="mt-1.5 text-xs text-rose-500 dark:text-rose-400 flex items-center gap-1.5 animate-fade-up font-medium"
                     role="alert"
                   >
-                    <i className="fas fa-circle-exclamation text-[11px]" aria-hidden="true" />
+                    <i
+                      className="fas fa-circle-exclamation text-[11px]"
+                      aria-hidden="true"
+                    />
                     <span>{pwdError}</span>
                   </p>
                 )}
@@ -375,7 +416,10 @@ function LoginForm({
                   aria-live="assertive"
                   className="flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs text-rose-700 dark:text-rose-300 animate-fade-up font-medium"
                 >
-                  <i className="fas fa-circle-exclamation text-sm text-rose-500 mt-0.5 shrink-0" aria-hidden="true" />
+                  <i
+                    className="fas fa-circle-exclamation text-sm text-rose-500 mt-0.5 shrink-0"
+                    aria-hidden="true"
+                  />
                   <div className="leading-relaxed">{err}</div>
                 </div>
               )}
@@ -387,7 +431,10 @@ function LoginForm({
                   aria-live="polite"
                   className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-200 animate-fade-up font-medium"
                 >
-                  <i className="fas fa-mobile-screen-button text-sm text-amber-500 mt-0.5 shrink-0" aria-hidden="true" />
+                  <i
+                    className="fas fa-mobile-screen-button text-sm text-amber-500 mt-0.5 shrink-0"
+                    aria-hidden="true"
+                  />
                   <div className="leading-relaxed">{pendingMsg}</div>
                 </div>
               )}
@@ -401,7 +448,10 @@ function LoginForm({
               >
                 {loading ? (
                   <>
-                    <i className="fas fa-circle-notch fa-spin text-sm" aria-hidden="true" />
+                    <i
+                      className="fas fa-circle-notch fa-spin text-sm"
+                      aria-hidden="true"
+                    />
                     <span>Đang đăng nhập...</span>
                   </>
                 ) : (
@@ -422,11 +472,17 @@ function LoginForm({
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                   Tài khoản demo
                 </span>
-                <span className="text-[10px] text-muted-foreground">Nhấp để điền nhanh</span>
+                <span className="text-[10px] text-muted-foreground">
+                  Nhấp để điền nhanh
+                </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2" role="region" aria-label="Tài khoản mẫu">
+              <div
+                className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+                role="region"
+                aria-label="Tài khoản mẫu"
+              >
                 {demoAccounts.map(([id, r, icon]) => {
-                  const selected = empId === id;
+                  const selected = empId === id
                   return (
                     <button
                       key={id}
@@ -453,10 +509,12 @@ function LoginForm({
                         <span className="block font-mono-data text-[11px] font-bold text-foreground">
                           {id}
                         </span>
-                        <span className="block text-[11px] text-muted truncate">{r}</span>
+                        <span className="block text-[11px] text-muted truncate">
+                          {r}
+                        </span>
                       </span>
                     </button>
-                  );
+                  )
                 })}
               </div>
             </div>
@@ -475,12 +533,15 @@ function LoginForm({
 
             {/* Security footer note */}
             <div className="mt-5 pt-4 border-t border-border/50 flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
-              <i className="fas fa-shield-halved text-emerald-500 text-[10px]" aria-hidden="true" />
+              <i
+                className="fas fa-shield-halved text-emerald-500 text-[10px]"
+                aria-hidden="true"
+              />
               <span>Hệ thống bảo mật nội bộ · Truy cập có kiểm soát</span>
             </div>
           </div>
         </div>
       </main>
     </div>
-  );
+  )
 }

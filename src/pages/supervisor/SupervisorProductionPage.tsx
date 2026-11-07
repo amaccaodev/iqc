@@ -1,5 +1,5 @@
-import ProductionProgressPage from "../../components/production/ProductionProgressPage";
+import ProductionProgressPage from "../../components/production/ProductionProgressPage"
 
 export default function SupervisorProductionPage() {
-  return <ProductionProgressPage mode="supervisor" />;
+  return <ProductionProgressPage mode="supervisor" />
 }
