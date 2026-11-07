@@ -1,5 +1,5 @@
-import WarehousePage from "../shared/WarehousePage";
+import WarehousePage from "../shared/WarehousePage"
 
 export default function DirectorWarehousePage() {
-  return <WarehousePage readOnly />;
+  return <WarehousePage readOnly />
 }
