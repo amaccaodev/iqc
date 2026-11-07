@@ -44,6 +44,7 @@ import ProfilePage from "../pages/shared/ProfilePage";
 import MachineApprovalsPage from "../pages/shared/MachineApprovalsPage";
 import PayrollRatesPage from "../pages/shared/PayrollRatesPage";
 import ShiftApprovalsPage from "../pages/shared/ShiftApprovalsPage";
+import MaterialExportOrdersModule from "../components/exportOrders/MaterialExportOrdersModule";
 
 function HomeRedirect() {
   const { user } = useAuth();
@@ -56,6 +57,16 @@ export default function AppRouter() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<HomeRedirect />} />
+      <Route
+        path="/export-orders"
+        element={
+          <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto">
+              <MaterialExportOrdersModule />
+            </div>
+          </div>
+        }
+      />
 
       <Route path="/director" element={<RoleLayout role="director" />}>
         <Route path="dashboard" element={<DirectorDashboardPage />} />
