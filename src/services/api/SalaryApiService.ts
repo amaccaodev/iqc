@@ -46,6 +46,11 @@ class SalaryApiService extends BaseApiService {
       approved: boolean;
       reviewerName: string;
       rejectReason?: string;
+      passQty?: number;
+      failQty?: number;
+      evidenceName?: string;
+      evidenceMimeType?: string;
+      evidenceBase64?: string;
     },
   ) {
     return this.post<ShiftClose>(`/shift-closes/${id}/review`, body);

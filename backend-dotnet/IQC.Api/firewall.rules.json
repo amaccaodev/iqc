@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "IQC Security Firewall rules — cấu hình bảo mật dữ liệu đầu vào",
+  "whitelistMode": false,
+  "blockedIps": [],
+  "allowedIps": [],
+  "blockedUserAgents": [
+    "sqlmap",
+    "nikto",
+    "nmap",
+    "masscan"
+  ],
+  "maxRequestBodyBytes": 8388608,
+  "blockedPatterns": [
+    "UNION SELECT",
+    "DROP TABLE",
+    "<script",
+    "javascript:",
+    "../",
+    "exec("
+  ],
+  "rateLimit": {
+    "globalPerMinute": 100,
+    "authPerMinute": 10,
+    "uploadPerMinute": 20
+  },
+  "securityHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()"
+  },
+  "owasp": {
+    "A01_brokenAccessControl": "JWT + [Authorize] on all business routes",
+    "A02_cryptographicFailures": "SHA256 password hash, HTTPS cookies",
+    "A03_injection": "EF Core parameterized + firewall pattern scan",
+    "A04_insecureDesign": "8MB body limit, role-based shift close",
+    "A05_misconfiguration": "Security headers, CORS whitelist",
+    "A07_xss": "Block script tags in query/path",
+    "A09_loggingFailures": "Serilog structured logging"
+  }
+}

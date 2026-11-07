@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:backend": "pnpm --dir backend dev",
+    "dev:backend:dotnet": "dotnet run --project backend-dotnet/IQC.Api",
+    "docker:up": "docker compose -f backend-dotnet/docker-compose.yml up --build -d",
+    "docker:down": "docker compose -f backend-dotnet/docker-compose.yml down",
+    "docker:logs": "docker compose -f backend-dotnet/docker-compose.yml logs -f api",
     "dev:all": "concurrently \"pnpm dev:backend\" \"pnpm dev\"",
+    "dev:all:dotnet": "concurrently \"pnpm dev:backend:dotnet\" \"pnpm dev\"",
     "db:link": "npx supabase link --project-ref mobroigpqtsfbfbvmvwa",
     "db:push": "npx supabase db push",
     "db:migrate": "node backend/scripts/migrate_pg.mjs",

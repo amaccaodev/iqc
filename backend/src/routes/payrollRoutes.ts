@@ -206,11 +206,26 @@ payrollRoutes.patch("/shift-closes/:id", (req, res) => {
 
 payrollRoutes.post("/shift-closes/:id/review", async (req, res) => {
   try {
-    const { stage, approved, reviewerName, rejectReason } = req.body as {
+    const {
+      stage,
+      approved,
+      reviewerName,
+      rejectReason,
+      passQty,
+      failQty,
+      evidenceName,
+      evidenceMimeType,
+      evidenceBase64,
+    } = req.body as {
       stage: "teamlead" | "qc" | "supervisor";
       approved: boolean;
       reviewerName: string;
       rejectReason?: string;
+      passQty?: number;
+      failQty?: number;
+      evidenceName?: string;
+      evidenceMimeType?: string;
+      evidenceBase64?: string;
     };
     if (!stage || !reviewerName) throw new Error("Thiếu bước duyệt hoặc người duyệt");
     const data: ShiftClose = shiftSalaryStore.reviewClose(
@@ -219,6 +234,13 @@ payrollRoutes.post("/shift-closes/:id/review", async (req, res) => {
       Boolean(approved),
       reviewerName,
       rejectReason ?? "",
+      {
+        passQty,
+        failQty,
+        evidenceName,
+        evidenceMimeType,
+        evidenceBase64,
+      },
     );
     try {
       await workflowService.addAuditLog({

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="IQC.Api/IQC.Api.csproj" />
+  <Project Path="IQC.Application/IQC.Application.csproj" />
+  <Project Path="IQC.Domain/IQC.Domain.csproj" />
+  <Project Path="IQC.Infrastructure/IQC.Infrastructure.csproj" />
+</Solution>

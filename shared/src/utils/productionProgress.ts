@@ -1,23 +1,38 @@
 import type { BOMItem, Machine, ProductionOrder, WorkerMachineAssignment } from "../types/index.js";
 import { resolveBomTeamId, teamDisplayName, teamIdsMatch } from "../constants/teams.js";
 
-/** Số đã làm của linh kiện: ưu tiên passQty, fallback số dòng đo đã nộp */
-export function bomDoneQty(bom: BOMItem): number {
+/** Số đã làm của bước: ưu tiên tổng chốt ca (không từ chối), fallback passQty / dòng đo */
+export function bomDoneQty(
+  bom: BOMItem,
+  shiftCloses?: Array<{ bomId: string; passQty: number; status: string }>,
+): number {
+  if (shiftCloses?.length) {
+    const fromCloses = shiftCloses
+      .filter((c) => c.bomId === bom.id && c.status !== "rejected")
+      .reduce((s, c) => s + (Number(c.passQty) || 0), 0);
+    if (fromCloses > 0) return fromCloses;
+  }
   const measured = bom.workerEntries.reduce((s, e) => s + e.rows.length, 0);
   return Math.max(bom.passQty || 0, measured);
 }
 
-export function bomProgressPct(bom: BOMItem): number {
+export function bomProgressPct(
+  bom: BOMItem,
+  shiftCloses?: Array<{ bomId: string; passQty: number; status: string }>,
+): number {
   const target = bom.targetQty || 0;
   if (target <= 0) return 0;
-  return Math.min(100, Math.round((bomDoneQty(bom) / target) * 100));
+  return Math.min(100, Math.round((bomDoneQty(bom, shiftCloses) / target) * 100));
 }
 
 /**
  * Ước lượng thành phẩm lắp được = min(done của từng linh kiện / qtyPerUnit).
  * Khi mỗi BOM = 1 cái/SP thì = min(done).
  */
-export function estimateFinishedQty(order: ProductionOrder): number {
+export function estimateFinishedQty(
+  order: ProductionOrder,
+  shiftCloses?: Array<{ bomId: string; passQty: number; status: string }>,
+): number {
   const parts = order.boms.filter((b) => !b.useFromStock || (b.targetQty ?? 0) > 0);
   if (!parts.length) return 0;
   return Math.min(
@@ -26,7 +41,7 @@ export function estimateFinishedQty(order: ProductionOrder): number {
         1,
         b.targetQty > 0 ? Math.ceil(b.targetQty / Math.max(1, order.targetQty || 1)) : 1,
       );
-      return Math.floor(bomDoneQty(b) / need);
+      return Math.floor(bomDoneQty(b, shiftCloses) / need);
     }),
   );
 }

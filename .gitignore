@@ -3,6 +3,9 @@ dist/
 test-results/
 playwright-report/
 build/
+backend-dotnet/**/bin/
+backend-dotnet/**/obj/
+backend-dotnet/.vs/
 .cache/
 .env*
 .vite/
