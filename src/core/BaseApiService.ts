@@ -36,7 +36,9 @@ export abstract class BaseApiService {
           : options.body != null
             ? String(options.body)
             : undefined;
-      return handleDemoApi<T>(method, path, body);
+      const demoRes = await handleDemoApi<T>(method, path, body);
+      console.log(`[API Demo Response] ${method} ${path}:`, demoRes);
+      return demoRes;
     }
 
     const headers: Record<string, string> = {
@@ -63,6 +65,8 @@ export abstract class BaseApiService {
     } catch {
       throw new Error(res.ok ? "Invalid response" : `HTTP ${res.status}`);
     }
+    const method = (options.method ?? "GET").toUpperCase();
+    console.log(`[API Response] ${method} ${path} (${res.status}):`, body.data ?? body);
     if (!res.ok || !body.success) {
       throw new Error(body.error ?? body.message ?? "Request failed");
     }
@@ -79,6 +83,7 @@ export abstract class BaseApiService {
             headers: { "Content-Type": "application/json" },
           });
           const body = (await res.json()) as ApiResponse<{ token: string; user: unknown }>;
+          console.log("[API Response] POST /auth/refresh:", body.data ?? body);
           if (!res.ok || !body.success || !body.data?.token) return null;
           localStorage.setItem("iqc_token", body.data.token);
           if (body.data.user) localStorage.setItem("iqc_user", JSON.stringify(body.data.user));

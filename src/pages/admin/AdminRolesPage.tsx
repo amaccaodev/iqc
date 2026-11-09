@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AdminRolesPage — Quản lý Roles và Groups (tổ)
  * Thêm / xóa role, thêm / xóa nhóm, gán role cho user, gán user vào nhóm
  */
@@ -21,8 +21,8 @@ export default function AdminRolesPage() {
 
   const load = useCallback(async () => {
     const [r, g] = await Promise.all([
-      fetch(`${API_BASE}/roles`).then(res => res.json()),
-      fetch(`${API_BASE}/groups`).then(res => res.json()),
+      fetch(`${API_BASE}/roles`).then(res => res.json()).then(data => { console.log("[API Response] GET /roles:", data); return data; }),
+      fetch(`${API_BASE}/groups`).then(res => res.json()).then(data => { console.log("[API Response] GET /groups:", data); return data; }),
     ]);
     if (r.success) setRoles(r.data as Role[]);
     if (g.success) setGroups(g.data as Group[]);
@@ -35,7 +35,9 @@ export default function AdminRolesPage() {
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/roles`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newRole) });
-      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json().catch(() => null);
+      console.log("[API Response] POST /roles:", data);
+      if (!res.ok) throw new Error(data?.error || data?.message || "Lỗi tạo role");
       setNewRole({ id: "", label: "", description: "" });
       setShowAdd(false);
       void load();
@@ -52,7 +54,9 @@ export default function AdminRolesPage() {
     });
     if (!ok) return;
     try {
-      await fetch(`${API_BASE}/roles/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/roles/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      console.log(`[API Response] DELETE /roles/${id}:`, data);
       void load();
     } catch (e) { toast.error((e as Error).message); }
   };
@@ -62,7 +66,9 @@ export default function AdminRolesPage() {
     setSaving(true);
     try {
       const res = await fetch(`${API_BASE}/groups`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newGroup) });
-      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json().catch(() => null);
+      console.log("[API Response] POST /groups:", data);
+      if (!res.ok) throw new Error(data?.error || data?.message || "Lỗi tạo group");
       setNewGroup({ id: "", name: "", lead: "", lead_short: "", description: "" });
       setShowAdd(false);
       void load();
@@ -79,7 +85,9 @@ export default function AdminRolesPage() {
     });
     if (!ok) return;
     try {
-      await fetch(`${API_BASE}/groups/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/groups/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => null);
+      console.log(`[API Response] DELETE /groups/${id}:`, data);
       void load();
     } catch (e) { toast.error((e as Error).message); }
   };

@@ -16,6 +16,15 @@ export function createApp() {
     (req as Request & { cookies: Record<string, string> }).cookies = parseCookies(req);
     next();
   });
+  // Log response data for all API requests
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const originalJson = res.json.bind(res);
+    res.json = (body: unknown) => {
+      console.log(`[API Response] ${req.method} ${req.originalUrl}:`, body);
+      return originalJson(body);
+    };
+    next();
+  });
   app.use("/api", apiRouter);
   app.get("/health", (_req, res) => {
     res.json({ status: "ok" });
