@@ -56,7 +56,8 @@ export type NavItem = { id: string; label: string; fa: string; path: string };
 export const NAV_CFG: Record<Role, NavItem[]> = {
   director: [
     { id: "dashboard", label: "Tổng quan", fa: "fa-star", path: "/director/dashboard" },
-    { id: "production", label: "Công việc", fa: "fa-list-check", path: "/director/production" },
+    { id: "tasks", label: "Công việc", fa: "fa-clipboard-check", path: "/director/tasks" },
+    { id: "production", label: "Sản xuất", fa: "fa-list-check", path: "/director/production" },
     { id: "orders", label: "Lệnh SX", fa: "fa-file-contract", path: "/director/orders" },
     { id: "machines", label: "Máy móc", fa: "fa-industry", path: "/director/machines" },
     { id: "approvals", label: "Phê duyệt", fa: "fa-check-circle", path: "/director/approvals" },
@@ -142,7 +143,8 @@ export const NAV_CFG: Record<Role, NavItem[]> = {
 export const MOBILE_NAV: Record<Role, NavItem[]> = {
   director: [
     { id: "dashboard", label: "Tổng quan", fa: "fa-star", path: "/director/dashboard" },
-    { id: "production", label: "Công việc", fa: "fa-list-check", path: "/director/production" },
+    { id: "tasks", label: "Công việc", fa: "fa-clipboard-check", path: "/director/tasks" },
+    { id: "production", label: "Sản xuất", fa: "fa-list-check", path: "/director/production" },
     { id: "machines", label: "Máy móc", fa: "fa-industry", path: "/director/machines" },
     { id: "profile", label: "Hồ sơ", fa: "fa-user", path: "/director/profile" },
   ],

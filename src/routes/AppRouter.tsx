@@ -15,6 +15,7 @@ import DirectorOrdersPage from "../pages/director/DirectorOrdersPage";
 import DirectorProductionPage from "../pages/director/DirectorProductionPage";
 import DirectorWarehousePage from "../pages/director/DirectorWarehousePage";
 import DirectorMachinesPage from "../pages/director/DirectorMachinesPage";
+import DirectorTasksPage from "../pages/director/DirectorTasksPage";
 import WarehousePage from "../pages/shared/WarehousePage";
 import PartDetailPage from "../pages/shared/PartDetailPage";
 import QCDashboardPage from "../pages/qc/QCDashboardPage";
@@ -85,10 +86,19 @@ export default function AppRouter() {
           </div>
         }
       />
+      <Route
+        path="/tasks"
+        element={
+          <div className="min-h-screen bg-background text-foreground">
+            <DirectorTasksPage />
+          </div>
+        }
+      />
 
       <Route path="/director" element={<RoleLayout role="director" />}>
         <Route path="dashboard" element={<DirectorDashboardPage />} />
         <Route path="production" element={<DirectorProductionPage />} />
+        <Route path="tasks" element={<DirectorTasksPage />} />
         <Route
           path="production/:orderId/:bomId"
           element={<PartDetailPage backBase="/director/production" />}
