@@ -23,24 +23,23 @@ export default defineConfig(({ mode }) => {
       : process.env.FIGMA_PUBLIC_URL
         ? `${process.env.FIGMA_PUBLIC_URL}/`
         : '/',
-    esbuild: {
-      // Production: bỏ console/debugger khỏi bundle
-      drop: isProdBuild ? ["console", "debugger"] : [],
-      legalComments: "none",
-    },
+
+
     build: {
-      // false = DevTools Sources không map về file .tsx gốc
       sourcemap: emitSourcemaps ? "inline" : false,
-      minify: "esbuild",
+      minify: true,
       cssMinify: true,
-      // Không để lộ đường dẫn module gốc trong chunk
       reportCompressedSize: false,
-      rollupOptions: {
+      rolldownOptions: {          // đổi từ rollupOptions
         output: {
-          // Tên file hash — khó đoán cấu trúc thư mục src
+          minify: {
+            compress: {
+              dropConsole: isProdBuild,
+              dropDebugger: isProdBuild,
+            },
+          },
           entryFileNames: "assets/[hash].js",
-          chunkFileNames: "assets/[hash].js",
-          assetFileNames: "assets/[hash][extname]",
+          // ...giữ nguyên các dòng cũ khác trong output
         },
       },
     },
